@@ -1,0 +1,333 @@
+export type TrainingMode = 'muscle_recomp' | 'controlled_fat_loss';
+
+export type TrainingLocation = 'gym' | 'home' | 'both';
+
+export type FitnessLevel = 'beginner' | 'intermediate' | 'advanced';
+
+export type AppTheme = 'elegant_dark' | 'fitness_dark' | 'dark' | 'light' | 'warm_amber';
+
+export type AppLanguage = 'en' | 'ar';
+
+export type ExerciseCategory = 
+  | 'push' 
+  | 'pull' 
+  | 'legs' 
+  | 'core' 
+  | 'cardio' 
+  | 'recovery' 
+  | 'home';
+
+export type MovementPattern = 
+  | 'horizontal_press' 
+  | 'incline_press' 
+  | 'overhead_press' 
+  | 'horizontal_row' 
+  | 'vertical_pull' 
+  | 'squat' 
+  | 'hinge' 
+  | 'lunge' 
+  | 'isolation_chest' 
+  | 'isolation_shoulder' 
+  | 'isolation_triceps' 
+  | 'isolation_biceps' 
+  | 'isolation_quad' 
+  | 'isolation_hamstring' 
+  | 'isolation_calves' 
+  | 'anti_extension' 
+  | 'anti_rotation' 
+  | 'anti_lateral_flexion' 
+  | 'flexion' 
+  | 'trunk_stability' 
+  | 'cardio_aerobic' 
+  | 'mobility_stretch';
+
+export interface Exercise {
+  id: string;
+  name: string;
+  nameAr: string;
+  category: ExerciseCategory;
+  movementPattern: MovementPattern;
+  primaryMuscle: string;
+  primaryMuscleAr?: string;
+  secondaryMuscles: string[];
+  secondaryMusclesAr?: string[];
+  equipment: string;
+  equipmentAr?: string;
+  location: TrainingLocation;
+  difficulty: FitnessLevel;
+  level: string;
+  exerciseType: 'compound' | 'isolation' | 'isometric' | 'cardio' | 'mobility';
+  description?: string;
+  descriptionAr?: string;
+  instructions: string[];
+  instructionsAr: string[];
+  benefits: string[];
+  benefitsAr: string[];
+  commonMistakes: string[];
+  commonMistakesAr: string[];
+  breathing: string;
+  breathingAr: string;
+  targetSets: number;
+  targetRepRange: string;
+  restSeconds: number;
+  rpeTarget: number;
+  imageUrl?: string;
+  youtubeSearchQuery: string;
+  youtubeVideoId?: string;
+  youtubeVideoUrl?: string;
+  videoStatus?: 'verified' | 'search_ready' | 'fallback';
+  alternatives: string[]; // Exercise IDs
+  tags: string[];
+}
+
+export interface SetLog {
+  id: string;
+  setNumber: number;
+  targetReps: string | number;
+  actualReps: number;
+  targetWeight: number;
+  actualWeight: number;
+  rpe: number; // 1 to 10
+  completed: boolean;
+  notes?: string;
+  timestamp?: number;
+}
+
+export interface WorkoutExercise {
+  exerciseId: string;
+  exerciseName: string;
+  exerciseNameAr?: string;
+  primaryMuscle: string;
+  sets: SetLog[];
+  restSeconds: number;
+  targetRpe: number;
+  notes?: string;
+  completed: boolean;
+}
+
+export interface WorkoutSession {
+  id: string;
+  date: string; // YYYY-MM-DD
+  name: string;
+  nameAr: string;
+  type: ExerciseCategory | 'push' | 'pull' | 'legs' | 'full_body' | 'rest_active';
+  mode: TrainingMode;
+  durationMinutes: number;
+  exercises: WorkoutExercise[];
+  notes?: string;
+  rating?: number; // 1-5
+  energyLevel?: number; // 1-5
+  completed: boolean;
+  startedAt?: number;
+  completedAt?: number;
+}
+
+export type CardioModality = 
+  | 'treadmill_incline' 
+  | 'treadmill_walk' 
+  | 'treadmill_run' 
+  | 'stationary_bike' 
+  | 'outdoor_walk' 
+  | 'outdoor_run' 
+  | 'elliptical';
+
+export interface CardioSession {
+  id: string;
+  date: string;
+  type: CardioModality;
+  modality?: CardioModality;
+  modalityName?: string;
+  modalityNameAr?: string;
+  durationMinutes: number;
+  inclinePercentage?: number;
+  speedKmh?: number;
+  distanceKm?: number;
+  caloriesBurned?: number;
+  calories?: number;
+  avgHeartRate?: number;
+  intensity: 'zone2_fat_loss' | 'low' | 'moderate' | 'high';
+  notes?: string;
+  timestamp?: number;
+}
+
+export interface CoreExercise {
+  id: string;
+  name: string;
+  nameAr?: string;
+  description: string;
+  descriptionAr?: string;
+  primaryPattern: string;
+  equipment: string;
+  targetRepRange: string;
+  difficulty?: 'beginner' | 'intermediate' | 'advanced';
+  videoDemonstrationUrl?: string;
+  targetMuscles?: string[];
+}
+
+export interface CoreSession {
+  id: string;
+  date: string;
+  name?: string;
+  routineName?: string;
+  routineNameAr?: string;
+  exercises?: any[];
+  exercisesCount?: number;
+  setsCompleted?: number;
+  completed?: boolean;
+  durationMinutes: number;
+  rpe?: number;
+  notes?: string;
+  timestamp?: number;
+}
+
+export type RecoveryType = 
+  | 'sauna' 
+  | 'steam' 
+  | 'jacuzzi' 
+  | 'stretching' 
+  | 'mobility' 
+  | 'sleep' 
+  | 'rest_day';
+
+export interface RecoverySession {
+  id: string;
+  date: string;
+  type: RecoveryType | string;
+  typeName?: string;
+  typeNameAr?: string;
+  durationMinutes: number;
+  recoveryRating?: number; // 1-5
+  notes?: string;
+  timestamp?: number;
+}
+
+export interface NutritionEntry {
+  id: string;
+  date: string;
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'pre_workout' | 'post_workout';
+  foodName: string;
+  foodNameAr?: string;
+  portion?: string;
+  portionGrams?: number;
+  calories: number;
+  protein?: number;
+  proteinGrams: number;
+  carbs?: number;
+  carbsGrams?: number;
+  fat?: number;
+  fatGrams?: number;
+  notes?: string;
+  timestamp?: number;
+}
+
+export interface FoodItemSeed {
+  id: string;
+  name: string;
+  nameAr: string;
+  category: 'egyptian' | 'protein' | 'carbs' | 'fats' | 'pre_post_workout' | 'fruits_veggies';
+  portionUnit: string;
+  portionUnitAr: string;
+  defaultPortion: number;
+  caloriesPer100g: number;
+  proteinPer100g: number;
+  carbsPer100g: number;
+  fatPer100g: number;
+  description?: string;
+  descriptionAr?: string;
+}
+
+export interface HydrationEntry {
+  id: string;
+  date: string;
+  amountMl: number;
+  timestamp: number;
+}
+
+export interface BodyMeasurement {
+  id: string;
+  date: string;
+  weight: number; // kg
+  waistCm?: number;
+  chestCm?: number;
+  armCm?: number;
+  thighCm?: number;
+  notes?: string;
+}
+
+export type ScreenWakeDuration = '1m' | '2m' | '5m' | '10m' | '30m' | 'never';
+export type CardioMotivationFrequency = '1m' | '2m' | 'off';
+
+export interface UserProfile {
+  name: string;
+  age: number;
+  heightCm: number;
+  currentWeightKg: number;
+  goalWeightKg: number;
+  trainingDaysPerWeek: number; // 3 to 6
+  level: FitnessLevel;
+  preferredLocation: TrainingLocation;
+  availableEquipment: string[];
+  mode: TrainingMode;
+  activityLevel: 'sedentary' | 'light' | 'moderate' | 'very_active';
+  currentWaistCm: number;
+  startDate: string; // YYYY-MM-DD
+  dailyCalorieTarget: number;
+  dailyProteinTargetGrams: number;
+  dailyWaterTargetMl: number;
+  notes?: string;
+  theme: AppTheme;
+  language: AppLanguage;
+  unitSystem: 'kg' | 'lbs';
+  screenWakeDuration?: ScreenWakeDuration;
+  cardioMotivationFrequency?: CardioMotivationFrequency;
+  autoGpsTracking?: boolean;
+  units?: 'km' | 'miles';
+}
+
+export interface Achievement {
+  id: string;
+  title: string;
+  titleAr: string;
+  description: string;
+  descriptionAr: string;
+  icon: string;
+  unlocked: boolean;
+  unlockedAt?: string;
+  progress: number;
+  maxProgress: number;
+  category: 'workouts' | 'streak' | 'strength' | 'cardio' | 'core' | 'nutrition' | 'hydration';
+}
+
+export interface AIChatMessage {
+  id: string;
+  role: 'user' | 'model' | 'assistant';
+  content: string;
+  timestamp: number;
+  model?: string;
+  modelUsed?: string;
+}
+
+export interface GeneratedImageRecord {
+  id: string;
+  prompt: string;
+  imageUrl: string;
+  imageSize: '1K' | '2K' | '4K';
+  aspectRatio: string;
+  createdAt: number;
+}
+
+export interface AppState {
+  profile: UserProfile;
+  activeWorkout: WorkoutSession | null;
+  workoutHistory: WorkoutSession[];
+  cardioHistory: CardioSession[];
+  coreHistory: CoreSession[];
+  recoveryHistory: RecoverySession[];
+  nutritionHistory: NutritionEntry[];
+  hydrationHistory: HydrationEntry[];
+  measurementsHistory: BodyMeasurement[];
+  achievements: Achievement[];
+  chatHistory: AIChatMessage[];
+  savedImages: GeneratedImageRecord[];
+  customExercises: Exercise[];
+}

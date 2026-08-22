@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: #0a0a0b;
+    --foreground: #e0e0e0;
+    --card: #111112;
+    --card-foreground: #f4f4f5;
+    --primary: #4f46e5;
+    --primary-foreground: #ffffff;
+    --secondary: #1a1a1c;
+    --secondary-foreground: #e0e0e0;
+    --muted: #161618;
+    --muted-foreground: #9e9e9e;
+    --border: #222225;
+  }
+
+  [data-theme="elegant_dark"] {
+    --background: #0a0a0b;
+    --foreground: #e0e0e0;
+    --card: #111112;
+    --card-foreground: #f4f4f5;
+    --primary: #4f46e5;
+    --primary-foreground: #ffffff;
+    --secondary: #1a1a1c;
+    --secondary-foreground: #e0e0e0;
+    --muted: #161618;
+    --muted-foreground: #9e9e9e;
+    --border: #222225;
+  }
+
+  [data-theme="fitness_dark"] {
+    --background: #090d10;
+    --foreground: #f0f6fc;
+    --card: #12181f;
+    --card-foreground: #f0f6fc;
+    --primary: #10b981;
+    --primary-foreground: #ffffff;
+    --secondary: #1a222c;
+    --secondary-foreground: #f0f6fc;
+    --muted: #17202a;
+    --muted-foreground: #8899a6;
+    --border: #253342;
+  }
+
+  [data-theme="dark"] {
+    --background: #0b0f17;
+    --foreground: #f3f4f6;
+    --card: #111827;
+    --card-foreground: #f3f4f6;
+    --primary: #6366f1;
+    --primary-foreground: #ffffff;
+    --secondary: #1f2937;
+    --secondary-foreground: #f3f4f6;
+    --muted: #1f2937;
+    --muted-foreground: #9ca3af;
+    --border: #374151;
+  }
+
+  [data-theme="light"] {
+    --background: #f8fafc;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --primary: #059669;
+    --primary-foreground: #ffffff;
+    --secondary: #f1f5f9;
+    --secondary-foreground: #0f172a;
+    --muted: #f1f5f9;
+    --muted-foreground: #64748b;
+    --border: #e2e8f0;
+  }
+
+  [data-theme="warm_amber"] {
+    --background: #14100c;
+    --foreground: #faf5f0;
+    --card: #201a14;
+    --card-foreground: #faf5f0;
+    --primary: #f59e0b;
+    --primary-foreground: #000000;
+    --secondary: #2c241c;
+    --secondary-foreground: #faf5f0;
+    --muted: #272018;
+    --muted-foreground: #a89f91;
+    --border: #3d3227;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    min-height: 100vh;
+  }
+}
+
+/* Custom minimal scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
