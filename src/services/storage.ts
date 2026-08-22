@@ -178,6 +178,329 @@ export const initialAchievements: Achievement[] = [
   },
 ];
 
+// Seed initial workout history if first run so frequency and volume progression charts have realistic context
+function getInitialWorkoutHistory(): WorkoutSession[] {
+  const d = (daysAgo: number) => new Date(Date.now() - daysAgo * 86400000).toISOString().split('T')[0];
+
+  return [
+    {
+      id: 'w_hist_1',
+      date: d(14),
+      name: 'Push Hypertrophy & Recomp (Chest/Shoulders/Triceps)',
+      nameAr: 'تمرين دفع وتضخيم (صدر / أكتاف / ترايسبس)',
+      type: 'push',
+      mode: 'controlled_fat_loss',
+      durationMinutes: 52,
+      completed: true,
+      completedAt: Date.now() - 14 * 86400000 + 3600000,
+      exercises: [
+        {
+          exerciseId: 'push_1',
+          exerciseName: 'Incline Dumbbell Bench Press',
+          exerciseNameAr: 'تجميع دمبل على بنش مائل',
+          primaryMuscle: 'Upper Chest',
+          restSeconds: 90,
+          targetRpe: 8,
+          completed: true,
+          sets: [
+            { id: 's1', setNumber: 1, targetReps: '8-10', actualReps: 10, targetWeight: 22, actualWeight: 22, rpe: 8, completed: true },
+            { id: 's2', setNumber: 2, targetReps: '8-10', actualReps: 10, targetWeight: 22, actualWeight: 22, rpe: 8, completed: true },
+            { id: 's3', setNumber: 3, targetReps: '8-10', actualReps: 8, targetWeight: 24, actualWeight: 24, rpe: 8.5, completed: true },
+          ],
+        },
+        {
+          exerciseId: 'push_2',
+          exerciseName: 'Flat Barbell Bench Press',
+          exerciseNameAr: 'ضغط بار مستوي',
+          primaryMuscle: 'Mid Chest',
+          restSeconds: 90,
+          targetRpe: 8,
+          completed: true,
+          sets: [
+            { id: 's4', setNumber: 1, targetReps: '8-10', actualReps: 10, targetWeight: 60, actualWeight: 60, rpe: 8, completed: true },
+            { id: 's5', setNumber: 2, targetReps: '8-10', actualReps: 8, targetWeight: 65, actualWeight: 65, rpe: 8.5, completed: true },
+            { id: 's6', setNumber: 3, targetReps: '8-10', actualReps: 8, targetWeight: 65, actualWeight: 65, rpe: 9, completed: true },
+          ],
+        },
+        {
+          exerciseId: 'push_3',
+          exerciseName: 'Dumbbell Lateral Raise',
+          exerciseNameAr: 'رفرفة جانبي بالدمبل',
+          primaryMuscle: 'Lateral Deltoid',
+          restSeconds: 60,
+          targetRpe: 8.5,
+          completed: true,
+          sets: [
+            { id: 's7', setNumber: 1, targetReps: '12-15', actualReps: 15, targetWeight: 10, actualWeight: 10, rpe: 8, completed: true },
+            { id: 's8', setNumber: 2, targetReps: '12-15', actualReps: 12, targetWeight: 12, actualWeight: 12, rpe: 8.5, completed: true },
+            { id: 's9', setNumber: 3, targetReps: '12-15', actualReps: 12, targetWeight: 12, actualWeight: 12, rpe: 9, completed: true },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'w_hist_2',
+      date: d(12),
+      name: 'Pull Power & Density (Back/Biceps/Rear Delts)',
+      nameAr: 'تمرين سحب وقوة الظهر (ظهر / بايسبس / كتف خلفي)',
+      type: 'pull',
+      mode: 'controlled_fat_loss',
+      durationMinutes: 55,
+      completed: true,
+      completedAt: Date.now() - 12 * 86400000 + 3600000,
+      exercises: [
+        {
+          exerciseId: 'pull_1',
+          exerciseName: 'Lat Pulldown (Wide Grip)',
+          exerciseNameAr: 'سحب ظهر عالي قبضة واسعة',
+          primaryMuscle: 'Lats',
+          restSeconds: 90,
+          targetRpe: 8,
+          completed: true,
+          sets: [
+            { id: 's10', setNumber: 1, targetReps: '8-12', actualReps: 12, targetWeight: 55, actualWeight: 55, rpe: 8, completed: true },
+            { id: 's11', setNumber: 2, targetReps: '8-12', actualReps: 10, targetWeight: 60, actualWeight: 60, rpe: 8, completed: true },
+            { id: 's12', setNumber: 3, targetReps: '8-12', actualReps: 10, targetWeight: 60, actualWeight: 60, rpe: 8.5, completed: true },
+          ],
+        },
+        {
+          exerciseId: 'pull_2',
+          exerciseName: 'Barbell Bent-Over Row',
+          exerciseNameAr: 'تجديف بالبار منحني',
+          primaryMuscle: 'Mid Back',
+          restSeconds: 90,
+          targetRpe: 8,
+          completed: true,
+          sets: [
+            { id: 's13', setNumber: 1, targetReps: '8-10', actualReps: 10, targetWeight: 50, actualWeight: 50, rpe: 8, completed: true },
+            { id: 's14', setNumber: 2, targetReps: '8-10', actualReps: 10, targetWeight: 55, actualWeight: 55, rpe: 8.5, completed: true },
+            { id: 's15', setNumber: 3, targetReps: '8-10', actualReps: 8, targetWeight: 60, actualWeight: 60, rpe: 9, completed: true },
+          ],
+        },
+        {
+          exerciseId: 'pull_3',
+          exerciseName: 'Dumbbell Bicep Curl',
+          exerciseNameAr: 'تبادل دمبل بايسبس',
+          primaryMuscle: 'Biceps',
+          restSeconds: 60,
+          targetRpe: 8.5,
+          completed: true,
+          sets: [
+            { id: 's16', setNumber: 1, targetReps: '10-12', actualReps: 12, targetWeight: 14, actualWeight: 14, rpe: 8, completed: true },
+            { id: 's17', setNumber: 2, targetReps: '10-12', actualReps: 10, targetWeight: 16, actualWeight: 16, rpe: 8.5, completed: true },
+            { id: 's18', setNumber: 3, targetReps: '10-12', actualReps: 10, targetWeight: 16, actualWeight: 16, rpe: 9, completed: true },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'w_hist_3',
+      date: d(10),
+      name: 'Legs & Posterior Chain Power (Quads/Hamstrings/Calves)',
+      nameAr: 'تمرين أرجل شامل (أفخاذ أمامية / خلفيات / سمانة)',
+      type: 'legs',
+      mode: 'controlled_fat_loss',
+      durationMinutes: 58,
+      completed: true,
+      completedAt: Date.now() - 10 * 86400000 + 3600000,
+      exercises: [
+        {
+          exerciseId: 'legs_1',
+          exerciseName: 'Barbell Back Squat',
+          exerciseNameAr: 'سكوات بالبار الخلفي',
+          primaryMuscle: 'Quadriceps',
+          restSeconds: 120,
+          targetRpe: 8,
+          completed: true,
+          sets: [
+            { id: 's19', setNumber: 1, targetReps: '8-10', actualReps: 10, targetWeight: 70, actualWeight: 70, rpe: 7.5, completed: true },
+            { id: 's20', setNumber: 2, targetReps: '8-10', actualReps: 8, targetWeight: 80, actualWeight: 80, rpe: 8, completed: true },
+            { id: 's21', setNumber: 3, targetReps: '8-10', actualReps: 8, targetWeight: 85, actualWeight: 85, rpe: 8.5, completed: true },
+          ],
+        },
+        {
+          exerciseId: 'legs_2',
+          exerciseName: 'Romanian Deadlift (RDL)',
+          exerciseNameAr: 'ديدليفت روماني بالدمبل/البار',
+          primaryMuscle: 'Hamstrings',
+          restSeconds: 90,
+          targetRpe: 8,
+          completed: true,
+          sets: [
+            { id: 's22', setNumber: 1, targetReps: '10-12', actualReps: 12, targetWeight: 60, actualWeight: 60, rpe: 7.5, completed: true },
+            { id: 's23', setNumber: 2, targetReps: '10-12', actualReps: 10, targetWeight: 70, actualWeight: 70, rpe: 8, completed: true },
+            { id: 's24', setNumber: 3, targetReps: '10-12', actualReps: 10, targetWeight: 70, actualWeight: 70, rpe: 8.5, completed: true },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'w_hist_4',
+      date: d(7),
+      name: 'Push Strength & Hypertrophy',
+      nameAr: 'تمرين دفع وقوة وتضخيم',
+      type: 'push',
+      mode: 'controlled_fat_loss',
+      durationMinutes: 54,
+      completed: true,
+      completedAt: Date.now() - 7 * 86400000 + 3600000,
+      exercises: [
+        {
+          exerciseId: 'push_1',
+          exerciseName: 'Incline Dumbbell Bench Press',
+          exerciseNameAr: 'تجميع دمبل على بنش مائل',
+          primaryMuscle: 'Upper Chest',
+          restSeconds: 90,
+          targetRpe: 8,
+          completed: true,
+          sets: [
+            { id: 's25', setNumber: 1, targetReps: '8-10', actualReps: 10, targetWeight: 24, actualWeight: 24, rpe: 8, completed: true },
+            { id: 's26', setNumber: 2, targetReps: '8-10', actualReps: 10, targetWeight: 24, actualWeight: 24, rpe: 8, completed: true },
+            { id: 's27', setNumber: 3, targetReps: '8-10', actualReps: 9, targetWeight: 26, actualWeight: 26, rpe: 8.5, completed: true },
+          ],
+        },
+        {
+          exerciseId: 'push_2',
+          exerciseName: 'Flat Barbell Bench Press',
+          exerciseNameAr: 'ضغط بار مستوي',
+          primaryMuscle: 'Mid Chest',
+          restSeconds: 90,
+          targetRpe: 8,
+          completed: true,
+          sets: [
+            { id: 's28', setNumber: 1, targetReps: '8-10', actualReps: 10, targetWeight: 65, actualWeight: 65, rpe: 8, completed: true },
+            { id: 's29', setNumber: 2, targetReps: '8-10', actualReps: 8, targetWeight: 70, actualWeight: 70, rpe: 8.5, completed: true },
+            { id: 's30', setNumber: 3, targetReps: '8-10', actualReps: 8, targetWeight: 70, actualWeight: 70, rpe: 9, completed: true },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'w_hist_5',
+      date: d(5),
+      name: 'Pull Hypertrophy & Lats Focus',
+      nameAr: 'تمرين سحب وتركيز عضلات الظهر العريضة',
+      type: 'pull',
+      mode: 'controlled_fat_loss',
+      durationMinutes: 50,
+      completed: true,
+      completedAt: Date.now() - 5 * 86400000 + 3600000,
+      exercises: [
+        {
+          exerciseId: 'pull_1',
+          exerciseName: 'Lat Pulldown (Wide Grip)',
+          exerciseNameAr: 'سحب ظهر عالي قبضة واسعة',
+          primaryMuscle: 'Lats',
+          restSeconds: 90,
+          targetRpe: 8,
+          completed: true,
+          sets: [
+            { id: 's31', setNumber: 1, targetReps: '8-12', actualReps: 12, targetWeight: 60, actualWeight: 60, rpe: 8, completed: true },
+            { id: 's32', setNumber: 2, targetReps: '8-12', actualReps: 10, targetWeight: 65, actualWeight: 65, rpe: 8.5, completed: true },
+            { id: 's33', setNumber: 3, targetReps: '8-12', actualReps: 10, targetWeight: 65, actualWeight: 65, rpe: 8.5, completed: true },
+          ],
+        },
+        {
+          exerciseId: 'pull_2',
+          exerciseName: 'Barbell Bent-Over Row',
+          exerciseNameAr: 'تجديف بالبار منحني',
+          primaryMuscle: 'Mid Back',
+          restSeconds: 90,
+          targetRpe: 8,
+          completed: true,
+          sets: [
+            { id: 's34', setNumber: 1, targetReps: '8-10', actualReps: 10, targetWeight: 55, actualWeight: 55, rpe: 8, completed: true },
+            { id: 's35', setNumber: 2, targetReps: '8-10', actualReps: 10, targetWeight: 60, actualWeight: 60, rpe: 8.5, completed: true },
+            { id: 's36', setNumber: 3, targetReps: '8-10', actualReps: 8, targetWeight: 65, actualWeight: 65, rpe: 9, completed: true },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'w_hist_6',
+      date: d(3),
+      name: 'Legs & Hamstring Progressive Overload',
+      nameAr: 'تمرين أرجل وزيادة أحمال تدريجية',
+      type: 'legs',
+      mode: 'controlled_fat_loss',
+      durationMinutes: 56,
+      completed: true,
+      completedAt: Date.now() - 3 * 86400000 + 3600000,
+      exercises: [
+        {
+          exerciseId: 'legs_1',
+          exerciseName: 'Barbell Back Squat',
+          exerciseNameAr: 'سكوات بالبار الخلفي',
+          primaryMuscle: 'Quadriceps',
+          restSeconds: 120,
+          targetRpe: 8,
+          completed: true,
+          sets: [
+            { id: 's37', setNumber: 1, targetReps: '8-10', actualReps: 10, targetWeight: 75, actualWeight: 75, rpe: 8, completed: true },
+            { id: 's38', setNumber: 2, targetReps: '8-10', actualReps: 8, targetWeight: 85, actualWeight: 85, rpe: 8.5, completed: true },
+            { id: 's39', setNumber: 3, targetReps: '8-10', actualReps: 8, targetWeight: 90, actualWeight: 90, rpe: 9, completed: true },
+          ],
+        },
+        {
+          exerciseId: 'legs_2',
+          exerciseName: 'Romanian Deadlift (RDL)',
+          exerciseNameAr: 'ديدليفت روماني بالدمبل/البار',
+          primaryMuscle: 'Hamstrings',
+          restSeconds: 90,
+          targetRpe: 8,
+          completed: true,
+          sets: [
+            { id: 's40', setNumber: 1, targetReps: '10-12', actualReps: 12, targetWeight: 70, actualWeight: 70, rpe: 8, completed: true },
+            { id: 's41', setNumber: 2, targetReps: '10-12', actualReps: 10, targetWeight: 75, actualWeight: 75, rpe: 8.5, completed: true },
+            { id: 's42', setNumber: 3, targetReps: '10-12', actualReps: 10, targetWeight: 75, actualWeight: 75, rpe: 9, completed: true },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'w_hist_7',
+      date: d(1),
+      name: 'Push Progression (Peak Tonnage)',
+      nameAr: 'تمرين دفع متقدم (أعلى حجم تدريبي)',
+      type: 'push',
+      mode: 'controlled_fat_loss',
+      durationMinutes: 55,
+      completed: true,
+      completedAt: Date.now() - 1 * 86400000 + 3600000,
+      exercises: [
+        {
+          exerciseId: 'push_1',
+          exerciseName: 'Incline Dumbbell Bench Press',
+          exerciseNameAr: 'تجميع دمبل على بنش مائل',
+          primaryMuscle: 'Upper Chest',
+          restSeconds: 90,
+          targetRpe: 8,
+          completed: true,
+          sets: [
+            { id: 's43', setNumber: 1, targetReps: '8-10', actualReps: 10, targetWeight: 26, actualWeight: 26, rpe: 8, completed: true },
+            { id: 's44', setNumber: 2, targetReps: '8-10', actualReps: 10, targetWeight: 26, actualWeight: 26, rpe: 8.5, completed: true },
+            { id: 's45', setNumber: 3, targetReps: '8-10', actualReps: 8, targetWeight: 28, actualWeight: 28, rpe: 9, completed: true },
+          ],
+        },
+        {
+          exerciseId: 'push_2',
+          exerciseName: 'Flat Barbell Bench Press',
+          exerciseNameAr: 'ضغط بار مستوي',
+          primaryMuscle: 'Mid Chest',
+          restSeconds: 90,
+          targetRpe: 8,
+          completed: true,
+          sets: [
+            { id: 's46', setNumber: 1, targetReps: '8-10', actualReps: 10, targetWeight: 70, actualWeight: 70, rpe: 8, completed: true },
+            { id: 's47', setNumber: 2, targetReps: '8-10', actualReps: 8, targetWeight: 75, actualWeight: 75, rpe: 8.5, completed: true },
+            { id: 's48', setNumber: 3, targetReps: '8-10', actualReps: 8, targetWeight: 75, actualWeight: 75, rpe: 9, completed: true },
+          ],
+        },
+      ],
+    },
+  ];
+}
+
 // Seed initial history if first run so dashboard & charts have realistic context
 function getInitialMeasurements(startDate: string, currentWeight: number, currentWaist: number): BodyMeasurement[] {
   const dates = [
@@ -242,11 +565,16 @@ export const StorageService = {
   getWorkoutHistory(): WorkoutSession[] {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.WORKOUT_HISTORY);
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     } catch (e) {
       console.error('Error loading workout history:', e);
     }
-    return [];
+    const initial = getInitialWorkoutHistory();
+    this.saveWorkoutHistory(initial);
+    return initial;
   },
 
   saveWorkoutHistory(history: WorkoutSession[]): void {
@@ -319,15 +647,21 @@ export const StorageService = {
     return [];
   },
 
+  saveNutritionHistory(list: NutritionEntry[]): void {
+    try {
+      localStorage.setItem(STORAGE_KEYS.NUTRITION_HISTORY, JSON.stringify(list));
+    } catch (e) {}
+  },
+
   addNutritionEntry(entry: NutritionEntry): void {
     const list = this.getNutritionHistory();
     list.unshift(entry);
-    localStorage.setItem(STORAGE_KEYS.NUTRITION_HISTORY, JSON.stringify(list));
+    this.saveNutritionHistory(list);
   },
 
   deleteNutritionEntry(id: string): void {
     const list = this.getNutritionHistory().filter(e => e.id !== id);
-    localStorage.setItem(STORAGE_KEYS.NUTRITION_HISTORY, JSON.stringify(list));
+    this.saveNutritionHistory(list);
   },
 
   getHydrationHistory(): HydrationEntry[] {

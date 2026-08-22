@@ -1,9 +1,10 @@
-// Audio Synthesizer Service for Rest Timers and Milestone Alerts
+// Audio Synthesizer Service for Rest Timers, Set Transitions, Workout Start/End, and Milestones
 // Uses Web Audio API for zero-latency, cross-browser sound generation without external audio file dependencies.
 
 export type RestSoundType = 'beep' | 'whistle' | 'chime' | 'buzzer' | 'bell';
 
 export const AudioService = {
+  // Play customized tone for rest timer completion
   playSound(type: RestSoundType = 'beep', volume = 0.3): void {
     if (typeof window === 'undefined') return;
 
@@ -120,6 +121,7 @@ export const AudioService = {
     this.playSound(type, 0.4);
   },
 
+  // Short clean beep for incremental actions
   playBeep(freq = 880, duration = 0.15, volume = 0.25): void {
     if (typeof window === 'undefined') return;
     try {
@@ -144,4 +146,163 @@ export const AudioService = {
       // safe fallback
     }
   },
+
+  // 1. Workout Session Start Cue (Ascending energizing chord C5 -> E5 -> G5 -> C6)
+  playWorkoutStartCue(volume = 0.3): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const chord = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+
+      chord.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const startTime = ctx.currentTime + idx * 0.1;
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, startTime);
+
+        gain.gain.setValueAtTime(0.001, startTime);
+        gain.gain.linearRampToValueAtTime(volume * 0.4, startTime + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.5);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(startTime);
+        osc.stop(startTime + 0.5);
+      });
+    } catch (e) {}
+  },
+
+  // 2. Workout Session Finish & Victory Cue (Fanfare celebration sequence)
+  playWorkoutEndCue(volume = 0.35): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const fanfare = [
+        { freq: 587.33, start: 0.0, dur: 0.15 }, // D5
+        { freq: 587.33, start: 0.15, dur: 0.15 }, // D5
+        { freq: 587.33, start: 0.3, dur: 0.15 }, // D5
+        { freq: 880.00, start: 0.48, dur: 0.6 },  // A5 victory sustained
+      ];
+
+      fanfare.forEach(({ freq, start, dur }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const sTime = ctx.currentTime + start;
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, sTime);
+
+        gain.gain.setValueAtTime(volume * 0.5, sTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, sTime + dur);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(sTime);
+        osc.stop(sTime + dur);
+      });
+    } catch (e) {}
+  },
+
+  // 3. Rest Timer Countdown Warning (Tick tone on 3, 2, 1 seconds before rest ends)
+  playCountdownWarning(secondsLeft: number, volume = 0.2): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      // Higher pitch on final 1 second warning
+      const freq = secondsLeft === 1 ? 950 : 660;
+      const duration = 0.08;
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+
+      gain.gain.setValueAtTime(volume, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + duration);
+    } catch (e) {}
+  },
+
+  // 3b. Rest Timer 5-Second Warning Prepare Chime (Subtle, pleasant melodic chime signaling user to prepare for next set)
+  playPrepareChime(volume = 0.22): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+
+      // Soft, crystal triad chime chord (A5: 880Hz -> C#6: 1108.73Hz -> E6: 1318.51Hz)
+      const chimeTones = [
+        { freq: 880.00, startOffset: 0.0, dur: 0.45 },
+        { freq: 1108.73, startOffset: 0.09, dur: 0.55 },
+        { freq: 1318.51, startOffset: 0.18, dur: 0.65 },
+      ];
+
+      chimeTones.forEach(({ freq, startOffset, dur }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const startTime = ctx.currentTime + startOffset;
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, startTime);
+
+        // Soft attack to keep it gentle & subtle, then exponential decay
+        gain.gain.setValueAtTime(0.001, startTime);
+        gain.gain.linearRampToValueAtTime(volume * 0.4, startTime + 0.025);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + dur);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(startTime);
+        osc.stop(startTime + dur);
+      });
+    } catch (e) {}
+  },
+
+  // 4. Rest Timer Start Cue (Smooth descending tone signaling recovery start)
+  playRestStartCue(volume = 0.25): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(650, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.25);
+
+      gain.gain.setValueAtTime(volume, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.28);
+    } catch (e) {}
+  },
+
+  // 5. Rest Timer Skip / End Early Cue
+  playRestSkipCue(volume = 0.25): void {
+    this.playBeep(750, 0.1, volume);
+  }
 };

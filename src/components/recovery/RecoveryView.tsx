@@ -10,11 +10,13 @@ import {
   RotateCcw, 
   Check, 
   ShieldCheck, 
-  Plus 
+  Plus,
+  Activity
 } from 'lucide-react';
 import { RecoverySession, UserProfile } from '../../types';
 import { translations } from '../../i18n/translations';
 import { StorageService } from '../../services/storage';
+import { SmartWarmupModal } from '../workout/SmartWarmupModal';
 
 interface RecoveryViewProps {
   profile: UserProfile;
@@ -31,6 +33,8 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
   const [durationMin, setDurationMin] = useState<number>(15);
   const [timerSeconds, setTimerSeconds] = useState<number>(0);
   const [timerActive, setTimerActive] = useState<boolean>(false);
+  const [warmupModalOpen, setWarmupModalOpen] = useState<boolean>(false);
+  const [warmupType, setWarmupType] = useState<'push' | 'pull' | 'legs' | 'full_body'>('full_body');
 
   const timerRef = useRef<any>(null);
 
@@ -137,6 +141,48 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
               ? 'غرفة مظلمة باردة (19°C) وتجنب الشاشات قبل النوم بـ 60 دقيقة لتعظيم إفراز التستوستيرون.'
               : 'Dark, cool 19°C environment, zero blue-light 60 min before sleep for natural testosterone release.'}
           </p>
+        </div>
+      </div>
+
+      {/* Smart Warm-up & Dynamic Joint Mobilization Section */}
+      <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-card to-card p-6 shadow-md space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
+              <Flame className="h-5 w-5 fill-current" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-foreground">
+                {isAr ? 'الإحماء الذكي وتليين المفاصل (5 دقائق)' : '5-Minute Smart Dynamic Warm-up & Mobility'}
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                {isAr
+                  ? 'بروتوكول حركي ميكانيكي لزيادة تدفق السائل الزلالي وتنشيط الجهاز العصبي العضلي.'
+                  : 'Targeted joint mobilization, rotator cuff activation, and neural priming.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {(['push', 'pull', 'legs', 'full_body'] as const).map(type => (
+              <button
+                key={type}
+                onClick={() => {
+                  setWarmupType(type);
+                  setWarmupModalOpen(true);
+                }}
+                className={`rounded-xl border px-3 py-2 text-xs font-bold transition-all ${
+                  warmupType === type
+                    ? 'border-amber-500 bg-amber-500/20 text-amber-300'
+                    : 'border-border bg-card/60 text-muted-foreground hover:bg-secondary hover:text-foreground'
+                }`}
+              >
+                {type === 'push' ? (isAr ? 'دفع (Push)' : 'Push') :
+                 type === 'pull' ? (isAr ? 'سحب (Pull)' : 'Pull') :
+                 type === 'legs' ? (isAr ? 'أرجل (Legs)' : 'Legs') : (isAr ? 'حركي شامل' : 'Full Body')}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -270,6 +316,14 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Smart Warm-up / Mobility Sequence Modal */}
+      <SmartWarmupModal
+        isOpen={warmupModalOpen}
+        initialWorkoutType={warmupType}
+        profile={profile}
+        onClose={() => setWarmupModalOpen(false)}
+      />
     </div>
   );
 };

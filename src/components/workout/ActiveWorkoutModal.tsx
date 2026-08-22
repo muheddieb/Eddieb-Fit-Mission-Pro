@@ -23,7 +23,8 @@ import {
   FastForward,
   Music,
   CheckCircle2,
-  Sparkles
+  Sparkles,
+  Bell
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -33,6 +34,7 @@ import { PPLEngine, ProgressionAdvice } from '../../services/pplEngine';
 import { StorageService } from '../../services/storage';
 import { WakeLockService } from '../../services/wakeLockService';
 import { AudioService } from '../../services/audioService';
+import { SmartWarmupModal } from './SmartWarmupModal';
 
 interface ActiveWorkoutModalProps {
   workout: WorkoutSession;
@@ -79,8 +81,18 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   const [selectedSound, setSelectedSound] = useState<RestSoundType>(profile.restSoundType || 'beep');
   const [swapExerciseOpen, setSwapExerciseOpen] = useState<boolean>(false);
   const [soundPickerOpen, setSoundPickerOpen] = useState<boolean>(false);
+  const [smartWarmupOpen, setSmartWarmupOpen] = useState<boolean>(false);
 
   const timerRef = useRef<any>(null);
+  const hasTriggeredStartCue = useRef<boolean>(false);
+
+  // Play Workout Start Audio Cue on modal mount
+  useEffect(() => {
+    if (!hasTriggeredStartCue.current && soundEnabled) {
+      AudioService.playWorkoutStartCue(0.3);
+      hasTriggeredStartCue.current = true;
+    }
+  }, [soundEnabled]);
 
   // Acquire Screen Wake Lock on workout open, release on close
   useEffect(() => {
@@ -98,10 +110,10 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   // Play configured rest completion sound (beep / whistle / chime / buzzer / bell)
   const triggerRestSound = () => {
     if (!soundEnabled) return;
-    AudioService.playSound(selectedSound, 0.35);
+    AudioService.playSound(selectedSound, 0.4);
   };
 
-  // Timer countdown interval
+  // Timer countdown interval with 5-second prepare chime, 3-2-1 countdown audio cues & end cue
   useEffect(() => {
     if (timerActive && timerSeconds > 0) {
       timerRef.current = setInterval(() => {
@@ -111,6 +123,18 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
             setTimerActive(false);
             triggerRestSound();
             return 0;
+          }
+          // 5-second prepare cue: subtle chime to signal user to prepare for next set
+          if (prev === 6) {
+            if (soundEnabled) {
+              AudioService.playPrepareChime(0.22);
+            }
+          }
+          // 3-2-1 transition warnings
+          if (prev === 4 || prev === 3 || prev === 2) {
+            if (soundEnabled) {
+              AudioService.playCountdownWarning(prev - 1, 0.25);
+            }
           }
           return prev - 1;
         });
@@ -125,12 +149,18 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   const startTimer = (seconds: number) => {
     setTimerSeconds(seconds);
     setTimerActive(true);
+    if (soundEnabled) {
+      AudioService.playRestStartCue(0.25);
+    }
   };
 
   const endRestImmediately = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     setTimerSeconds(0);
     setTimerActive(false);
+    if (soundEnabled) {
+      AudioService.playRestSkipCue(0.25);
+    }
   };
 
   const adjustTimer = (delta: number) => {
@@ -164,7 +194,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     setWorkout({ ...workout, exercises: updatedExercises });
   };
 
-  // Toggle set completion and trigger rest timer
+  // Toggle set completion and trigger rest timer with audio cue
   const handleToggleSetCompletion = (setLog: SetLog) => {
     const nextCompleted = !setLog.completed;
     handleUpdateSet(setLog.id, 'completed', nextCompleted);
@@ -200,6 +230,9 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     });
 
     setWorkout({ ...workout, exercises: updatedExercises });
+    if (soundEnabled) {
+      AudioService.playBeep(880, 0.1, 0.2);
+    }
   };
 
   // Remove set
@@ -246,7 +279,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     setSwapExerciseOpen(false);
   };
 
-  // Finish Workout
+  // Finish Workout with audio cue
   const handleFinish = () => {
     let totalVolume = 0;
     workout.exercises.forEach(ex => {
@@ -264,6 +297,11 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
       totalVolumeKg: totalVolume,
       notes: workout.notes || 'Mission accomplished with progressive overload and fat loss focus.',
     };
+
+    // Play victory finish fanfare audio cue
+    if (soundEnabled) {
+      AudioService.playWorkoutEndCue(0.35);
+    }
 
     try {
       confetti({
@@ -315,12 +353,23 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
 
         <div className="flex items-center gap-2">
           {/* Sound & Tone Selector Dropdown Trigger */}
+          <button
+            id="btn-warmup-workout-top"
+            onClick={() => setSmartWarmupOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-amber-400 hover:bg-amber-500/20 transition-all shadow-sm"
+            title={isAr ? 'الإحماء الذكي الديناميكي (5 دقائق)' : '5-Minute Smart Warm-up'}
+          >
+            <Flame className="h-4 w-4 fill-current" />
+            <span className="hidden sm:inline">{isAr ? 'إحماء ذكي (5 د)' : 'Smart Warm-up (5m)'}</span>
+            <span className="sm:hidden">{isAr ? 'إحماء' : 'Warm-up'}</span>
+          </button>
+
           <div className="relative">
             <button
               id="btn-sound-toggle-workout"
               onClick={() => setSoundPickerOpen(!soundPickerOpen)}
               className="flex items-center gap-1 rounded-lg border border-border bg-secondary/60 px-2.5 py-1.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors"
-              title={isAr ? 'تغيير صوت انتهاء الراحة (Beep, صافرة, جرس)' : 'Rest timer sound selector'}
+              title={isAr ? 'تغيير صوت وتنبيهات التدريب (Start, End, Rest, Beep)' : 'Workout Audio Cues & Rest Sound Selector'}
             >
               {soundEnabled ? (
                 <Volume2 className="h-4 w-4 text-primary" />
@@ -331,9 +380,10 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
             </button>
 
             {soundPickerOpen && (
-              <div className="absolute right-0 top-full mt-2 w-48 rounded-2xl border border-border bg-card p-2 shadow-2xl z-50 space-y-1">
-                <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  {isAr ? 'صوت انتهاء فترة الراحة' : 'Rest Alert Sound'}
+              <div className="absolute right-0 top-full mt-2 w-52 rounded-2xl border border-border bg-card p-2 shadow-2xl z-50 space-y-1">
+                <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+                  <span>{isAr ? 'المؤثرات الصوتية للجلسة' : 'Workout Audio Cues'}</span>
+                  <Bell className="h-3 w-3 text-primary" />
                 </div>
                 {(['beep', 'whistle', 'chime', 'buzzer', 'bell'] as RestSoundType[]).map(st => (
                   <button
@@ -366,7 +416,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                     }}
                     className="flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-secondary"
                   >
-                    <span>{soundEnabled ? (isAr ? 'كتم الصوت' : 'Mute Sound') : (isAr ? 'تفعيل الصوت' : 'Unmute Sound')}</span>
+                    <span>{soundEnabled ? (isAr ? 'كتم جميع الأصوات' : 'Mute All Audio') : (isAr ? 'تفعيل الأصوات' : 'Unmute Audio')}</span>
                   </button>
                 </div>
               </div>
@@ -479,27 +529,26 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                       {t.workout.progression}: {progressionAdvice.recommendedWeight} kg ({progressionAdvice.status.toUpperCase()})
                     </div>
                     <div className="text-muted-foreground">
-                      {isAr ? progressionAdvice.reasonAr : progressionAdvice.reason}
+                      {isAr && progressionAdvice.reasonAr ? progressionAdvice.reasonAr : progressionAdvice.reason}
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Substitution Drawer (if opened) */}
+              {/* Exercise Substitute Modal Drawer */}
               <AnimatePresence>
                 {swapExerciseOpen && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="overflow-hidden rounded-xl border border-border bg-secondary/40 p-4 space-y-3"
+                    className="rounded-xl border border-border bg-secondary/40 p-4 space-y-3"
                   >
                     <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-foreground">
-                        {isAr ? 'بدائل مطابقة لنفس المسار الحركي والهدف العضلي:' : 'Biomechanical Movement Substitutes:'}
-                      </h4>
+                      <span className="text-xs font-bold text-foreground">
+                        {isAr ? 'التمارين البديلة لنفس العضلة المستهدفة' : 'Targeted Alternative Exercises'}
+                      </span>
                       <button
-                        id="btn-close-substitutes"
                         onClick={() => setSwapExerciseOpen(false)}
                         className="text-xs text-muted-foreground hover:text-foreground"
                       >
@@ -511,19 +560,14 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                       {substitutes.map(sub => (
                         <button
                           key={sub.id}
-                          id={`btn-swap-to-${sub.id}`}
                           onClick={() => handleSwapExercise(sub)}
-                          className="flex items-center justify-between rounded-lg border border-border bg-card p-2.5 text-left hover:border-primary/40 hover:bg-card/80 transition-colors"
+                          className="flex items-center justify-between rounded-lg border border-border bg-card p-2.5 text-left text-xs font-semibold text-foreground hover:border-primary transition-colors"
                         >
                           <div>
-                            <div className="text-xs font-bold text-foreground">
-                              {isAr && sub.nameAr ? sub.nameAr : sub.name}
-                            </div>
-                            <div className="text-[10px] text-muted-foreground">
-                              {sub.equipment} • {sub.difficulty}
-                            </div>
+                            <div className="font-bold">{isAr && sub.nameAr ? sub.nameAr : sub.name}</div>
+                            <div className="text-[10px] text-muted-foreground">{sub.equipment} • {sub.difficulty}</div>
                           </div>
-                          <span className="text-xs font-bold text-primary">{t.workout.substitute}</span>
+                          <CheckCircle2 className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100" />
                         </button>
                       ))}
                     </div>
@@ -572,7 +616,6 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                             onChange={e => handleUpdateSet(setLog.id, 'actualWeight', parseFloat(e.target.value))}
                             className="w-full rounded-xl border border-border bg-card py-2 px-2 text-center text-xs sm:text-sm font-bold text-foreground focus:border-primary focus:outline-none transition-colors cursor-pointer hover:border-primary/50"
                           >
-                            {/* Make sure current value is included even if custom */}
                             {!WEIGHT_OPTIONS.includes(setLog.actualWeight) && setLog.actualWeight > 0 && (
                               <option value={setLog.actualWeight}>{setLog.actualWeight} kg (Custom)</option>
                             )}
@@ -706,10 +749,15 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
               <Timer className="h-5 w-5" />
             </div>
             <div>
-              <div className="text-[10px] uppercase font-black text-muted-foreground tracking-wider flex items-center gap-1">
+              <div className="text-[10px] uppercase font-black text-muted-foreground tracking-wider flex items-center gap-1.5">
                 <span>{t.workout.restTimer}</span>
-                {timerActive && (
+                {timerActive && timerSeconds > 5 && (
                   <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+                )}
+                {timerActive && timerSeconds <= 5 && timerSeconds > 0 && (
+                  <span className="rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-400 border border-amber-500/30 animate-pulse">
+                    {isAr ? '🔔 استعد للمجموعة!' : '🔔 Prepare for Set!'}
+                  </span>
                 )}
               </div>
               <div className="text-xl font-black text-foreground font-mono">
@@ -781,7 +829,14 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Smart Warm-up 5-Minute Modal */}
+      <SmartWarmupModal
+        isOpen={smartWarmupOpen}
+        initialWorkoutType={workout.type}
+        profile={profile}
+        onClose={() => setSmartWarmupOpen(false)}
+      />
     </div>
   );
 };
-

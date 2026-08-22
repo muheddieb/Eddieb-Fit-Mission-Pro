@@ -10,7 +10,13 @@ import {
   Coffee, 
   Info, 
   Sparkles,
-  Search
+  Search,
+  Activity,
+  Target,
+  Zap,
+  CheckCircle2,
+  TrendingDown,
+  Scale
 } from 'lucide-react';
 import { FoodItemSeed, NutritionEntry, UserProfile } from '../../types';
 import { translations } from '../../i18n/translations';
@@ -19,10 +25,12 @@ import { StorageService } from '../../services/storage';
 
 interface NutritionViewProps {
   profile: UserProfile;
+  onUpdateProfile?: (profile: UserProfile) => void;
 }
 
 export const NutritionView: React.FC<NutritionViewProps> = ({
   profile,
+  onUpdateProfile,
 }) => {
   const t = translations[profile.language];
   const isAr = profile.language === 'ar';
@@ -34,6 +42,15 @@ export const NutritionView: React.FC<NutritionViewProps> = ({
   const [customFoodName, setCustomFoodName] = useState<string>('');
   const [customCalories, setCustomCalories] = useState<number>(200);
   const [customProtein, setCustomProtein] = useState<number>(25);
+
+  // TDEE Interactive Calculator State
+  const [tdeeAge, setTdeeAge] = useState<number>(profile.age || 26);
+  const [tdeeHeight, setTdeeHeight] = useState<number>(profile.heightCm || 180);
+  const [tdeeWeight, setTdeeWeight] = useState<number>(profile.currentWeightKg || 88);
+  const [tdeeGender, setTdeeGender] = useState<'male' | 'female'>('male');
+  const [tdeeActivity, setTdeeActivity] = useState<number>(1.55); // 1.2: Sedentary, 1.375: Light, 1.55: Moderate, 1.725: Heavy, 1.9: Extreme
+  const [tdeeGoal, setTdeeGoal] = useState<'aggressive_cut' | 'moderate_cut' | 'maintenance' | 'recomp' | 'lean_bulk'>('moderate_cut');
+  const [appliedNotification, setAppliedNotification] = useState<boolean>(false);
 
   const tips = isAr ? prePostWorkoutTips.ar : prePostWorkoutTips.en;
 
@@ -55,6 +72,70 @@ export const NutritionView: React.FC<NutritionViewProps> = ({
   const calculatedProtein = Math.round(((selectedFood.proteinPer100g * portionGrams) / 100) * 10) / 10;
   const calculatedCarbs = Math.round(((selectedFood.carbsPer100g * portionGrams) / 100) * 10) / 10;
   const calculatedFat = Math.round(((selectedFood.fatPer100g * portionGrams) / 100) * 10) / 10;
+
+  // Mifflin-St Jeor TDEE & BMR Formula
+  const bmr = Math.round(
+    tdeeGender === 'male'
+      ? 10 * tdeeWeight + 6.25 * tdeeHeight - 5 * tdeeAge + 5
+      : 10 * tdeeWeight + 6.25 * tdeeHeight - 5 * tdeeAge - 161
+  );
+
+  const calculatedTDEE = Math.round(bmr * tdeeActivity);
+
+  // Goal adjustment
+  let goalCalorieTarget = calculatedTDEE;
+  let targetProteinGrams = Math.round(tdeeWeight * 2.2); // ~2.2g per kg bodyweight
+  let goalDescription = '';
+  let goalDescriptionAr = '';
+
+  if (tdeeGoal === 'aggressive_cut') {
+    goalCalorieTarget = Math.round(calculatedTDEE * 0.75); // -25% deficit
+    targetProteinGrams = Math.round(tdeeWeight * 2.4);
+    goalDescription = 'Aggressive Fat Loss (-25% Deficit, High Satiety)';
+    goalDescriptionAr = 'حرق دهون مكثف (عجز 25% مع بروتين عالي جداً)';
+  } else if (tdeeGoal === 'moderate_cut') {
+    goalCalorieTarget = Math.round(calculatedTDEE * 0.82); // -18% deficit
+    targetProteinGrams = Math.round(tdeeWeight * 2.2);
+    goalDescription = 'Controlled Fat Loss (-18% Deficit, Muscle Preserving)';
+    goalDescriptionAr = 'تنشيف محسوب ومستدام (عجز 18% للحفاظ على الكتلة العضلية)';
+  } else if (tdeeGoal === 'recomp') {
+    goalCalorieTarget = Math.round(calculatedTDEE * 0.95); // -5% slight deficit
+    targetProteinGrams = Math.round(tdeeWeight * 2.3);
+    goalDescription = 'Body Recomposition (Simultaneous Fat Loss & Muscle Tone)';
+    goalDescriptionAr = 'إعادة تشكيل الجسم (بناء عضل مع خفض الدهون تدريجياً)';
+  } else if (tdeeGoal === 'maintenance') {
+    goalCalorieTarget = calculatedTDEE;
+    targetProteinGrams = Math.round(tdeeWeight * 2.0);
+    goalDescription = 'Energy Balance Maintenance';
+    goalDescriptionAr = 'تثبيت الوزن وتوازن الطاقة الكامل';
+  } else if (tdeeGoal === 'lean_bulk') {
+    goalCalorieTarget = Math.round(calculatedTDEE * 1.10); // +10% surplus
+    targetProteinGrams = Math.round(tdeeWeight * 2.0);
+    goalDescription = 'Lean Muscle Mass Surplus (+10%)';
+    goalDescriptionAr = 'تضخيم عضلي صافي وفائض مدروس (+10%)';
+  }
+
+  // Recommended Macros distribution for Target
+  const targetFatGrams = Math.round((goalCalorieTarget * 0.25) / 9);
+  const targetCarbsGrams = Math.max(50, Math.round((goalCalorieTarget - (targetProteinGrams * 4 + targetFatGrams * 9)) / 4));
+
+  const handleApplyTDEETargets = () => {
+    const updatedProfile: UserProfile = {
+      ...profile,
+      dailyCalorieTarget: goalCalorieTarget,
+      dailyProteinTargetGrams: targetProteinGrams,
+      currentWeightKg: tdeeWeight,
+      heightCm: tdeeHeight,
+      age: tdeeAge,
+    };
+
+    StorageService.saveProfile(updatedProfile);
+    if (onUpdateProfile) {
+      onUpdateProfile(updatedProfile);
+    }
+    setAppliedNotification(true);
+    setTimeout(() => setAppliedNotification(false), 4000);
+  };
 
   const handleLogFoodItem = () => {
     const foodTitle = isAr && selectedFood.nameAr ? selectedFood.nameAr : selectedFood.name;
@@ -172,6 +253,172 @@ export const NutritionView: React.FC<NutritionViewProps> = ({
           <p className="text-[11px] text-muted-foreground mt-1">
             Olive oil, egg yolks, seeds
           </p>
+        </div>
+      </div>
+
+      {/* TDEE (Total Daily Energy Expenditure) Calculator */}
+      <div className="rounded-3xl border border-primary/30 bg-gradient-to-br from-card via-card to-primary/5 p-6 shadow-xl space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border pb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+              <Activity className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-black text-foreground">
+                  {isAr ? 'حاسبة استهلاك الطاقة الكلي (TDEE) والسعرات الدقيقة' : 'TDEE (Total Daily Energy Expenditure) Calculator'}
+                </h3>
+                <span className="rounded bg-primary/20 px-2 py-0.5 text-[10px] font-black text-primary uppercase">
+                  Mifflin-St Jeor
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {isAr 
+                  ? 'احسب معدل الحرق اليومي الحقيقي وحدد هدف السعرات والماكروز تلقائياً للتنشيف أو البناء'
+                  : 'Calculate your exact metabolic expenditure and optimize daily caloric deficits for fat loss.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Calculator Inputs Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+          {/* Age */}
+          <div>
+            <label className="block text-xs font-bold text-muted-foreground mb-1">
+              {isAr ? 'العمر (سنة)' : 'Age (years)'}
+            </label>
+            <input
+              type="number"
+              min="16"
+              max="90"
+              value={tdeeAge}
+              onChange={e => setTdeeAge(parseInt(e.target.value, 10) || 25)}
+              className="w-full rounded-xl border border-border bg-background p-2.5 text-sm font-bold text-foreground focus:border-primary focus:outline-none"
+            />
+          </div>
+
+          {/* Height */}
+          <div>
+            <label className="block text-xs font-bold text-muted-foreground mb-1">
+              {isAr ? 'الطول (سم)' : 'Height (cm)'}
+            </label>
+            <input
+              type="number"
+              min="120"
+              max="230"
+              value={tdeeHeight}
+              onChange={e => setTdeeHeight(parseInt(e.target.value, 10) || 180)}
+              className="w-full rounded-xl border border-border bg-background p-2.5 text-sm font-bold text-foreground focus:border-primary focus:outline-none"
+            />
+          </div>
+
+          {/* Weight */}
+          <div>
+            <label className="block text-xs font-bold text-muted-foreground mb-1">
+              {isAr ? 'الوزن الحالي (كجم)' : 'Current Weight (kg)'}
+            </label>
+            <input
+              type="number"
+              min="40"
+              max="200"
+              step="0.5"
+              value={tdeeWeight}
+              onChange={e => setTdeeWeight(parseFloat(e.target.value) || 80)}
+              className="w-full rounded-xl border border-border bg-background p-2.5 text-sm font-bold text-foreground focus:border-primary focus:outline-none"
+            />
+          </div>
+
+          {/* Activity Level */}
+          <div>
+            <label className="block text-xs font-bold text-muted-foreground mb-1">
+              {isAr ? 'مستوى النشاط الأسبوعي' : 'Activity Multiplier'}
+            </label>
+            <select
+              value={tdeeActivity}
+              onChange={e => setTdeeActivity(parseFloat(e.target.value))}
+              className="w-full rounded-xl border border-border bg-background p-2.5 text-xs font-bold text-foreground focus:border-primary focus:outline-none"
+            >
+              <option value="1.2">{isAr ? 'خامل (مكتبي / قليل الحركة)' : 'Sedentary (desk job)'}</option>
+              <option value="1.375">{isAr ? 'نشاط خفيف (1-2 يوم تمرين)' : 'Light (1-2 days/wk)'}</option>
+              <option value="1.55">{isAr ? 'نشاط متوسط (3-5 أيام تمرين)' : 'Moderate (3-5 days/wk)'}</option>
+              <option value="1.725">{isAr ? 'نشاط عالي (6-7 أيام مكثفة)' : 'Heavy (6-7 days/wk)'}</option>
+              <option value="1.9">{isAr ? 'نشاط رياضي شاق (تدريب مضاعف)' : 'Extreme (Athlete 2x/day)'}</option>
+            </select>
+          </div>
+
+          {/* Goal Selector */}
+          <div>
+            <label className="block text-xs font-bold text-muted-foreground mb-1">
+              {isAr ? 'الهدف التدريبي' : 'Fitness Mission'}
+            </label>
+            <select
+              value={tdeeGoal}
+              onChange={e => setTdeeGoal(e.target.value as any)}
+              className="w-full rounded-xl border border-border bg-background p-2.5 text-xs font-bold text-primary focus:border-primary focus:outline-none"
+            >
+              <option value="aggressive_cut">{isAr ? 'تنشيف سريع (-25%)' : 'Aggressive Cut (-25%)'}</option>
+              <option value="moderate_cut">{isAr ? 'تنشيف مدروس (-18%)' : 'Controlled Fat Loss (-18%)'}</option>
+              <option value="recomp">{isAr ? 'إعادة تشكيل Recomp (-5%)' : 'Body Recomp (-5%)'}</option>
+              <option value="maintenance">{isAr ? 'تثبيت الوزن (0%)' : 'Maintenance (0%)'}</option>
+              <option value="lean_bulk">{isAr ? 'تضخيم صافي (+10%)' : 'Lean Bulk (+10%)'}</option>
+            </select>
+          </div>
+        </div>
+
+        {/* TDEE Summary & Calculated Target Breakdown */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center rounded-2xl border border-primary/20 bg-secondary/40 p-4">
+          {/* Left stats: BMR & Maintenance TDEE */}
+          <div className="md:col-span-4 space-y-2 border-b md:border-b-0 md:border-r border-border pb-3 md:pb-0 md:pr-4">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">{isAr ? 'معدل الأيض الأساسي (BMR):' : 'Basal Metabolic Rate (BMR):'}</span>
+              <span className="font-mono font-black text-foreground">{bmr} kcal</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">{isAr ? 'إجمالي الحرق اليومي (TDEE):' : 'Total Daily Burn (TDEE):'}</span>
+              <span className="font-mono font-black text-amber-400 text-sm">{calculatedTDEE} kcal</span>
+            </div>
+            <div className="text-[11px] text-muted-foreground pt-1">
+              {isAr ? goalDescriptionAr : goalDescription}
+            </div>
+          </div>
+
+          {/* Center targets: Recommended Calorie & Protein */}
+          <div className="md:col-span-5 grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-xl border border-border bg-card p-2.5">
+              <div className="text-[10px] text-muted-foreground font-bold uppercase">{isAr ? 'السعرات المستهدفة' : 'Target Calories'}</div>
+              <div className="text-lg font-black text-amber-400 font-mono mt-0.5">{goalCalorieTarget}</div>
+              <div className="text-[10px] text-muted-foreground">kcal / day</div>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-2.5">
+              <div className="text-[10px] text-muted-foreground font-bold uppercase">{isAr ? 'البروتين' : 'Protein'}</div>
+              <div className="text-lg font-black text-primary font-mono mt-0.5">{targetProteinGrams}</div>
+              <div className="text-[10px] text-muted-foreground">g / day</div>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-2.5">
+              <div className="text-[10px] text-muted-foreground font-bold uppercase">{isAr ? 'الكارب / الدهون' : 'Carbs / Fat'}</div>
+              <div className="text-sm font-black text-foreground font-mono mt-1">{targetCarbsGrams}g / {targetFatGrams}g</div>
+              <div className="text-[10px] text-muted-foreground">{isAr ? 'توزيع مثالي' : 'optimal'}</div>
+            </div>
+          </div>
+
+          {/* Right action: Apply to Profile Button */}
+          <div className="md:col-span-3 flex flex-col items-center justify-center">
+            <button
+              id="btn-apply-tdee-to-profile"
+              onClick={handleApplyTDEETargets}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-xs font-black text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all active:scale-95"
+            >
+              <Target className="h-4 w-4" />
+              <span>{isAr ? 'اعتماد الأهداف في الملف' : 'Apply Targets to App'}</span>
+            </button>
+            {appliedNotification && (
+              <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 mt-2 animate-bounce">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {isAr ? 'تم تحديث الأهداف اليومية بنجاح!' : 'Targets Applied to Profile!'}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

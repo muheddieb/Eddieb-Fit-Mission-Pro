@@ -7,6 +7,7 @@ import {
   BodyMeasurement 
 } from '../types';
 import { exerciseSeedData } from '../data/exerciseSeed';
+import { calculateProgramProgress, parseDateAtMidnight } from './dateUtils';
 
 export interface ProgressionAdvice {
   recommendedWeight: number;
@@ -19,6 +20,14 @@ export interface ProgressionAdvice {
 
 export interface TransitionPhaseInfo {
   currentWeek: number;
+  currentDayInWeek: number;
+  totalProgramDay: number;
+  totalDaysElapsed: number;
+  cycleNumber: number;
+  weekInCycle: number;
+  startDate: string;
+  formattedProgress: string;
+  formattedProgressAr: string;
   phaseTitle: string;
   phaseTitleAr: string;
   focusDirectives: string[];
@@ -27,6 +36,37 @@ export interface TransitionPhaseInfo {
   calorieAdjustmentAr: string;
   cardioRecommendation: string;
   cardioRecommendationAr: string;
+}
+
+export interface WeeklyVolumeSession {
+  id: string;
+  date: string;
+  dayName: string;
+  dayNameAr: string;
+  name: string;
+  nameAr: string;
+  type: string;
+  volumeKg: number;
+  setsCount: number;
+  completed: boolean;
+}
+
+export interface WeeklyVolumeInfo {
+  currentWeekVolumeKg: number;
+  currentWeekVolumeTons: number;
+  previousWeekVolumeKg: number;
+  volumeDeltaKg: number;
+  volumeDeltaPercent: number;
+  totalSetsCompleted: number;
+  totalRepsCompleted: number;
+  workoutsInWeekCount: number;
+  avgVolumePerWorkoutKg: number;
+  status: 'overload_achieved' | 'steady_maintenance' | 'volume_deload' | 'baseline';
+  statusBadge: string;
+  statusBadgeAr: string;
+  feedback: string;
+  feedbackAr: string;
+  sessionBreakdown: WeeklyVolumeSession[];
 }
 
 export const PPLEngine = {
@@ -300,96 +340,263 @@ export const PPLEngine = {
     );
   },
 
-  // 4-Week Adaptive Transition Engine
-  getFourWeekTransition(startDateStr: string): TransitionPhaseInfo {
-    const start = new Date(startDateStr || Date.now()).getTime();
-    const now = Date.now();
-    const daysElapsed = Math.max(0, Math.floor((now - start) / 86400000));
-    const currentWeek = Math.min(4, Math.max(1, Math.floor(daysElapsed / 7) + 1));
+  // Parse date safely at local midnight (delegates to centralized dateUtils)
+  parseDateOnly(dateStr: string): Date {
+    return parseDateAtMidnight(dateStr);
+  },
 
-    switch (currentWeek) {
+  // Dynamic Adaptive Program Timeline Engine (Single Source of Truth: Start Date + Current Date)
+  getAdaptiveProgramTimeline(startDateStr: string, customNow?: Date): TransitionPhaseInfo {
+    const progress = calculateProgramProgress(startDateStr, customNow);
+    const {
+      currentWeek,
+      currentDay: currentDayInWeek,
+      totalProgramDay,
+      totalElapsedDays,
+      totalElapsedDays: totalDaysElapsed,
+      cycleNumber,
+      weekInCycle,
+      startDateString: startDate,
+      formattedProgress,
+      formattedProgressAr,
+    } = progress;
+
+    let phaseTitle = '';
+    let phaseTitleAr = '';
+    let focusDirectives: string[] = [];
+    let focusDirectivesAr: string[] = [];
+    let calorieAdjustment = '';
+    let calorieAdjustmentAr = '';
+    let cardioRecommendation = '';
+    let cardioRecommendationAr = '';
+
+    switch (weekInCycle) {
       case 1:
-        return {
-          currentWeek: 1,
-          phaseTitle: 'Week 1: Stability & Baseline Calibration',
-          phaseTitleAr: 'الأسبوع 1: الاستقرار وتثبيت الأوزان المرجعية',
-          focusDirectives: [
-            'Establish rock-solid form on primary compound movements (Bench, Squat, Rows).',
-            'Modest caloric deficit (250-350 kcal) ensuring zero loss of training stamina.',
-            'Target 7,500 daily steps with low-impact incline treadmill walking.',
-          ],
-          focusDirectivesAr: [
-            'تثبيت التكنيك في الحركات المركبة الأساسية (البنش، السكوات، السحب).',
-            'عجز سعرات معتدل (250-350 سعرة) لضمان عدم تأثر طاقة التمرين.',
-            'استهداف 7,500 خطوة يومياً مع المشي بميل خفيف.',
-          ],
-          calorieAdjustment: 'Slight deficit (~300 kcal below TDEE)',
-          calorieAdjustmentAr: 'عجز طفيف (~300 سعرة تحت الثبات)',
-          cardioRecommendation: '2 x 20 min LISS Incline Walk',
-          cardioRecommendationAr: 'جلستان 20 دقيقة مشي بميل',
-        };
+        phaseTitle = `Week ${currentWeek}: Stability & Progressive Baseline (Cycle ${cycleNumber}, Block Week 1)`;
+        phaseTitleAr = `الأسبوع ${currentWeek}: الاستقرار وتثبيت الأوزان المرجعية (الدورة ${cycleNumber}، الأسبوع 1)`;
+        focusDirectives = [
+          'Establish rock-solid form and benchmark loads on primary compound movements (Bench, Squat, Rows).',
+          'Maintain controlled deficit or recomp surplus ensuring full recovery capacity between sessions.',
+          'Accumulate steady base movement (7,500-8,500 daily steps) with low-impact cardio.',
+        ];
+        focusDirectivesAr = [
+          'تثبيت التكنيك والأوزان المرجعية في الحركات المركبة الأساسية (البنش، السكوات، السحب).',
+          'الالتزام بالسعرات المستهدفة لضمان طاقة كاملة واستشفاء سريع بين التمارين.',
+          'استهداف 7,500 إلى 8,500 خطوة يومياً مع كارديو منخفض الشدة.',
+        ];
+        calorieAdjustment = 'Controlled energy balance (~300 kcal deficit or maintenance)';
+        calorieAdjustmentAr = 'توازن طاقة منضبط (~300 سعرة عجز أو سعرات الثبات)';
+        cardioRecommendation = '2-3 x 20 min LISS Incline Walk';
+        cardioRecommendationAr = '2-3 جلسات 20 دقيقة مشي بميل خفيف';
+        break;
+
       case 2:
-        return {
-          currentWeek: 2,
-          phaseTitle: 'Week 2: Resistance Maintenance & Step Progression',
-          phaseTitleAr: 'الأسبوع 2: الحفاظ على الأحمال وزيادة النشاط اليومي',
-          focusDirectives: [
-            'Do NOT drop working set weights—preserve muscle tension above all else.',
-            'Increase daily movement target to 8,500 - 9,500 steps.',
-            'Track 7-day average scale weight and waist circumference.',
-          ],
-          focusDirectivesAr: [
-            'لا تقلل أوزان التمرين—الشد العضلي هو الحامي الأول للكتلة العضلية.',
-            'رفع خطوات المشي اليومية إلى 8,500 - 9,500 خطوة.',
-            'متابعة متوسط الوزن لـ 7 أيام مع قياس الخصر.',
-          ],
-          calorieAdjustment: 'Maintain steady deficit, protein >= 2.0g/kg',
-          calorieAdjustmentAr: 'عجز ثابت مع بروتين لا يقل عن 2.0 جم/كجم',
-          cardioRecommendation: '3 x 25 min Zone 2 Cycling / Walking',
-          cardioRecommendationAr: '3 جلسات 25 دقيقة كارديو معتدل',
-        };
+        phaseTitle = `Week ${currentWeek}: Load Maintenance & Step Progression (Cycle ${cycleNumber}, Block Week 2)`;
+        phaseTitleAr = `الأسبوع ${currentWeek}: الحفاظ على الأحمال وزيادة النشاط اليومي (الدورة ${cycleNumber}، الأسبوع 2)`;
+        focusDirectives = [
+          'Do NOT drop working set weights—preserve muscle mechanical tension above all else.',
+          'Attempt micro-overload (+1-2 reps or +1.25kg to +2.5kg on final sets if RPE <= 8).',
+          'Increase daily movement target to 8,500 - 9,500 steps.',
+        ];
+        focusDirectivesAr = [
+          'لا تقلل أوزان التمرين—الشد الميكانيكي هو المحرك الأساسي لحماية وبناء الكتلة العضلية.',
+          'محاولة زيادة تكرار أو زيادة وزن خفيفة (+1.25 إلى 2.5 كجم) في المجموعات الأخيرة إذا كان RPE <= 8.',
+          'رفع خطوات المشي اليومية إلى 8,500 - 9,500 خطوة.',
+        ];
+        calorieAdjustment = 'Maintain steady protein >= 2.0g/kg body weight';
+        calorieAdjustmentAr = 'الحفاظ على بروتين يومي لا يقل عن 2.0 جم/كجم من وزن الجسم';
+        cardioRecommendation = '3 x 25 min Zone 2 Cycling / Incline Walking';
+        cardioRecommendationAr = '3 جلسات 25 دقيقة كارديو معتدل Zone 2';
+        break;
+
       case 3:
-        return {
-          currentWeek: 3,
-          phaseTitle: 'Week 3: Strength Preservation & Recovery Audit',
-          phaseTitleAr: 'الأسبوع 3: صيانة القوة وتقييم جودة الاستشفاء',
-          focusDirectives: [
-            'Audit sleep (7-8.5 hrs) and hydration (3.5L+).',
-            'Ensure RPE stays within 7-8 to avoid accumulating central fatigue.',
-            'Incorporate post-workout static stretching and sauna recovery.',
-          ],
-          focusDirectivesAr: [
-            'تقييم ساعات النوم (7-8.5 ساعة) والترطيب (3.5+ لتر).',
-            'الحفاظ على معدل RPE بين 7-8 لتجنب الإجهاد العصبي التراكمي.',
-            'جلسات إطالات بعد التمرين مع ساونا للاستشفاء.',
-          ],
-          calorieAdjustment: 'Keep steady, high Egyptian protein staples (Areesh, Chicken, Ful)',
-          calorieAdjustmentAr: 'تثبيت السعرات مع التركيز على مصادر البروتين',
-          cardioRecommendation: '3 x 30 min Incline Walk',
-          cardioRecommendationAr: '3 جلسات 30 دقيقة مشي بميل',
-        };
+        phaseTitle = `Week ${currentWeek}: Strength Preservation & Recovery Audit (Cycle ${cycleNumber}, Block Week 3)`;
+        phaseTitleAr = `الأسبوع ${currentWeek}: صيانة القوة وتقييم جودة الاستشفاء (الدورة ${cycleNumber}، الأسبوع 3)`;
+        focusDirectives = [
+          'Audit sleep quality (7-8.5 hrs) and daily hydration (3.5L+).',
+          'Ensure target RPE stays strictly within 7-8 to avoid accumulating central nervous fatigue.',
+          'Incorporate post-workout static stretching, foam rolling, and sauna recovery.',
+        ];
+        focusDirectivesAr = [
+          'مراجعة جودة النوم (7-8.5 ساعة) ومتابعة شرب المياه (3.5 لتر فأكثر).',
+          'الحفاظ على معدل الجهد RPE بين 7-8 لتجنب الإجهاد العصبي التراكمي.',
+          'جلسات إطالات بعد التمرين مع ساونا أو جاكوزي لتسريع الاستشفاء.',
+        ];
+        calorieAdjustment = 'Consistent nutrition with high Egyptian protein staples (Areesh, Chicken breast, Ful, Eggs)';
+        calorieAdjustmentAr = 'تثبيت السعرات والماكروز مع التركيز على مصادر البروتين الصحية (جبنة قريش، صدور دجاج، فول، بيض)';
+        cardioRecommendation = '3 x 30 min Incline Treadmill Walk';
+        cardioRecommendationAr = '3 جلسات 30 دقيقة مشي بميل على السير';
+        break;
+
       case 4:
       default:
-        return {
-          currentWeek: 4,
-          phaseTitle: 'Week 4: Trend Assessment & Phase Calibration',
-          phaseTitleAr: 'الأسبوع 4: تقييم النتائج الشاملة وتحديث الخطة',
-          focusDirectives: [
-            'Comprehensive review: Compare Week 1 vs Week 4 waist trend, strength, and energy.',
-            'If waist dropped and strength held: continue controlled fat-loss trajectory.',
-            'If fatigue is high: execute a 1-week volume reload before next progression block.',
-          ],
-          focusDirectivesAr: [
-            'مراجعة شاملة: مقارنة مقاس الخصر والأوزان ومعدل النشاط مع الأسبوع الأول.',
-            'إذا نزل الخصر وثبتت القوة: الاستمرار في نفس المنظومة بنجاح.',
-            'إذا كان الإجهاد مرتفعاً: أسبوع تخفيف أحمال خفيف قبل الدورة التالية.',
-          ],
-          calorieAdjustment: 'Evaluate waist trend to calibrate baseline',
-          calorieAdjustmentAr: 'تقييم مؤشر الخصر لتحديث السعرات',
-          cardioRecommendation: 'Maintain 75-90 min total weekly LISS',
-          cardioRecommendationAr: 'الحفاظ على 75-90 دقيقة كارديو أسبوعياً',
-        };
+        phaseTitle = `Week ${currentWeek}: Trend Assessment & Volume Calibration (Cycle ${cycleNumber}, Block Week 4)`;
+        phaseTitleAr = `الأسبوع ${currentWeek}: تقييم النتائج الشاملة وتحديث الخطة (الدورة ${cycleNumber}، الأسبوع 4)`;
+        focusDirectives = [
+          'Compare week-over-week trends in waist circumference, 7-day average scale weight, and volume tonnage.',
+          'If waist decreased and working weights progressed: maintain current progressive overload protocol.',
+          'If accumulated fatigue is elevated: perform a structured active recovery or deload week.',
+        ];
+        focusDirectivesAr = [
+          'مقارنة شاملة لمحيط الخصر، متوسط الوزن لـ 7 أيام، وإجمالي الحجم التدريبي المرفوع.',
+          'إذا نزل الخصر وثبتت أوزانك: الاستمرار في نفس المنظومة بنجاح تام.',
+          'إذا كان الإجهاد مرتفعاً: تطبيق أسبوع استشفاء وتخفيف أحمال قبل بدء الدورة التدريبية التالية.',
+        ];
+        calorieAdjustment = 'Evaluate 7-day weight and waist trends to calibrate caloric baseline';
+        calorieAdjustmentAr = 'تقييم مؤشر الخصر ومتوسط الوزن لتحديث السعرات المستهدفة بدقة';
+        cardioRecommendation = 'Maintain 75-90 min total weekly LISS';
+        cardioRecommendationAr = 'الحفاظ على 75-90 دقيقة كارديو أسبوعياً';
+        break;
     }
+
+    return {
+      currentWeek,
+      currentDayInWeek,
+      totalProgramDay,
+      totalDaysElapsed,
+      cycleNumber,
+      weekInCycle,
+      startDate,
+      formattedProgress,
+      formattedProgressAr,
+      phaseTitle,
+      phaseTitleAr,
+      focusDirectives,
+      focusDirectivesAr,
+      calorieAdjustment,
+      calorieAdjustmentAr,
+      cardioRecommendation,
+      cardioRecommendationAr,
+    };
+  },
+
+  // 4-Week Adaptive Transition Engine (Aliases to getAdaptiveProgramTimeline)
+  getFourWeekTransition(startDateStr: string): TransitionPhaseInfo {
+    return this.getAdaptiveProgramTimeline(startDateStr);
+  },
+
+  // Weekly Volume and Progressive Overload Engine
+  calculateWeeklyVolume(history: WorkoutSession[], nowTimestamp?: number): WeeklyVolumeInfo {
+    const now = nowTimestamp || Date.now();
+    const msInDay = 86400000;
+    const currentWeekStart = now - (7 * msInDay);
+    const previousWeekStart = now - (14 * msInDay);
+
+    const completedSessions = (history || []).filter(w => w.completed);
+    const currentWeekSessions: WeeklyVolumeSession[] = [];
+    let currentWeekVolumeKg = 0;
+    let previousWeekVolumeKg = 0;
+    let totalSetsCompleted = 0;
+    let totalRepsCompleted = 0;
+
+    completedSessions.forEach(session => {
+      const sessionTime = new Date(session.date).getTime();
+      let sessionVolume = 0;
+      let sessionSets = 0;
+
+      session.exercises.forEach(ex => {
+        ex.sets.forEach(s => {
+          if (s.completed) {
+            const rawWeight = s.actualWeight !== undefined ? s.actualWeight : s.targetWeight;
+            const weight = typeof rawWeight === 'number' ? rawWeight : (parseFloat(String(rawWeight || '0')) || 0);
+
+            const rawReps = s.actualReps !== undefined ? s.actualReps : s.targetReps;
+            const reps = typeof rawReps === 'number' ? rawReps : (parseInt(String(rawReps || '0').split('-')[0], 10) || 0);
+
+            sessionVolume += weight * reps;
+            sessionSets += 1;
+            if (sessionTime >= currentWeekStart && sessionTime <= now + msInDay) {
+              totalSetsCompleted += 1;
+              totalRepsCompleted += reps;
+            }
+          }
+        });
+      });
+
+      if (sessionTime >= currentWeekStart && sessionTime <= now + msInDay) {
+        currentWeekVolumeKg += sessionVolume;
+        const d = new Date(session.date);
+        const dayNamesEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const dayNamesAr = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+        const dayIdx = d.getDay();
+
+        currentWeekSessions.push({
+          id: session.id,
+          date: session.date,
+          dayName: dayNamesEn[dayIdx] || 'Session',
+          dayNameAr: dayNamesAr[dayIdx] || 'تمرينة',
+          name: session.name,
+          nameAr: session.nameAr || session.name,
+          type: session.type,
+          volumeKg: Math.round(sessionVolume),
+          setsCount: sessionSets,
+          completed: true,
+        });
+      } else if (sessionTime >= previousWeekStart && sessionTime < currentWeekStart) {
+        previousWeekVolumeKg += sessionVolume;
+      }
+    });
+
+    currentWeekVolumeKg = Math.round(currentWeekVolumeKg);
+    previousWeekVolumeKg = Math.round(previousWeekVolumeKg);
+    const volumeDeltaKg = currentWeekVolumeKg - previousWeekVolumeKg;
+    const volumeDeltaPercent = previousWeekVolumeKg > 0 
+      ? Math.round(((volumeDeltaKg / previousWeekVolumeKg) * 100) * 10) / 10 
+      : 0;
+
+    let status: 'overload_achieved' | 'steady_maintenance' | 'volume_deload' | 'baseline' = 'baseline';
+    let statusBadge = 'Baseline Volume Week';
+    let statusBadgeAr = 'حجم تدريبي مرجعي';
+    let feedback = '';
+    let feedbackAr = '';
+
+    const currentWeekVolumeTons = Math.round((currentWeekVolumeKg / 1000) * 10) / 10;
+    const workoutsInWeekCount = currentWeekSessions.length;
+    const avgVolumePerWorkoutKg = workoutsInWeekCount > 0 ? Math.round(currentWeekVolumeKg / workoutsInWeekCount) : 0;
+
+    if (previousWeekVolumeKg === 0) {
+      status = 'baseline';
+      statusBadge = 'Baseline Week Logged';
+      statusBadgeAr = 'تسجيل الأسبوع المرجعي الأول';
+      feedback = `Accumulated ${currentWeekVolumeKg.toLocaleString()} kg (${currentWeekVolumeTons} tons) across ${workoutsInWeekCount} sessions. This establishes your progressive overload baseline.`;
+      feedbackAr = `تم رفع إجمالي ${currentWeekVolumeKg.toLocaleString()} كجم (${currentWeekVolumeTons} طن) عبر ${workoutsInWeekCount} تمارين. يمثل هذا نقطة البداية المرجعية لزيادة الأحمال.`;
+    } else if (volumeDeltaPercent >= 3) {
+      status = 'overload_achieved';
+      statusBadge = `+${volumeDeltaPercent}% Overload Achieved`;
+      statusBadgeAr = `+${volumeDeltaPercent}% زيادة أحمال متدرجة`;
+      feedback = `Excellent progression! Volume increased by ${volumeDeltaKg.toLocaleString()} kg (+${volumeDeltaPercent}%) compared to last week. Mechanical tension and hypertrophy drive are maximized.`;
+      feedbackAr = `تطور ممتاز! زاد الحجم التدريبي بمقدار ${volumeDeltaKg.toLocaleString()} كجم (+${volumeDeltaPercent}%) مقارنة بالأسبوع الماضي. استجابة البناء العضلي في أعلى مستوياتها.`;
+    } else if (volumeDeltaPercent >= -5 && volumeDeltaPercent < 3) {
+      status = 'steady_maintenance';
+      statusBadge = `${volumeDeltaPercent >= 0 ? '+' : ''}${volumeDeltaPercent}% Volume Maintained`;
+      statusBadgeAr = `${volumeDeltaPercent >= 0 ? '+' : ''}${volumeDeltaPercent}% ثبات الحجم التدريبي`;
+      feedback = `Solid training consistency. Weekly volume held steady at ${currentWeekVolumeKg.toLocaleString()} kg (${volumeDeltaPercent >= 0 ? '+' : ''}${volumeDeltaPercent}% vs last week), preserving strength and muscle mass.`;
+      feedbackAr = `التزام تدريبي قوي. ثبت الحجم التدريبي عند ${currentWeekVolumeKg.toLocaleString()} كجم (${volumeDeltaPercent >= 0 ? '+' : ''}${volumeDeltaPercent}%)، مما يحافظ على القوة والكتلة العضلية.`;
+    } else {
+      status = 'volume_deload';
+      statusBadge = `${volumeDeltaPercent}% Volume Deload`;
+      statusBadgeAr = `${volumeDeltaPercent}% استشفاء وخفض أحمال`;
+      feedback = `Weekly volume dropped by ${Math.abs(volumeDeltaKg).toLocaleString()} kg (${volumeDeltaPercent}%). Ideal for active deload and tissue recovery if fatigue was high.`;
+      feedbackAr = `انخفض الحجم التدريبي بمقدار ${Math.abs(volumeDeltaKg).toLocaleString()} كجم (${volumeDeltaPercent}%). مناسب جداً للراحة النشطة والاستشفاء في حال وجود إجهاد.`;
+    }
+
+    return {
+      currentWeekVolumeKg,
+      currentWeekVolumeTons,
+      previousWeekVolumeKg,
+      volumeDeltaKg,
+      volumeDeltaPercent,
+      totalSetsCompleted,
+      totalRepsCompleted,
+      workoutsInWeekCount,
+      avgVolumePerWorkoutKg,
+      status,
+      statusBadge,
+      statusBadgeAr,
+      feedback,
+      feedbackAr,
+      sessionBreakdown: currentWeekSessions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    };
   },
 
   // 7-Day Rolling Weight Average Calculator

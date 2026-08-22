@@ -357,3 +357,5 @@ export interface AppState {
   savedImages: GeneratedImageRecord[];
   customExercises: Exercise[];
 }
+
+export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error' | 'idle';

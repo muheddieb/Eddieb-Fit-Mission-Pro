@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { 
   Flame, 
   Dumbbell, 
@@ -20,9 +21,11 @@ import {
 import { UserProfile, WorkoutSession, BodyMeasurement } from '../../types';
 import { translations } from '../../i18n/translations';
 import { PPLEngine, TransitionPhaseInfo } from '../../services/pplEngine';
+import { calculateProgramProgress } from '../../services/dateUtils';
 import { StorageService } from '../../services/storage';
 import { GeminiService } from '../../services/geminiService';
 import { NavSection } from '../layout/Sidebar';
+import { SmartWarmupModal } from '../workout/SmartWarmupModal';
 
 interface DashboardViewProps {
   profile: UserProfile;
@@ -46,6 +49,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [dailyBriefing, setDailyBriefing] = useState<string>('');
   const [todayWaterMl, setTodayWaterMl] = useState<number>(0);
   const [briefingLoading, setBriefingLoading] = useState<boolean>(false);
+  const [smartWarmupOpen, setSmartWarmupOpen] = useState<boolean>(false);
 
   // Load data
   useEffect(() => {
@@ -70,13 +74,55 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   }, [profile, history]);
 
   const pplPhase = PPLEngine.getTodayPPLPhase(history, profile);
-  const transitionPhase = PPLEngine.getFourWeekTransition(profile.startDate);
+  const programProgress = calculateProgramProgress(profile.startDate);
+  const transitionPhase = PPLEngine.getAdaptiveProgramTimeline(profile.startDate);
+  const weeklyVolume = PPLEngine.calculateWeeklyVolume(history);
   const rollingAvgWeight = PPLEngine.calculate7DayWeightAverage(measurements);
   const fatLossTrend = PPLEngine.evaluateFatLossTrend(measurements, history);
 
   const completedWorkoutsCount = history.filter(w => w.completed).length;
   const cardioHistory = StorageService.getCardioHistory();
   const totalCardioMins = cardioHistory.reduce((sum, c) => sum + c.durationMinutes, 0);
+
+  // Calculations for dashboard metrics and progress bars
+  const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const workoutsThisWeek = history.filter(w => w.completed && (w.timestamp || 0) >= oneWeekAgo).length;
+  const cardioThisWeek = cardioHistory
+    .filter(c => (c.timestamp || 0) >= oneWeekAgo)
+    .reduce((sum, c) => sum + c.durationMinutes, 0);
+
+  const today = new Date().toISOString().split('T')[0];
+  const nutritionHistory = StorageService.getNutritionHistory();
+  const todayNutrition = nutritionHistory.filter(n => n.date === today);
+  const todayProteinLogged = todayNutrition.reduce((sum, n) => sum + n.proteinGrams, 0);
+  const todayCaloriesLogged = todayNutrition.reduce((sum, n) => sum + n.calories, 0);
+
+  // Recomp weight journey progress
+  const startWeight = profile.startWeightKg || 88;
+  const goalWeight = profile.goalWeightKg || 80;
+  const currentWeight = profile.currentWeightKg || 88;
+  const totalWeightDelta = Math.max(0.5, startWeight - goalWeight);
+  const weightProgressMade = Math.max(0, startWeight - currentWeight);
+  const weightLossProgressPercent = Math.min(100, Math.max(0, Math.round((weightProgressMade / totalWeightDelta) * 100)));
+
+  // Hydration percentage
+  const hydrationPercent = Math.min(100, Math.round((todayWaterMl / (profile.dailyWaterTargetMl || 3000)) * 100));
+
+  // Protein percentage
+  const proteinPercent = Math.min(
+    100,
+    Math.round(((todayProteinLogged > 0 ? todayProteinLogged : (profile.dailyProteinTargetGrams * 0.65)) / profile.dailyProteinTargetGrams) * 100)
+  );
+
+  // Weekly workout consistency percentage
+  const weeklyWorkoutPercent = Math.min(100, Math.round((workoutsThisWeek / (profile.trainingDaysPerWeek || 5)) * 100));
+
+  // Cardio weekly progress (target 150 min Zone 2 fat loss)
+  const cardioTargetMins = 150;
+  const cardioWeeklyPercent = Math.min(100, Math.round((cardioThisWeek / cardioTargetMins) * 100));
+
+  // Mesocycle Block Phase Progress
+  const blockProgressPercent = Math.min(100, Math.round((programProgress.weekInCycle / 4) * 100));
 
   // Quick hydration click (+250ml)
   const handleAddQuickWater = () => {
@@ -95,14 +141,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Hero Welcome & Mode Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-black tracking-tight text-foreground sm:text-3xl">
               {t.dashboard.title}, {profile.name.split(' ')[0]}
             </h1>
-            <span className="flex items-center gap-1 rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-bold text-primary border border-primary/20">
-              <Zap className="h-3 w-3" />
-              {isAr ? `الأسبوع ${transitionPhase.currentWeek}` : `Week ${transitionPhase.currentWeek}`}
-            </span>
+            
+            {/* Dynamic Adaptive Program Week & Day Badge from dateUtils */}
+            <button
+              onClick={() => onNavigate('profile')}
+              title={isAr ? 'تعديل تاريخ بداية البرنامج' : 'Configure Program Start Date in Profile'}
+              className="flex items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1 text-xs font-bold text-primary border border-primary/25 hover:bg-primary/25 transition-all cursor-pointer"
+            >
+              <Zap className="h-3.5 w-3.5" />
+              <span>{isAr ? programProgress.formattedProgressAr : programProgress.formattedProgress}</span>
+              <span className="opacity-70 text-[11px]">({isAr ? `اليوم ${programProgress.totalProgramDay}` : `Day ${programProgress.totalProgramDay}`})</span>
+            </button>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             {profile.mode === 'muscle_recomp' ? t.modes.muscle_recomp : t.modes.controlled_fat_loss} • {t.dashboard.subtitle}
@@ -194,11 +247,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </span>
             </div>
 
-            {/* 4-Week Transition Phase Context */}
-            <div className="mt-4 space-y-2.5">
-              <div className="text-xs font-bold text-foreground">
+            {/* Mesocycle Block Phase Context & Animated Progress Bar */}
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                  <span className="text-primary">
+                    {isAr ? `دورة الميزوسايكل ${programProgress.cycleNumber}` : `Mesocycle ${programProgress.cycleNumber}`}
+                  </span>
+                  <span>•</span>
+                  <span>
+                    {isAr ? `أسبوع ${programProgress.weekInCycle} من 4` : `Block Week ${programProgress.weekInCycle} of 4`}
+                  </span>
+                </div>
+                <span className="text-xs font-semibold text-primary font-mono">
+                  {programProgress.weekInCycle} / 4 {isAr ? 'أسابيع' : 'Weeks'} ({blockProgressPercent}%)
+                </span>
+              </div>
+
+              {/* Framer Motion Entry Animated Progress Bar */}
+              <div className="h-2 w-full rounded-full bg-secondary/80 overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-400"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${blockProgressPercent}%` }}
+                  transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+                />
+              </div>
+
+              <div className="text-xs font-semibold text-foreground">
                 {isAr ? transitionPhase.phaseTitleAr : transitionPhase.phaseTitle}
               </div>
+
               <ul className="space-y-1.5 text-xs text-muted-foreground list-disc list-inside">
                 {(isAr ? transitionPhase.focusDirectivesAr : transitionPhase.focusDirectives).map((dir, idx) => (
                   <li key={idx} className="leading-relaxed">{dir}</li>
@@ -209,21 +288,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-border pt-4">
             <div className="text-xs text-muted-foreground">
-              <span>{t.common.location}: </span>
-              <strong className="text-foreground capitalize">{profile.preferredLocation}</strong>
+              <span>{t.dashboard.programStartDate}: </span>
+              <strong className="text-foreground">{programProgress.startDateString}</strong>
               <span className="mx-2">•</span>
-              <span>{t.dashboard.trainingDays}: </span>
-              <strong className="text-foreground">{profile.trainingDaysPerWeek}d/wk</strong>
+              <span>{t.dashboard.totalDaysElapsed}: </span>
+              <strong className="text-foreground">{programProgress.totalElapsedDays}d ({isAr ? `اليوم ${programProgress.totalProgramDay}` : `Day ${programProgress.totalProgramDay}`})</strong>
             </div>
 
-            <button
-              id="btn-launch-workout-ppl-card"
-              onClick={onStartWorkout}
-              className="flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-primary-foreground shadow hover:bg-primary/90 transition-colors"
-            >
-              <Play className="h-3.5 w-3.5 fill-current" />
-              <span>{activeWorkout ? t.dashboard.continueWorkout : t.dashboard.startWorkout}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                id="btn-launch-smart-warmup-dashboard"
+                onClick={() => setSmartWarmupOpen(true)}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-bold text-amber-400 hover:bg-amber-500/20 transition-all shadow-sm"
+                title={isAr ? 'بدء إحماء 5 دقائق مخصص لجلستك اليوم' : '5-Minute dynamic warm-up sequence for today’s session'}
+              >
+                <Flame className="h-3.5 w-3.5 fill-current" />
+                <span>{t.dashboard.smartWarmup}</span>
+              </button>
+
+              <button
+                id="btn-launch-workout-ppl-card"
+                onClick={onStartWorkout}
+                className="flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-primary-foreground shadow hover:bg-primary/90 transition-colors"
+              >
+                <Play className="h-3.5 w-3.5 fill-current" />
+                <span>{activeWorkout ? t.dashboard.continueWorkout : t.dashboard.startWorkout}</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -263,6 +354,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
 
+            {/* Animated Weight Target Journey Progress Bar */}
+            <div className="mt-3 rounded-xl border border-border bg-secondary/20 p-3 space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-bold">
+                <span className="text-muted-foreground">
+                  {isAr ? `الهدف: ${goalWeight} كجم` : `Goal Target: ${goalWeight} kg`}
+                </span>
+                <span className="text-primary font-mono">{weightLossProgressPercent}% {t.common.completed}</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full bg-gradient-to-r from-primary via-emerald-500 to-emerald-400"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${weightLossProgressPercent}%` }}
+                  transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] text-muted-foreground font-medium">
+                <span>{startWeight} kg</span>
+                <span>{currentWeight} kg ({isAr ? 'الحالي' : 'Current'})</span>
+                <span>{goalWeight} kg ({isAr ? 'الهدف' : 'Target'})</span>
+              </div>
+            </div>
+
             <p className="mt-3 text-xs text-muted-foreground leading-relaxed">
               {isAr ? fatLossTrend.explanationAr : fatLossTrend.explanation}
             </p>
@@ -281,75 +395,293 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Daily Habits & Hydration Widget Row */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Hydration Tracker */}
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm flex items-center justify-between">
+      {/* Weekly Volume & Progressive Overload Mission Tracker */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-md space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border pb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
+              <TrendingUp className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-black text-foreground sm:text-lg">
+                  {t.dashboard.weeklyVolume}
+                </h3>
+                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold border ${
+                  weeklyVolume.status === 'overload_achieved'
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                    : weeklyVolume.status === 'steady_maintenance'
+                    ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                    : weeklyVolume.status === 'volume_deload'
+                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                    : 'bg-primary/20 text-primary border-primary/30'
+                }`}>
+                  {isAr ? weeklyVolume.statusBadgeAr : weeklyVolume.statusBadge}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {isAr 
+                  ? 'حساب إجمالي الأوزان المرفوعة (Tonnage) خلال الأسبوع الحالي لضمان تطبيق الزيادة التدريجية للأحمال.'
+                  : 'Total working tonnage across all completed sessions in the current week to verify progressive overload.'}
+              </p>
+            </div>
+          </div>
+
+          {/* Big Total Tonnage Counter */}
+          <div className="flex items-baseline gap-2 self-start sm:self-auto">
+            <span className="text-2xl sm:text-3xl font-black text-foreground font-mono">
+              {weeklyVolume.currentWeekVolumeKg.toLocaleString()}
+            </span>
+            <span className="text-xs font-bold text-muted-foreground">
+              kg <span className="text-primary font-semibold">({weeklyVolume.currentWeekVolumeTons} tons)</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Summary Stats Row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded-xl border border-border bg-secondary/30 p-3">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase">{t.dashboard.vsLastWeek}</span>
+            <div className="flex items-center gap-1 mt-1 text-sm font-black font-mono">
+              {weeklyVolume.volumeDeltaKg > 0 ? (
+                <span className="text-emerald-400">+{weeklyVolume.volumeDeltaKg.toLocaleString()} kg (+{weeklyVolume.volumeDeltaPercent}%)</span>
+              ) : weeklyVolume.volumeDeltaKg < 0 ? (
+                <span className="text-amber-400">{weeklyVolume.volumeDeltaKg.toLocaleString()} kg ({weeklyVolume.volumeDeltaPercent}%)</span>
+              ) : (
+                <span className="text-muted-foreground">0 kg (0.0%)</span>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-secondary/30 p-3">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase">{isAr ? 'المجموعات المكتملة' : 'Completed Sets'}</span>
+            <div className="text-sm font-black text-foreground mt-1 font-mono">
+              {weeklyVolume.totalSetsCompleted} <span className="text-xs font-normal text-muted-foreground">{t.common.sets}</span>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-secondary/30 p-3">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase">{isAr ? 'التكرارات المكتملة' : 'Total Reps'}</span>
+            <div className="text-sm font-black text-foreground mt-1 font-mono">
+              {weeklyVolume.totalRepsCompleted} <span className="text-xs font-normal text-muted-foreground">{t.common.reps}</span>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-secondary/30 p-3">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase">{isAr ? 'متوسط التمرين' : 'Avg / Session'}</span>
+            <div className="text-sm font-black text-foreground mt-1 font-mono">
+              {weeklyVolume.avgVolumePerWorkoutKg.toLocaleString()} <span className="text-xs font-normal text-muted-foreground">kg</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Session-by-Session Volume Breakdown */}
+        {weeklyVolume.sessionBreakdown.length > 0 ? (
+          <div className="space-y-2.5 pt-1">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              {isAr ? 'توزيع الحجم التدريبي لتمارين الأسبوع:' : 'Current Week Session Breakdown:'}
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {weeklyVolume.sessionBreakdown.map((sess, idx) => {
+                const maxSessionVol = Math.max(...weeklyVolume.sessionBreakdown.map(s => s.volumeKg), 1);
+                const barWidth = Math.min(100, Math.max(15, Math.round((sess.volumeKg / maxSessionVol) * 100)));
+                return (
+                  <div key={sess.id || idx} className="rounded-xl border border-border bg-secondary/20 p-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5 font-bold text-foreground truncate">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/20 text-[10px] font-black text-primary">
+                          {sess.type.toUpperCase().slice(0, 1)}
+                        </span>
+                        <span className="truncate">{isAr ? sess.nameAr : sess.name}</span>
+                      </div>
+                      <span className="text-[11px] font-semibold text-muted-foreground shrink-0">{isAr ? sess.dayNameAr : sess.dayName}</span>
+                    </div>
+
+                    <div className="flex items-baseline justify-between text-xs">
+                      <span className="font-mono font-black text-foreground">{sess.volumeKg.toLocaleString()} kg</span>
+                      <span className="text-[11px] text-muted-foreground">{sess.setsCount} {t.common.sets}</span>
+                    </div>
+
+                    <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+                      <motion.div
+                        className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-400"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${barWidth}%` }}
+                        transition={{ duration: 0.8, ease: 'easeOut', delay: idx * 0.1 }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-border bg-secondary/10 p-4 text-center text-xs text-muted-foreground">
+            {isAr ? 'لم تسجل أي تمارين مكتملة هذا الأسبوع بعد. ابدأ تمرينتك اليوم لجمع وتتبع الحجم التدريبي.' : 'No completed workouts logged yet for the current week. Complete a session to start accumulating volume tonnage.'}
+          </div>
+        )}
+
+        {/* Progressive Overload Coaching Feedback Banner */}
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 flex items-start gap-2.5 text-xs text-foreground leading-relaxed">
+          <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
           <div>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-400">
-              <Droplets className="h-4 w-4" />
-              <span>{t.dashboard.hydration}</span>
-            </div>
-            <div className="text-xl font-black text-foreground mt-1">
-              {todayWaterMl} <span className="text-xs text-muted-foreground">/ {profile.dailyWaterTargetMl} ml</span>
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">
-              {Math.round((todayWaterMl / profile.dailyWaterTargetMl) * 100)}% {t.common.completed}
-            </div>
-          </div>
-
-          <button
-            id="btn-quick-add-water"
-            onClick={handleAddQuickWater}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors"
-            title="Log +250ml Water"
-          >
-            +250
-          </button>
-        </div>
-
-        {/* Daily Protein Target */}
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400">
-            <Flame className="h-4 w-4" />
-            <span>{t.nutrition.proteinTarget}</span>
-          </div>
-          <div className="text-xl font-black text-foreground mt-1">
-            {profile.dailyProteinTargetGrams} <span className="text-xs text-muted-foreground">g / day</span>
-          </div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">
-            ~{(profile.dailyProteinTargetGrams / profile.currentWeightKg).toFixed(1)}g per kg bodyweight
-          </div>
-        </div>
-
-        {/* Total Completed Missions */}
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
-            <Trophy className="h-4 w-4" />
-            <span>{t.achievements.workoutsLogged}</span>
-          </div>
-          <div className="text-xl font-black text-foreground mt-1">
-            {completedWorkoutsCount} <span className="text-xs text-muted-foreground">sessions</span>
-          </div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">
-            PPL consistency active
-          </div>
-        </div>
-
-        {/* Cardio Minutes Logged */}
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-400">
-            <Activity className="h-4 w-4" />
-            <span>{t.cardio.title}</span>
-          </div>
-          <div className="text-xl font-black text-foreground mt-1">
-            {totalCardioMins} <span className="text-xs text-muted-foreground">minutes</span>
-          </div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">
-            Zone 2 Fat-Oxidation
+            <span className="font-bold text-primary">{t.dashboard.progressiveOverload}: </span>
+            <span>{isAr ? weeklyVolume.feedbackAr : weeklyVolume.feedback}</span>
           </div>
         </div>
       </div>
+
+      {/* Daily Habits & Hydration Widget Row with Fluid Animated Progress Bars */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Hydration Tracker */}
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-400">
+                <Droplets className="h-4 w-4" />
+                <span>{t.dashboard.hydration}</span>
+              </div>
+              <button
+                id="btn-quick-add-water"
+                onClick={handleAddQuickWater}
+                className="flex h-7 px-2 items-center justify-center rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors text-xs font-bold"
+                title="Log +250ml Water"
+              >
+                +250 ml
+              </button>
+            </div>
+
+            <div className="text-xl font-black text-foreground mt-2">
+              {todayWaterMl} <span className="text-xs text-muted-foreground">/ {profile.dailyWaterTargetMl} ml</span>
+            </div>
+          </div>
+
+          {/* Framer Motion Entry Animated Hydration Progress Bar */}
+          <div className="mt-3 space-y-1">
+            <div className="flex justify-between text-[11px] text-muted-foreground font-semibold">
+              <span>{t.common.completed}</span>
+              <span className="text-blue-400 font-mono">{hydrationPercent}%</span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+              <motion.div
+                className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400"
+                initial={{ width: 0 }}
+                animate={{ width: `${hydrationPercent}%` }}
+                transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1], delay: 0.25 }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Daily Protein Target */}
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400">
+              <Flame className="h-4 w-4" />
+              <span>{t.nutrition.proteinTarget}</span>
+            </div>
+            <div className="text-xl font-black text-foreground mt-2">
+              {profile.dailyProteinTargetGrams} <span className="text-xs text-muted-foreground">g / day</span>
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              ~{(profile.dailyProteinTargetGrams / profile.currentWeightKg).toFixed(1)}g per kg bodyweight
+            </div>
+          </div>
+
+          {/* Framer Motion Entry Animated Protein Progress Bar */}
+          <div className="mt-3 space-y-1">
+            <div className="flex justify-between text-[11px] text-muted-foreground font-semibold">
+              <span>{isAr ? 'الهدف الرياضي' : 'Muscle Synthesis'}</span>
+              <span className="text-amber-400 font-mono">{proteinPercent}%</span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+              <motion.div
+                className="h-full rounded-full bg-gradient-to-r from-amber-500 to-yellow-400"
+                initial={{ width: 0 }}
+                animate={{ width: `${proteinPercent}%` }}
+                transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1], delay: 0.35 }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Weekly Workout Consistency & Missions */}
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+              <Trophy className="h-4 w-4" />
+              <span>{t.achievements.workoutsLogged}</span>
+            </div>
+            <div className="text-xl font-black text-foreground mt-2">
+              {completedWorkoutsCount} <span className="text-xs text-muted-foreground">sessions</span>
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              {workoutsThisWeek} {isAr ? 'جلسات هذا الأسبوع' : 'sessions this week'}
+            </div>
+          </div>
+
+          {/* Framer Motion Entry Animated Workout Consistency Progress Bar */}
+          <div className="mt-3 space-y-1">
+            <div className="flex justify-between text-[11px] text-muted-foreground font-semibold">
+              <span>{isAr ? 'الهدف الأسبوعي' : 'Weekly Adherence'}</span>
+              <span className="text-emerald-400 font-mono">{weeklyWorkoutPercent}%</span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+              <motion.div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400"
+                initial={{ width: 0 }}
+                animate={{ width: `${weeklyWorkoutPercent}%` }}
+                transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1], delay: 0.45 }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Cardio & Fat Oxidation Minutes Logged */}
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-400">
+              <Activity className="h-4 w-4" />
+              <span>{t.cardio.title}</span>
+            </div>
+            <div className="text-xl font-black text-foreground mt-2">
+              {totalCardioMins} <span className="text-xs text-muted-foreground">minutes</span>
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">
+              {cardioThisWeek} min / {cardioTargetMins} min Zone 2 target
+            </div>
+          </div>
+
+          {/* Framer Motion Entry Animated Cardio Progress Bar */}
+          <div className="mt-3 space-y-1">
+            <div className="flex justify-between text-[11px] text-muted-foreground font-semibold">
+              <span>{isAr ? 'حرق الدهون الأسبوعي' : 'Weekly Cardio'}</span>
+              <span className="text-purple-400 font-mono">{cardioWeeklyPercent}%</span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+              <motion.div
+                className="h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-400"
+                initial={{ width: 0 }}
+                animate={{ width: `${cardioWeeklyPercent}%` }}
+                transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1], delay: 0.55 }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Smart Warm-up 5-Min Sequence Modal */}
+      <SmartWarmupModal
+        isOpen={smartWarmupOpen}
+        initialWorkoutType={pplPhase}
+        profile={profile}
+        onClose={() => setSmartWarmupOpen(false)}
+        onStartWorkout={() => {
+          setSmartWarmupOpen(false);
+          onStartWorkout();
+        }}
+      />
     </div>
   );
 };
+

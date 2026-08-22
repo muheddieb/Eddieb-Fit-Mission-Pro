@@ -9,11 +9,16 @@ import {
   MapPin, 
   Flame, 
   Droplets,
-  Check
+  Check,
+  Zap,
+  Clock,
+  RotateCcw
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { translations } from '../../i18n/translations';
 import { StorageService } from '../../services/storage';
+import { PPLEngine } from '../../services/pplEngine';
+import { calculateProgramProgress } from '../../services/dateUtils';
 
 interface ProfileViewProps {
   profile: UserProfile;
@@ -30,12 +35,23 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [formData, setFormData] = useState<UserProfile>(profile);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
 
+  // Centralized calculated adaptive timeline based on currently selected start date
+  const programProgress = calculateProgramProgress(formData.startDate);
+  const liveTimeline = PPLEngine.getAdaptiveProgramTimeline(formData.startDate);
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     onUpdateProfile(formData);
     StorageService.saveProfile(formData);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
+  };
+
+  const handleSetPresetDate = (daysAgo: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    const dateStr = d.toISOString().split('T')[0];
+    setFormData(prev => ({ ...prev, startDate: dateStr }));
   };
 
   return (
@@ -125,6 +141,105 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 onChange={e => setFormData({ ...formData, currentWaistCm: parseFloat(e.target.value) || 85 })}
                 className="w-full rounded-xl border border-border bg-background p-2.5 text-sm font-bold text-foreground focus:border-primary focus:outline-none"
               />
+            </div>
+          </div>
+        </div>
+
+        {/* Adaptive Program Timeline & Subscription Start Date */}
+        <div className="space-y-4 rounded-2xl border border-primary/30 bg-primary/5 p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-primary/20 pb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                <h3 className="text-sm font-black uppercase tracking-wider text-foreground">
+                  {isAr ? 'تاريخ بداية البرنامج والاشتراك (Adaptive Timeline)' : 'Adaptive Program Start Date'}
+                </h3>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {isAr 
+                  ? 'يتم حساب الأسبوع الحالي واليوم تلقائياً من تاريخ البداية. يمكنك إدخال تاريخ قديم أو حديث بحرية.'
+                  : 'Program weeks and progression cycles are computed dynamically from your start date. Historical dates are fully supported.'}
+              </p>
+            </div>
+
+            <span className="inline-flex items-center gap-1 self-start sm:self-auto rounded-full bg-primary/20 px-3 py-1 text-xs font-black text-primary border border-primary/30">
+              <Zap className="h-3.5 w-3.5" />
+              <span>{isAr ? liveTimeline.formattedProgressAr : liveTimeline.formattedProgress}</span>
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <div className="md:col-span-6 space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-muted-foreground mb-1.5">
+                  {isAr ? 'تاريخ بداية البرنامج (Start Date)' : 'Program Start Date'}
+                </label>
+                <input
+                  id="input-program-start-date"
+                  type="date"
+                  value={formData.startDate || new Date().toISOString().split('T')[0]}
+                  onChange={e => setFormData({ ...formData, startDate: e.target.value })}
+                  className="w-full rounded-xl border border-border bg-background p-2.5 text-sm font-bold text-foreground focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground">{isAr ? 'اختصارات سريعة:' : 'Quick Presets:'}</span>
+                <button
+                  type="button"
+                  onClick={() => handleSetPresetDate(0)}
+                  className="rounded-lg border border-border bg-secondary/60 px-2 py-1 text-[11px] font-semibold text-foreground hover:bg-secondary transition-colors"
+                >
+                  {isAr ? 'اليوم (الأسبوع 1)' : 'Today (Week 1)'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetPresetDate(14)}
+                  className="rounded-lg border border-border bg-secondary/60 px-2 py-1 text-[11px] font-semibold text-foreground hover:bg-secondary transition-colors"
+                >
+                  {isAr ? 'منذ أسبوعين (الأسبوع 3)' : '2 Wks Ago (Week 3)'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetPresetDate(30)}
+                  className="rounded-lg border border-border bg-secondary/60 px-2 py-1 text-[11px] font-semibold text-foreground hover:bg-secondary transition-colors"
+                >
+                  {isAr ? 'منذ شهر (الأسبوع 5)' : '1 Mo Ago (Week 5)'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, startDate: '2026-06-15' }))}
+                  className="rounded-lg border border-border bg-secondary/60 px-2 py-1 text-[11px] font-semibold text-foreground hover:bg-secondary transition-colors"
+                >
+                  {isAr ? '15 يونيو (الأسبوع 10)' : 'Jun 15 (Week 10)'}
+                </button>
+              </div>
+            </div>
+
+            {/* Real-Time Timeline Calculated Card */}
+            <div className="md:col-span-6 rounded-xl border border-border bg-card p-3.5 space-y-2 text-xs">
+              <div className="flex items-center justify-between font-bold border-b border-border pb-1.5">
+                <span className="text-muted-foreground">{isAr ? 'الحساب الديناميكي:' : 'Calculated Program Status:'}</span>
+                <span className="text-primary font-mono font-black">
+                  {isAr ? `اليوم ${programProgress.totalProgramDay} في البرنامج` : `Day ${programProgress.totalProgramDay} of Program`}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="rounded-lg bg-secondary/40 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase font-bold">{isAr ? 'الأسبوع الحالي' : 'Current Week'}</div>
+                  <div className="text-base font-black text-foreground mt-0.5">Week {programProgress.currentWeek}</div>
+                </div>
+                <div className="rounded-lg bg-secondary/40 p-2">
+                  <div className="text-[10px] text-muted-foreground uppercase font-bold">{isAr ? 'يوم الأسبوع' : 'Day in Week'}</div>
+                  <div className="text-base font-black text-foreground mt-0.5">Day {programProgress.currentDay} / 7</div>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-muted-foreground leading-relaxed pt-1">
+                <strong className="text-foreground">{isAr ? liveTimeline.phaseTitleAr : liveTimeline.phaseTitle}</strong>
+              </div>
             </div>
           </div>
         </div>

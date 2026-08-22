@@ -273,7 +273,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <span>{isAr ? 'هدف الوزن المثالي (Target 80kg Goal)' : 'Target Weight Goal (80 kg)'}</span>
           </h3>
           <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-black text-emerald-400 border border-emerald-500/30">
-            {profile.targetWeightKg} kg Target
+            {profile.goalWeightKg || 80} kg Target
           </span>
         </div>
 
@@ -284,12 +284,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
           <div className="rounded-xl border border-primary/30 bg-primary/10 p-3 text-center">
             <div className="text-[11px] font-bold text-primary">{isAr ? 'الهدف المطلوب' : 'Target Weight'}</div>
-            <div className="text-xl font-black text-primary font-mono">{profile.targetWeightKg} kg</div>
+            <div className="text-xl font-black text-primary font-mono">{profile.goalWeightKg || 80} kg</div>
           </div>
           <div className="rounded-xl border border-border bg-secondary/30 p-3 text-center">
             <div className="text-[11px] font-bold text-muted-foreground">{isAr ? 'المتبقي للتخلص منه' : 'To Lose'}</div>
             <div className="text-xl font-black text-amber-400 font-mono">
-              -{(profile.currentWeightKg - profile.targetWeightKg).toFixed(1)} kg
+              -{(profile.currentWeightKg - (profile.goalWeightKg || 80)).toFixed(1)} kg
             </div>
           </div>
           <div className="rounded-xl border border-border bg-secondary/30 p-3 text-center">

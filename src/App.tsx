@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { UserProfile, WorkoutSession, Exercise, BodyMeasurement } from './types';
+import { User } from 'firebase/auth';
+import { UserProfile, WorkoutSession, Exercise, BodyMeasurement, SyncStatus } from './types';
 import { StorageService, defaultProfile } from './services/storage';
 import { PPLEngine } from './services/pplEngine';
+import { FirestoreSyncService } from './services/firestoreSyncService';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar, NavSection } from './components/layout/Sidebar';
 import { MobileNav } from './components/layout/MobileNav';
@@ -29,6 +31,13 @@ export default function App() {
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
   const [measurements, setMeasurements] = useState<BodyMeasurement[]>([]);
 
+  // Firebase Auth & Sync State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
+  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [lastSyncTimestamp, setLastSyncTimestamp] = useState<number | null>(null);
+
   // Modals & UI Controls
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState<boolean>(false);
@@ -36,7 +45,7 @@ export default function App() {
   const [selectedExerciseModal, setSelectedExerciseModal] = useState<Exercise | null>(null);
   const [visualizerModalOpen, setVisualizerModalOpen] = useState<boolean>(false);
 
-  // Initialize data on mount
+  // Initialize data and Firebase Auth listener on mount
   useEffect(() => {
     const loadedProfile = StorageService.getProfile();
     setProfile(loadedProfile);
@@ -51,6 +60,30 @@ export default function App() {
 
     const loadedMeas = StorageService.getMeasurements();
     setMeasurements(loadedMeas);
+
+    // Subscribe to sync manager status & connectivity changes
+    const unsubSync = FirestoreSyncService.subscribe((status, online, lastSync) => {
+      setSyncStatus(status);
+      setIsOnline(online);
+      setLastSyncTimestamp(lastSync);
+      setIsSyncing(status === 'syncing');
+    });
+
+    // Listen to Firebase Auth state
+    const unsubscribe = FirestoreSyncService.onAuthChange((user) => {
+      setCurrentUser(user);
+      if (user) {
+        // Refresh state from storage after sync
+        setProfile(StorageService.getProfile());
+        setWorkoutHistory(StorageService.getWorkoutHistory());
+        setMeasurements(StorageService.getMeasurements());
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      unsubSync();
+    };
   }, []);
 
   // Update HTML data-theme and dir on document
@@ -64,6 +97,9 @@ export default function App() {
   const handleUpdateProfile = (updated: UserProfile) => {
     setProfile(updated);
     StorageService.saveProfile(updated);
+    if (currentUser) {
+      FirestoreSyncService.saveProfile(updated, currentUser.uid);
+    }
   };
 
   // Handler: Start or resume daily workout
@@ -97,6 +133,9 @@ export default function App() {
   // Handler: Finish workout
   const handleFinishWorkout = (w: WorkoutSession) => {
     StorageService.completeWorkout(w);
+    if (currentUser) {
+      FirestoreSyncService.saveWorkout(w, currentUser.uid);
+    }
     setActiveWorkout(null);
     setActiveWorkoutOpen(false);
     setWorkoutHistory(StorageService.getWorkoutHistory());
@@ -110,6 +149,37 @@ export default function App() {
     setWorkoutHistory([]);
     setMeasurements([]);
     setCurrentSection('dashboard');
+  };
+
+  // Firebase Auth Handlers
+  const handleSignIn = async () => {
+    try {
+      setIsSyncing(true);
+      const user = await FirestoreSyncService.signInWithGoogle();
+      if (user) {
+        setCurrentUser(user);
+        setProfile(StorageService.getProfile());
+        setWorkoutHistory(StorageService.getWorkoutHistory());
+        setMeasurements(StorageService.getMeasurements());
+      }
+    } catch (e) {
+      console.error('Sign in failed:', e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await FirestoreSyncService.signOut();
+    setCurrentUser(null);
+  };
+
+  const handleRetrySync = async () => {
+    if (currentUser) {
+      await FirestoreSyncService.triggerManualSync(currentUser.uid);
+    } else {
+      await FirestoreSyncService.testConnectivity();
+    }
   };
 
   // Render Current Section View
@@ -160,7 +230,7 @@ export default function App() {
         );
       case 'nutrition':
       case 'preWorkout':
-        return <NutritionView profile={profile} />;
+        return <NutritionView profile={profile} onUpdateProfile={handleUpdateProfile} />;
       case 'cardio':
         return <CardioView profile={profile} />;
       case 'core':
@@ -244,10 +314,18 @@ export default function App() {
       <Navbar
         profile={profile}
         activeWorkout={activeWorkout}
+        currentUser={currentUser}
+        isSyncing={isSyncing}
+        syncStatus={syncStatus}
+        isOnline={isOnline}
+        lastSyncTimestamp={lastSyncTimestamp}
+        onRetrySync={handleRetrySync}
         onUpdateProfile={handleUpdateProfile}
         onOpenActiveWorkout={() => setActiveWorkoutOpen(true)}
         onToggleMobileDrawer={() => setMobileDrawerOpen(true)}
         onOpenVisualizer={() => setVisualizerModalOpen(true)}
+        onSignInWithGoogle={handleSignIn}
+        onSignOut={handleSignOut}
       />
 
       {/* Main Workspace Layout */}

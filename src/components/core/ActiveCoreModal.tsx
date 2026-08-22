@@ -110,7 +110,7 @@ export const ActiveCoreModal: React.FC<ActiveCoreModalProps> = ({
     AudioService.playSound(selectedSound);
   };
 
-  // Rest countdown
+  // Rest countdown with 5-second prepare chime & transition cues
   useEffect(() => {
     if (isResting && restSecondsLeft > 0 && !isPaused) {
       timerRef.current = setInterval(() => {
@@ -120,6 +120,18 @@ export const ActiveCoreModal: React.FC<ActiveCoreModalProps> = ({
             setIsResting(false);
             triggerCompletionSound();
             return 0;
+          }
+          // 5-second prepare chime
+          if (prev === 6) {
+            if (soundEnabled) {
+              AudioService.playPrepareChime(0.22);
+            }
+          }
+          // 3-2-1 transition warnings
+          if (prev === 4 || prev === 3 || prev === 2) {
+            if (soundEnabled) {
+              AudioService.playCountdownWarning(prev - 1, 0.25);
+            }
           }
           return prev - 1;
         });
