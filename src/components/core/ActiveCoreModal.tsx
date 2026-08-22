@@ -17,14 +17,18 @@ import {
   SkipForward,
   Volume2,
   VolumeX,
-  Smartphone
+  Smartphone,
+  Home,
+  Music,
+  BellRing
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
-import { CoreExercise, CoreSession, UserProfile } from '../../types';
+import { CoreExercise, CoreSession, UserProfile, RestSoundType } from '../../types';
 import { translations } from '../../i18n/translations';
 import { StorageService } from '../../services/storage';
 import { WakeLockService } from '../../services/wakeLockService';
+import { AudioService } from '../../services/audioService';
 
 export interface CoreRoutine {
   id: string;
@@ -65,6 +69,7 @@ export const ActiveCoreModal: React.FC<ActiveCoreModalProps> = ({
   const [isResting, setIsResting] = useState<boolean>(false);
   const [restSecondsLeft, setRestSecondsLeft] = useState<number>(0);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [selectedSound, setSelectedSound] = useState<RestSoundType>(profile.restSoundType || 'beep');
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const [isPaused, setIsPaused] = useState<boolean>(false);
 
@@ -100,24 +105,9 @@ export const ActiveCoreModal: React.FC<ActiveCoreModalProps> = ({
     return () => clearInterval(elapsedRef.current);
   }, [isPaused]);
 
-  // Audio tone generator
-  const playTone = (freq = 880) => {
+  const triggerCompletionSound = () => {
     if (!soundEnabled) return;
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-      gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.4);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.4);
-    } catch (e) {
-      // safe fallback
-    }
+    AudioService.playSound(selectedSound);
   };
 
   // Rest countdown
@@ -128,7 +118,7 @@ export const ActiveCoreModal: React.FC<ActiveCoreModalProps> = ({
           if (prev <= 1) {
             clearInterval(timerRef.current);
             setIsResting(false);
-            playTone(950);
+            triggerCompletionSound();
             return 0;
           }
           return prev - 1;
@@ -138,11 +128,13 @@ export const ActiveCoreModal: React.FC<ActiveCoreModalProps> = ({
       clearInterval(timerRef.current);
     }
     return () => clearInterval(timerRef.current);
-  }, [isResting, restSecondsLeft, isPaused]);
+  }, [isResting, restSecondsLeft, isPaused, soundEnabled, selectedSound]);
 
   // Add a rep
   const handleAddRep = () => {
-    playTone(520);
+    if (soundEnabled) {
+      AudioService.playBeep(520, 0.08);
+    }
     setCurrentReps(prev => {
       const next = prev + 1;
       if (next >= targetReps) {
@@ -157,7 +149,9 @@ export const ActiveCoreModal: React.FC<ActiveCoreModalProps> = ({
 
   // Complete current set
   const handleCompleteSet = (finalReps?: number) => {
-    playTone(680);
+    if (soundEnabled) {
+      AudioService.playBeep(680, 0.12);
+    }
     setCompletedSetsCount(prev => prev + 1);
 
     const isLastSetOfEx = currentSet >= targetSets;
@@ -185,9 +179,21 @@ export const ActiveCoreModal: React.FC<ActiveCoreModalProps> = ({
     }
   };
 
-  const handleSkipRest = () => {
+  const handleEndRestNow = () => {
     setIsResting(false);
     setRestSecondsLeft(0);
+    if (soundEnabled) {
+      AudioService.playBeep(700, 0.1);
+    }
+  };
+
+  const handleSoundChange = (newSound: RestSoundType) => {
+    setSelectedSound(newSound);
+    AudioService.playSound(newSound);
+    StorageService.saveProfile({
+      ...profile,
+      restSoundType: newSound,
+    });
   };
 
   const handleFinishWorkout = () => {
@@ -228,11 +234,22 @@ export const ActiveCoreModal: React.FC<ActiveCoreModalProps> = ({
       {/* Top Header */}
       <div className="flex h-16 items-center justify-between border-b border-border bg-card/90 px-4 sm:px-6">
         <div className="flex items-center gap-3">
+          {/* Home Button */}
+          <button
+            id="btn-active-core-home"
+            onClick={onClose}
+            className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-sm"
+            title={isAr ? 'العودة للرئيسية' : 'Home'}
+          >
+            <Home className="h-4 w-4" />
+            <span className="hidden sm:inline">{isAr ? 'الرئيسية' : 'Home'}</span>
+          </button>
+
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/20 text-primary">
             <Flame className="h-5 w-5 fill-current" />
           </div>
           <div>
-            <h2 className="text-base font-black text-foreground sm:text-lg">
+            <h2 className="text-sm sm:text-base font-black text-foreground">
               {isAr ? routine.nameAr : routine.name}
             </h2>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -244,32 +261,50 @@ export const ActiveCoreModal: React.FC<ActiveCoreModalProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-            title="Audio feedback toggle"
-          >
-            {soundEnabled ? <Volume2 className="h-5 w-5 text-primary" /> : <VolumeX className="h-5 w-5" />}
-          </button>
+          {/* Sound Selector Dropdown */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              title="Audio feedback toggle"
+            >
+              {soundEnabled ? <Volume2 className="h-4 w-4 text-primary" /> : <VolumeX className="h-4 w-4" />}
+            </button>
+
+            {soundEnabled && (
+              <select
+                value={selectedSound}
+                onChange={e => handleSoundChange(e.target.value as RestSoundType)}
+                className="rounded-lg border border-border bg-secondary/80 px-2 py-1 text-[11px] font-bold text-foreground focus:border-primary focus:outline-none cursor-pointer"
+                title={isAr ? 'صوت انتهاء الراحة' : 'Rest End Sound'}
+              >
+                <option value="beep">{isAr ? 'صفارة (Beep)' : 'Beep'}</option>
+                <option value="whistle">{isAr ? 'صافرة حكم (Whistle)' : 'Whistle'}</option>
+                <option value="chime">{isAr ? 'رنين ناعم (Chime)' : 'Chime'}</option>
+                <option value="buzzer">{isAr ? 'جرس صالة (Buzzer)' : 'Buzzer'}</option>
+                <option value="bell">{isAr ? 'جرس جولة (Bell)' : 'Boxing Bell'}</option>
+              </select>
+            )}
+          </div>
 
           <button
             onClick={() => setIsPaused(!isPaused)}
-            className={`flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${
+            className={`flex items-center gap-1 rounded-xl px-2.5 sm:px-3 py-1.5 text-xs font-bold transition-all ${
               isPaused 
                 ? 'bg-amber-500 text-black shadow-md' 
                 : 'border border-border bg-secondary text-foreground hover:bg-secondary/80'
             }`}
           >
             {isPaused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5" />}
-            <span>{isPaused ? (isAr ? 'استئناف' : 'Resume') : (isAr ? 'إيقاف مؤقت' : 'Pause')}</span>
+            <span className="hidden sm:inline">{isPaused ? (isAr ? 'استئناف' : 'Resume') : (isAr ? 'إيقاف مؤقت' : 'Pause')}</span>
           </button>
 
           <button
             onClick={handleFinishWorkout}
-            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow hover:bg-emerald-500 transition-colors"
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-emerald-500 transition-colors"
           >
             <Trophy className="h-4 w-4" />
-            <span>{isAr ? 'إنهاء وحفظ' : 'Finish'}</span>
+            <span>{isAr ? 'إنهاء' : 'Finish'}</span>
           </button>
 
           <button
@@ -316,20 +351,31 @@ export const ActiveCoreModal: React.FC<ActiveCoreModalProps> = ({
                   : 'Breathe diaphragmatically and stabilize intra-abdominal pressure for maximum core tension next set.'}
               </p>
 
-              <div className="flex items-center justify-center gap-3 pt-2">
+              {/* End Rest Now / Add Time Controls */}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
                 <button
-                  onClick={() => setRestSecondsLeft(prev => prev + 15)}
-                  className="rounded-xl border border-border bg-secondary/80 px-4 py-2.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors"
+                  id="btn-end-core-rest-now"
+                  onClick={handleEndRestNow}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-2xl bg-primary px-8 py-3 text-sm font-black text-primary-foreground shadow-lg shadow-primary/30 hover:bg-primary/90 transition-transform active:scale-95"
                 >
-                  +15s
+                  <SkipForward className="h-5 w-5" />
+                  <span>{isAr ? 'إنهاء الراحة والبدء الآن' : 'End Rest Now'}</span>
                 </button>
-                <button
-                  onClick={handleSkipRest}
-                  className="flex items-center gap-1.5 rounded-xl bg-primary px-6 py-2.5 text-xs font-bold text-primary-foreground shadow hover:bg-primary/90 transition-colors"
-                >
-                  <SkipForward className="h-4 w-4" />
-                  <span>{isAr ? 'تخطي الراحة والبدء' : 'Skip Rest'}</span>
-                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setRestSecondsLeft(prev => prev + 15)}
+                    className="rounded-xl border border-border bg-secondary/80 px-4 py-2.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors"
+                  >
+                    +15s
+                  </button>
+                  <button
+                    onClick={() => setRestSecondsLeft(prev => prev + 30)}
+                    className="rounded-xl border border-border bg-secondary/80 px-4 py-2.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors"
+                  >
+                    +30s
+                  </button>
+                </div>
               </div>
             </motion.div>
           ) : (

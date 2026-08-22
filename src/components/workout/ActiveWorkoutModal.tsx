@@ -18,15 +18,21 @@ import {
   Play,
   Pause,
   ArrowRight,
-  Radio
+  Radio,
+  Home,
+  FastForward,
+  Music,
+  CheckCircle2,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
-import { WorkoutSession, WorkoutExercise, SetLog, UserProfile, Exercise } from '../../types';
+import { WorkoutSession, WorkoutExercise, SetLog, UserProfile, Exercise, RestSoundType } from '../../types';
 import { translations } from '../../i18n/translations';
 import { PPLEngine, ProgressionAdvice } from '../../services/pplEngine';
 import { StorageService } from '../../services/storage';
 import { WakeLockService } from '../../services/wakeLockService';
+import { AudioService } from '../../services/audioService';
 
 interface ActiveWorkoutModalProps {
   workout: WorkoutSession;
@@ -36,6 +42,21 @@ interface ActiveWorkoutModalProps {
   onClose: () => void;
   onOpenExerciseDetails: (exercise: Exercise) => void;
 }
+
+// Preset weights from 0 kg to 200 kg with fine-grained increments
+const WEIGHT_OPTIONS: number[] = [
+  0, 1, 2, 2.5, 3, 4, 5, 6, 7, 7.5, 8, 9, 10, 
+  12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30, 32.5, 35, 37.5, 40, 
+  42.5, 45, 47.5, 50, 52.5, 55, 57.5, 60, 62.5, 65, 67.5, 70, 
+  72.5, 75, 77.5, 80, 82.5, 85, 87.5, 90, 95, 100, 105, 110, 
+  115, 120, 125, 130, 135, 140, 145, 150, 160, 170, 180, 190, 200
+];
+
+// Preset reps from 1 to 50
+const REPS_OPTIONS: number[] = [
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 
+  16, 17, 18, 19, 20, 22, 24, 25, 28, 30, 35, 40, 45, 50
+];
 
 export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   workout: initialWorkout,
@@ -55,7 +76,9 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   const [timerSeconds, setTimerSeconds] = useState<number>(0);
   const [timerActive, setTimerActive] = useState<boolean>(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [selectedSound, setSelectedSound] = useState<RestSoundType>(profile.restSoundType || 'beep');
   const [swapExerciseOpen, setSwapExerciseOpen] = useState<boolean>(false);
+  const [soundPickerOpen, setSoundPickerOpen] = useState<boolean>(false);
 
   const timerRef = useRef<any>(null);
 
@@ -72,27 +95,13 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     onSaveWorkout(workout);
   }, [workout]);
 
-  // Audio tone generator using Web Audio API for timer completion
-  const playBeep = () => {
+  // Play configured rest completion sound (beep / whistle / chime / buzzer / bell)
+  const triggerRestSound = () => {
     if (!soundEnabled) return;
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.5);
-    } catch (e) {
-      console.warn('AudioContext beep failed:', e);
-    }
+    AudioService.playSound(selectedSound, 0.35);
   };
 
-  // Timer interval
+  // Timer countdown interval
   useEffect(() => {
     if (timerActive && timerSeconds > 0) {
       timerRef.current = setInterval(() => {
@@ -100,7 +109,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
           if (prev <= 1) {
             clearInterval(timerRef.current);
             setTimerActive(false);
-            playBeep();
+            triggerRestSound();
             return 0;
           }
           return prev - 1;
@@ -111,11 +120,17 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     }
 
     return () => clearInterval(timerRef.current);
-  }, [timerActive, timerSeconds, soundEnabled]);
+  }, [timerActive, timerSeconds, soundEnabled, selectedSound]);
 
   const startTimer = (seconds: number) => {
     setTimerSeconds(seconds);
     setTimerActive(true);
+  };
+
+  const endRestImmediately = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setTimerSeconds(0);
+    setTimerActive(false);
   };
 
   const adjustTimer = (delta: number) => {
@@ -233,7 +248,6 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
 
   // Finish Workout
   const handleFinish = () => {
-    // Calculate final metrics
     let totalVolume = 0;
     workout.exercises.forEach(ex => {
       ex.sets.forEach(s => {
@@ -246,21 +260,18 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     const finishedWorkout: WorkoutSession = {
       ...workout,
       completed: true,
-      durationMinutes: Math.max(15, Math.round((Date.now() - workout.timestamp) / 60000)),
+      durationMinutes: Math.max(15, Math.round((Date.now() - (workout.startedAt || workout.timestamp || Date.now())) / 60000)),
       totalVolumeKg: totalVolume,
-      notes: workout.notes || 'Workout completed with progressive overload discipline.',
+      notes: workout.notes || 'Mission accomplished with progressive overload and fat loss focus.',
     };
 
-    // Confetti celebration
     try {
       confetti({
-        particleCount: 80,
-        spread: 70,
+        particleCount: 90,
+        spread: 75,
         origin: { y: 0.6 },
       });
-    } catch (e) {
-      // safe fallback
-    }
+    } catch (e) {}
 
     WakeLockService.release();
     onFinishWorkout(finishedWorkout);
@@ -275,11 +286,23 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
       {/* Top Session Action Bar */}
       <div className="flex h-16 items-center justify-between border-b border-border bg-card/80 px-4 sm:px-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/20 text-primary">
+          {/* Home Screen Navigation Button */}
+          <button
+            id="btn-workout-to-home"
+            onClick={onClose}
+            className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-sm"
+            title={isAr ? 'العودة للصفحة الرئيسية (التمرين يظل نشطاً)' : 'Back to Home Dashboard (Workout stays active)'}
+          >
+            <Home className="h-4 w-4" />
+            <span>{isAr ? 'الرئيسية' : 'Home'}</span>
+          </button>
+
+          <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-xl bg-primary/20 text-primary">
             <Flame className="h-5 w-5 fill-current" />
           </div>
+
           <div>
-            <h2 className="text-base font-black text-foreground sm:text-lg">
+            <h2 className="text-sm font-black text-foreground sm:text-base">
               {isAr ? workout.nameAr || workout.name : workout.name}
             </h2>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -291,29 +314,80 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            id="btn-sound-toggle-workout"
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-            title={soundEnabled ? 'Timer Sound On' : 'Timer Sound Off'}
-          >
-            {soundEnabled ? <Volume2 className="h-5 w-5 text-primary" /> : <VolumeX className="h-5 w-5" />}
-          </button>
+          {/* Sound & Tone Selector Dropdown Trigger */}
+          <div className="relative">
+            <button
+              id="btn-sound-toggle-workout"
+              onClick={() => setSoundPickerOpen(!soundPickerOpen)}
+              className="flex items-center gap-1 rounded-lg border border-border bg-secondary/60 px-2.5 py-1.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors"
+              title={isAr ? 'تغيير صوت انتهاء الراحة (Beep, صافرة, جرس)' : 'Rest timer sound selector'}
+            >
+              {soundEnabled ? (
+                <Volume2 className="h-4 w-4 text-primary" />
+              ) : (
+                <VolumeX className="h-4 w-4 text-muted-foreground" />
+              )}
+              <span className="text-[11px] capitalize hidden sm:inline">{selectedSound}</span>
+            </button>
+
+            {soundPickerOpen && (
+              <div className="absolute right-0 top-full mt-2 w-48 rounded-2xl border border-border bg-card p-2 shadow-2xl z-50 space-y-1">
+                <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  {isAr ? 'صوت انتهاء فترة الراحة' : 'Rest Alert Sound'}
+                </div>
+                {(['beep', 'whistle', 'chime', 'buzzer', 'bell'] as RestSoundType[]).map(st => (
+                  <button
+                    key={st}
+                    onClick={() => {
+                      setSelectedSound(st);
+                      AudioService.preview(st);
+                      setSoundPickerOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs font-semibold transition-colors ${
+                      selectedSound === st
+                        ? 'bg-primary text-primary-foreground font-bold'
+                        : 'text-foreground hover:bg-secondary'
+                    }`}
+                  >
+                    <span className="capitalize">
+                      {st === 'beep' ? 'Standard Beep (افتراضي)' :
+                       st === 'whistle' ? 'صافرة تدريب (Whistle)' :
+                       st === 'chime' ? 'جرس رقمي (Chime)' :
+                       st === 'buzzer' ? 'بوق الجيم (Buzzer)' : 'جرس حلبة (Bell)'}
+                    </span>
+                    {selectedSound === st && <Check className="h-3.5 w-3.5" />}
+                  </button>
+                ))}
+                <div className="border-t border-border pt-1">
+                  <button
+                    onClick={() => {
+                      setSoundEnabled(!soundEnabled);
+                      setSoundPickerOpen(false);
+                    }}
+                    className="flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-secondary"
+                  >
+                    <span>{soundEnabled ? (isAr ? 'كتم الصوت' : 'Mute Sound') : (isAr ? 'تفعيل الصوت' : 'Unmute Sound')}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           
           <button
             id="btn-finish-workout-top"
             onClick={handleFinish}
-            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-emerald-500 transition-colors"
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-emerald-500 transition-colors"
           >
             <Trophy className="h-4 w-4" />
-            <span>{t.workout.finishWorkout}</span>
+            <span className="hidden sm:inline">{t.workout.finishWorkout}</span>
+            <span className="sm:hidden">{isAr ? 'إنهاء' : 'Finish'}</span>
           </button>
 
           <button
             id="btn-close-active-workout"
             onClick={onClose}
             className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-            title="Minimize workout"
+            title={isAr ? 'إخفاء مؤقت والعودة للرئيسية' : 'Minimize workout'}
           >
             <X className="h-5 w-5" />
           </button>
@@ -347,15 +421,15 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
             ))}
           </div>
 
-          {/* Current Exercise Card with Framer Motion Transition */}
+          {/* Current Exercise Card with Motion Transition */}
           <AnimatePresence mode="wait">
             <motion.div
               key={currentExerciseIndex}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="rounded-2xl border border-border bg-card p-5 shadow-lg"
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="rounded-2xl border border-border bg-card p-5 shadow-lg space-y-5"
             >
               {/* Header info & quick action icons */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-4">
@@ -364,12 +438,12 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                     <h3 className="text-xl font-black text-foreground">
                       {isAr && currentExercise.exerciseNameAr ? currentExercise.exerciseNameAr : currentExercise.exerciseName}
                     </h3>
-                    <span className="rounded bg-secondary px-2 py-0.5 text-xs text-muted-foreground font-medium">
+                    <span className="rounded-lg bg-secondary px-2.5 py-0.5 text-xs text-muted-foreground font-semibold">
                       {currentExercise.primaryMuscle}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {t.workout.targetReps}: {fullExerciseData?.targetRepRange || '8-10'} • {t.workout.rpe}: {currentExercise.targetRpe} • {t.workout.rest}: {currentExercise.restSeconds}s
+                    {t.workout.targetReps}: <span className="font-bold text-foreground">{fullExerciseData?.targetRepRange || '8-10'}</span> • {t.workout.rpe}: <span className="font-bold text-foreground">{currentExercise.targetRpe}</span> • {t.workout.rest}: <span className="font-bold text-foreground">{currentExercise.restSeconds}s</span>
                   </p>
                 </div>
 
@@ -378,7 +452,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                     <button
                       id="btn-view-exercise-guide"
                       onClick={() => onOpenExerciseDetails(fullExerciseData)}
-                      className="flex items-center gap-1.5 rounded-lg border border-border bg-secondary/60 px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
+                      className="flex items-center gap-1.5 rounded-xl border border-border bg-secondary/60 px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
                     >
                       <Info className="h-4 w-4 text-primary" />
                       <span>{t.common.guideAndVideo}</span>
@@ -388,7 +462,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                   <button
                     id="btn-swap-exercise-toggle"
                     onClick={() => setSwapExerciseOpen(!swapExerciseOpen)}
-                    className="flex items-center gap-1.5 rounded-lg border border-border bg-secondary/60 px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
+                    className="flex items-center gap-1.5 rounded-xl border border-border bg-secondary/60 px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
                   >
                     <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>{t.workout.substitute}</span>
@@ -398,7 +472,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
 
               {/* Progressive Overload Advisor Banner */}
               {progressionAdvice && (
-                <div className="mt-4 rounded-xl border border-primary/25 bg-primary/10 p-3.5 flex items-start gap-3">
+                <div className="rounded-xl border border-primary/25 bg-primary/10 p-3.5 flex items-start gap-3">
                   <TrendingUp className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                   <div className="text-xs">
                     <div className="font-bold text-foreground mb-0.5">
@@ -418,11 +492,11 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="mt-4 overflow-hidden rounded-xl border border-border bg-secondary/40 p-4 space-y-3"
+                    className="overflow-hidden rounded-xl border border-border bg-secondary/40 p-4 space-y-3"
                   >
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-bold text-foreground">
-                        {isAr ? 'بدائل مطابقة لنفس المسار الحركي:' : 'Biomechanical Movement Substitutes:'}
+                        {isAr ? 'بدائل مطابقة لنفس المسار الحركي والهدف العضلي:' : 'Biomechanical Movement Substitutes:'}
                       </h4>
                       <button
                         id="btn-close-substitutes"
@@ -457,17 +531,17 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                 )}
               </AnimatePresence>
 
-              {/* Sets Logging Table with Framer Motion Layout Transitions */}
-              <div className="mt-6 space-y-3">
+              {/* Sets Logging Table with Dropdown Lists for Weight & Reps */}
+              <div className="space-y-3">
                 <div className="grid grid-cols-12 gap-2 text-center text-xs font-bold text-muted-foreground px-2">
                   <div className="col-span-2 text-left">{t.workout.set}</div>
-                  <div className="col-span-3">{t.workout.weight} (kg)</div>
-                  <div className="col-span-3">{t.workout.reps}</div>
+                  <div className="col-span-4">{isAr ? 'الوزن (قائمة منسدلة)' : 'Weight (Drop-Down)'}</div>
+                  <div className="col-span-3">{isAr ? 'التكرار (قائمة)' : 'Reps (Drop-Down)'}</div>
                   <div className="col-span-2">{t.workout.rpe}</div>
-                  <div className="col-span-2">{t.common.done}</div>
+                  <div className="col-span-1">{t.common.done}</div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   <AnimatePresence initial={false}>
                     {currentExercise.sets.map((setLog) => (
                       <motion.div
@@ -485,35 +559,48 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                       >
                         {/* Set Number */}
                         <div className="col-span-2 flex items-center gap-1.5 font-bold text-foreground text-sm">
-                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-xs">
+                          <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-secondary text-xs font-black shadow-inner">
                             {setLog.setNumber}
                           </span>
                         </div>
 
-                        {/* Weight Input */}
-                        <div className="col-span-3">
-                          <input
-                            type="number"
-                            step="0.5"
-                            min="0"
-                            value={setLog.actualWeight || ''}
-                            onChange={e => handleUpdateSet(setLog.id, 'actualWeight', parseFloat(e.target.value) || 0)}
-                            placeholder="kg"
-                            className="w-full rounded-lg border border-border bg-card py-1.5 text-center text-sm font-bold text-foreground focus:border-primary focus:outline-none transition-colors"
-                          />
+                        {/* Weight Drop-Down List (Select) */}
+                        <div className="col-span-4">
+                          <select
+                            id={`select-weight-${setLog.id}`}
+                            value={setLog.actualWeight}
+                            onChange={e => handleUpdateSet(setLog.id, 'actualWeight', parseFloat(e.target.value))}
+                            className="w-full rounded-xl border border-border bg-card py-2 px-2 text-center text-xs sm:text-sm font-bold text-foreground focus:border-primary focus:outline-none transition-colors cursor-pointer hover:border-primary/50"
+                          >
+                            {/* Make sure current value is included even if custom */}
+                            {!WEIGHT_OPTIONS.includes(setLog.actualWeight) && setLog.actualWeight > 0 && (
+                              <option value={setLog.actualWeight}>{setLog.actualWeight} kg (Custom)</option>
+                            )}
+                            {WEIGHT_OPTIONS.map(w => (
+                              <option key={w} value={w}>
+                                {w === 0 ? (isAr ? 'وزن الجسم (0 kg)' : 'Bodyweight (0 kg)') : `${w} kg`}
+                              </option>
+                            ))}
+                          </select>
                         </div>
 
-                        {/* Reps Input */}
+                        {/* Reps Drop-Down List (Select) */}
                         <div className="col-span-3">
-                          <input
-                            type="number"
-                            min="1"
-                            max="50"
-                            value={setLog.actualReps || ''}
-                            onChange={e => handleUpdateSet(setLog.id, 'actualReps', parseInt(e.target.value, 10) || 0)}
-                            placeholder="Reps"
-                            className="w-full rounded-lg border border-border bg-card py-1.5 text-center text-sm font-bold text-foreground focus:border-primary focus:outline-none transition-colors"
-                          />
+                          <select
+                            id={`select-reps-${setLog.id}`}
+                            value={setLog.actualReps}
+                            onChange={e => handleUpdateSet(setLog.id, 'actualReps', parseInt(e.target.value, 10))}
+                            className="w-full rounded-xl border border-border bg-card py-2 px-2 text-center text-xs sm:text-sm font-bold text-foreground focus:border-primary focus:outline-none transition-colors cursor-pointer hover:border-primary/50"
+                          >
+                            {!REPS_OPTIONS.includes(setLog.actualReps) && setLog.actualReps > 0 && (
+                              <option value={setLog.actualReps}>{setLog.actualReps} Reps</option>
+                            )}
+                            {REPS_OPTIONS.map(r => (
+                              <option key={r} value={r}>
+                                {r} {isAr ? 'تكرار' : 'reps'}
+                              </option>
+                            ))}
+                          </select>
                         </div>
 
                         {/* RPE Selector (1 - 10) */}
@@ -521,29 +608,30 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                           <select
                             value={setLog.rpe || 8}
                             onChange={e => handleUpdateSet(setLog.id, 'rpe', parseFloat(e.target.value))}
-                            className="w-full rounded-lg border border-border bg-card py-1.5 text-center text-xs font-semibold text-foreground focus:border-primary focus:outline-none"
+                            className="w-full rounded-xl border border-border bg-card py-2 px-1 text-center text-xs font-semibold text-foreground focus:border-primary focus:outline-none cursor-pointer"
                           >
-                            <option value="6">6 (Warmup)</option>
-                            <option value="7">7 (3 RIR)</option>
+                            <option value="6">RPE 6</option>
+                            <option value="7">RPE 7</option>
                             <option value="7.5">7.5</option>
-                            <option value="8">8 (2 RIR)</option>
+                            <option value="8">RPE 8</option>
                             <option value="8.5">8.5</option>
-                            <option value="9">9 (1 RIR)</option>
+                            <option value="9">RPE 9</option>
                             <option value="9.5">9.5</option>
-                            <option value="10">10 (Failure)</option>
+                            <option value="10">10 (Max)</option>
                           </select>
                         </div>
 
-                        {/* Completed Checkbox */}
-                        <div className="col-span-2 flex justify-center">
+                        {/* Completed Checkbox Button */}
+                        <div className="col-span-1 flex justify-center">
                           <button
                             id={`btn-toggle-set-${setLog.id}`}
                             onClick={() => handleToggleSetCompletion(setLog)}
-                            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-all ${
+                            className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all ${
                               setLog.completed
-                                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20 scale-105'
+                                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30 scale-105'
                                 : 'border border-border bg-card text-muted-foreground hover:bg-secondary'
                             }`}
+                            title={isAr ? 'تأكيد إكمال المجموعة وبدء الراحة' : 'Log set and start rest timer'}
                           >
                             <Check className="h-4 w-4" />
                           </button>
@@ -558,7 +646,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                   <button
                     id="btn-add-extra-set"
                     onClick={handleAddSet}
-                    className="flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+                    className="flex items-center gap-1.5 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 transition-colors"
                   >
                     <Plus className="h-4 w-4" />
                     <span>{t.workout.addSet}</span>
@@ -568,7 +656,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                     <button
                       id="btn-remove-last-set"
                       onClick={() => handleRemoveSet(currentExercise.sets[currentExercise.sets.length - 1].id)}
-                      className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-red-400"
+                      className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-red-400 transition-colors"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       <span>{t.common.delete}</span>
@@ -591,7 +679,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
               <span>{t.workout.prevExercise}</span>
             </button>
 
-            <span className="text-xs text-muted-foreground font-medium">
+            <span className="text-xs text-muted-foreground font-bold">
               {currentExerciseIndex + 1} / {workout.exercises.length}
             </span>
 
@@ -608,68 +696,84 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
         </div>
       </div>
 
-      {/* Floating Interactive Rest Timer Bar */}
-      <div className="border-t border-border bg-card/95 p-3 backdrop-blur sm:px-6">
-        <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
+      {/* Floating Interactive Rest Timer Bar with Instant End / Skip Rest Button */}
+      <div className="border-t border-border bg-card/95 p-3 backdrop-blur sm:px-6 shadow-2xl">
+        <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary text-primary">
+            <div className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
+              timerActive ? 'bg-primary text-primary-foreground animate-pulse' : 'bg-secondary text-primary'
+            }`}>
               <Timer className="h-5 w-5" />
             </div>
             <div>
-              <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-                {t.workout.restTimer}
+              <div className="text-[10px] uppercase font-black text-muted-foreground tracking-wider flex items-center gap-1">
+                <span>{t.workout.restTimer}</span>
+                {timerActive && (
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+                )}
               </div>
-              <div className="text-lg font-black text-foreground font-mono">
+              <div className="text-xl font-black text-foreground font-mono">
                 {Math.floor(timerSeconds / 60)}:{(timerSeconds % 60).toString().padStart(2, '0')}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center flex-wrap gap-2">
+            {/* Quick Adjustment Buttons */}
             <button
               id="btn-timer-minus-15"
               onClick={() => adjustTimer(-15)}
-              className="rounded-lg border border-border bg-secondary/50 px-2 py-1 text-xs font-bold text-foreground hover:bg-secondary transition-colors"
+              className="rounded-xl border border-border bg-secondary/50 px-2.5 py-1.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors"
             >
               -15s
             </button>
             <button
               id="btn-timer-plus-30"
               onClick={() => adjustTimer(30)}
-              className="rounded-lg border border-border bg-secondary/50 px-2 py-1 text-xs font-bold text-foreground hover:bg-secondary transition-colors"
+              className="rounded-xl border border-border bg-secondary/50 px-2.5 py-1.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors"
             >
               +30s
             </button>
+
+            {/* End Rest Now Button (Mandated by user: اقدر انهي الراحه متى شئت) */}
+            {timerSeconds > 0 && (
+              <button
+                id="btn-end-rest-now"
+                onClick={endRestImmediately}
+                className="flex items-center gap-1 rounded-xl bg-amber-500/20 px-3 py-1.5 text-xs font-bold text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 transition-colors shadow-sm"
+                title={isAr ? 'إنهاء الراحة الآن والبدء في المجموعة التالية فوراً' : 'End rest right now'}
+              >
+                <FastForward className="h-3.5 w-3.5" />
+                <span>{isAr ? 'إنهاء الراحة الآن' : 'End Rest Now'}</span>
+              </button>
+            )}
 
             {timerActive ? (
               <button
                 id="btn-pause-timer"
                 onClick={() => setTimerActive(false)}
-                className="flex items-center gap-1 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-bold text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 transition-colors"
+                className="flex items-center gap-1 rounded-xl bg-secondary px-3 py-1.5 text-xs font-bold text-foreground border border-border hover:bg-secondary/80 transition-colors"
               >
                 <Pause className="h-3.5 w-3.5" />
-                <span>Pause</span>
+                <span>{isAr ? 'إيقاف مؤقت' : 'Pause'}</span>
               </button>
             ) : (
               <button
                 id="btn-start-timer-90"
                 onClick={() => startTimer(currentExercise.restSeconds || 90)}
-                className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-colors"
+                className="flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-colors shadow-md shadow-primary/20"
               >
                 <Play className="h-3.5 w-3.5 fill-current" />
-                <span>{t.workout.startRest}</span>
+                <span>{t.workout.startRest} ({currentExercise.restSeconds || 90}s)</span>
               </button>
             )}
 
             {timerSeconds > 0 && (
               <button
                 id="btn-reset-timer"
-                onClick={() => {
-                  setTimerSeconds(0);
-                  setTimerActive(false);
-                }}
-                className="rounded-lg p-1.5 text-muted-foreground hover:text-foreground transition-colors"
-                title="Reset timer"
+                onClick={endRestImmediately}
+                className="rounded-xl p-2 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                title={isAr ? 'تصفير العداد' : 'Reset timer'}
               >
                 <RotateCcw className="h-4 w-4" />
               </button>
@@ -680,3 +784,4 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     </div>
   );
 };
+

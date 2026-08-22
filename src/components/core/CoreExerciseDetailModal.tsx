@@ -9,7 +9,9 @@ import {
   Sliders, 
   Zap, 
   Flame,
-  Info
+  Info,
+  Home,
+  Target
 } from 'lucide-react';
 import { CoreExercise, UserProfile } from '../../types';
 import { translations } from '../../i18n/translations';
@@ -19,21 +21,27 @@ interface CoreExerciseDetailModalProps {
   profile: UserProfile;
   onClose: () => void;
   onStartExercise: (exercise: CoreExercise, customSets: number, customReps: number, customRest: number) => void;
+  onGoHome?: () => void;
 }
+
+const SETS_OPTIONS = [1, 2, 3, 4, 5, 6, 8, 10];
+const REPS_OPTIONS = [8, 10, 12, 15, 20, 25, 30, 45, 60];
+const REST_OPTIONS = [15, 20, 30, 45, 60, 90, 120];
 
 export const CoreExerciseDetailModal: React.FC<CoreExerciseDetailModalProps> = ({
   exercise,
   profile,
   onClose,
   onStartExercise,
+  onGoHome,
 }) => {
   const t = translations[profile.language];
   const isAr = profile.language === 'ar';
 
   const [sets, setSets] = useState<number>(3);
-  const [reps, setReps] = useState<number>(12);
-  const [restSeconds, setRestSeconds] = useState<number>(45);
-  const [videoModalOpen, setVideoModalOpen] = useState<boolean>(false);
+  const [reps, setReps] = useState<number>(15);
+  const [restSeconds, setRestSeconds] = useState<number>(30);
+  const [showEmbeddedVideo, setShowEmbeddedVideo] = useState<boolean>(false);
 
   const title = isAr && exercise.nameAr ? exercise.nameAr : exercise.name;
   const description = isAr && exercise.descriptionAr ? exercise.descriptionAr : exercise.description;
@@ -63,20 +71,39 @@ export const CoreExerciseDetailModal: React.FC<CoreExerciseDetailModalProps> = (
   ];
 
   const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(
-    `${exercise.name} exercise form tutorial fitness`
+    `${exercise.name} core exercise form tutorial fitness technique`
   )}`;
+
+  const handleHomeClick = () => {
+    if (onGoHome) {
+      onGoHome();
+    } else {
+      onClose();
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" dir={isAr ? 'rtl' : 'ltr'}>
       <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-2xl animate-in zoom-in-95 duration-200">
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-border bg-secondary/30 px-6 py-4">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-3">
+            {/* Home Navigation Button */}
+            <button
+              id="btn-core-exercise-to-home"
+              onClick={handleHomeClick}
+              className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-sm"
+              title={isAr ? 'العودة للصفحة الرئيسية (Home)' : 'Back to Home'}
+            >
+              <Home className="h-4 w-4" />
+              <span>{isAr ? 'الرئيسية' : 'Home'}</span>
+            </button>
+
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/20 text-primary">
               <ShieldCheck className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-lg font-black text-foreground">{title}</h3>
+              <h3 className="text-base sm:text-lg font-black text-foreground">{title}</h3>
               <p className="text-xs text-muted-foreground">{exercise.name} • {exercise.primaryPattern}</p>
             </div>
           </div>
@@ -91,6 +118,21 @@ export const CoreExerciseDetailModal: React.FC<CoreExerciseDetailModalProps> = (
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+          {/* 80kg Fat Loss & Visceral Fat Reduction Tip */}
+          <div className="rounded-2xl border border-primary/30 bg-primary/10 p-3.5 flex items-start gap-3">
+            <Target className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+            <div className="text-xs">
+              <span className="font-bold text-foreground block mb-0.5">
+                {isAr ? 'تقوية الجدار العضلي وحرق الدهون الحشوية (Target 80kg):' : 'Core Bracing & Visceral Fat Target:'}
+              </span>
+              <p className="text-muted-foreground leading-relaxed">
+                {isAr 
+                  ? 'تمارين الكور وحزام البطن الداخلي تثبت العمود الفقري وتشد منطقة الخصر من 102 سم نحو القوام الرياضي مع حرق الدهون.' 
+                  : 'Deep transverse abdominal bracing reinforces spinal integrity and tightens the waistline as body fat drops towards 80kg.'}
+              </p>
+            </div>
+          </div>
+
           {/* Quick Badges */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-xl border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
@@ -167,67 +209,79 @@ export const CoreExerciseDetailModal: React.FC<CoreExerciseDetailModalProps> = (
             </div>
           </div>
 
-          {/* Configurable Training Parameters */}
+          {/* Configurable Training Parameters with Drop Down Lists */}
           <div className="rounded-2xl border border-border bg-secondary/40 p-5 space-y-4">
             <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
               <Sliders className="h-4 w-4 text-primary" />
-              <span>{isAr ? 'تخصيص معايير جلسة التمرين' : 'Training Parameters'}</span>
+              <span>{isAr ? 'تخصيص معايير الجلسة (قوائم منسدلة)' : 'Training Parameters (Drop-Down Lists)'}</span>
             </h4>
 
             <div className="grid grid-cols-3 gap-3">
+              {/* Sets Dropdown */}
               <div>
-                <label className="block text-[11px] font-bold text-muted-foreground mb-1">
-                  {isAr ? 'المجموعات' : 'Sets'}
+                <label className="block text-[11px] font-bold text-muted-foreground mb-1.5">
+                  {isAr ? 'المجموعات (Sets)' : 'Sets'}
                 </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
+                <select
                   value={sets}
-                  onChange={e => setSets(parseInt(e.target.value, 10) || 3)}
-                  className="w-full rounded-xl border border-border bg-background p-2 text-center text-sm font-bold text-foreground focus:border-primary focus:outline-none"
-                />
+                  onChange={e => setSets(parseInt(e.target.value, 10))}
+                  className="w-full rounded-xl border border-border bg-card p-2 text-center text-sm font-bold text-foreground focus:border-primary focus:outline-none cursor-pointer"
+                >
+                  {SETS_OPTIONS.map(s => (
+                    <option key={s} value={s}>
+                      {s} {isAr ? 'مجموعات' : 'sets'}
+                    </option>
+                  ))}
+                </select>
               </div>
 
+              {/* Reps Dropdown */}
               <div>
-                <label className="block text-[11px] font-bold text-muted-foreground mb-1">
-                  {isAr ? 'التكرارات' : 'Target Reps'}
+                <label className="block text-[11px] font-bold text-muted-foreground mb-1.5">
+                  {isAr ? 'التكرار / المدة' : 'Target Reps/Time'}
                 </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
+                <select
                   value={reps}
-                  onChange={e => setReps(parseInt(e.target.value, 10) || 12)}
-                  className="w-full rounded-xl border border-border bg-background p-2 text-center text-sm font-bold text-foreground focus:border-primary focus:outline-none"
-                />
+                  onChange={e => setReps(parseInt(e.target.value, 10))}
+                  className="w-full rounded-xl border border-border bg-card p-2 text-center text-sm font-bold text-foreground focus:border-primary focus:outline-none cursor-pointer"
+                >
+                  {REPS_OPTIONS.map(r => (
+                    <option key={r} value={r}>
+                      {r} {isAr ? 'تكرار/ثانية' : 'reps/sec'}
+                    </option>
+                  ))}
+                </select>
               </div>
 
+              {/* Rest Seconds Dropdown */}
               <div>
-                <label className="block text-[11px] font-bold text-muted-foreground mb-1">
-                  {isAr ? 'الراحة (ثانية)' : 'Rest (s)'}
+                <label className="block text-[11px] font-bold text-muted-foreground mb-1.5">
+                  {isAr ? 'فترة الراحة' : 'Rest Duration'}
                 </label>
-                <input
-                  type="number"
-                  min="10"
-                  max="180"
-                  step="5"
+                <select
                   value={restSeconds}
-                  onChange={e => setRestSeconds(parseInt(e.target.value, 10) || 45)}
-                  className="w-full rounded-xl border border-border bg-background p-2 text-center text-sm font-bold text-foreground focus:border-primary focus:outline-none"
-                />
+                  onChange={e => setRestSeconds(parseInt(e.target.value, 10))}
+                  className="w-full rounded-xl border border-border bg-card p-2 text-center text-sm font-bold text-foreground focus:border-primary focus:outline-none cursor-pointer"
+                >
+                  {REST_OPTIONS.map(rst => (
+                    <option key={rst} value={rst}>
+                      {rst} {isAr ? 'ثانية' : 'sec'}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
         </div>
 
         {/* Modal Footer Actions */}
-        <div className="flex items-center justify-end gap-3 border-t border-border bg-secondary/30 px-6 py-4">
+        <div className="flex items-center justify-between border-t border-border bg-secondary/30 px-6 py-4">
           <button
-            onClick={onClose}
-            className="rounded-xl border border-border bg-secondary px-4 py-2.5 text-xs font-bold text-foreground hover:bg-secondary/80"
+            onClick={handleHomeClick}
+            className="flex items-center gap-1.5 rounded-xl border border-border bg-secondary px-4 py-2.5 text-xs font-bold text-foreground hover:bg-secondary/80"
           >
-            {t.common.close}
+            <Home className="h-4 w-4 text-primary" />
+            <span>{isAr ? 'الرئيسية' : 'Home'}</span>
           </button>
 
           <button
@@ -243,3 +297,4 @@ export const CoreExerciseDetailModal: React.FC<CoreExerciseDetailModalProps> = (
     </div>
   );
 };
+

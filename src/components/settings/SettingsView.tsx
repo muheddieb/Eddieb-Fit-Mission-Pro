@@ -10,11 +10,16 @@ import {
   AlertTriangle, 
   Check, 
   Smartphone,
-  ShieldAlert
+  ShieldAlert,
+  Volume2,
+  Play,
+  Music,
+  Target
 } from 'lucide-react';
-import { UserProfile } from '../../types';
+import { UserProfile, RestSoundType } from '../../types';
 import { translations } from '../../i18n/translations';
 import { StorageService } from '../../services/storage';
+import { AudioService } from '../../services/audioService';
 
 interface SettingsViewProps {
   profile: UserProfile;
@@ -32,6 +37,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const [confirmReset, setConfirmReset] = useState<boolean>(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const handleTestSound = (sound: RestSoundType) => {
+    AudioService.playSound(sound);
+  };
 
   const handleExportJSON = () => {
     const jsonStr = StorageService.exportAllDataAsJSON();
@@ -176,6 +185,116 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 {dur === 'never' ? (isAr ? 'دائماً (Never)' : 'Always') : dur}
               </button>
             ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Rest Timer Audio Notification Settings */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-md space-y-5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+            <Volume2 className="h-5 w-5 text-primary" />
+            <span>{isAr ? 'صوت انتهاء فترة الراحة (Rest Timer Alert Sound)' : 'Rest Timer Alert Sound'}</span>
+          </h3>
+          <span className="rounded-full bg-primary/20 px-2.5 py-0.5 text-[10px] font-bold text-primary">
+            {profile.restSoundType || 'beep'}
+          </span>
+        </div>
+
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {isAr
+            ? 'حدد نغمة التنبيه التي تصدر فور انتهاء وقت الراحة بين المجموعات لتنبيهك بالبدء في المجموعة التالية فوراً (الافتراضي هو Beep صافرة القياسية).'
+            : 'Select the audible tone played when the inter-set rest timer reaches zero to signal the start of your next set.'}
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+          {[
+            { id: 'beep', nameAr: 'صفارة قياسية (Beep)', nameEn: 'Standard Beep' },
+            { id: 'whistle', nameAr: 'صافرة حكم (Whistle)', nameEn: 'Whistle' },
+            { id: 'chime', nameAr: 'رنين ناعم (Chime)', nameEn: 'Harmonic Chime' },
+            { id: 'buzzer', nameAr: 'جرس صالة (Buzzer)', nameEn: 'Gym Buzzer' },
+            { id: 'bell', nameAr: 'جرس جولة (Bell)', nameEn: 'Boxing Bell' },
+          ].map(snd => {
+            const isSelected = (profile.restSoundType || 'beep') === snd.id;
+            return (
+              <div
+                key={snd.id}
+                className={`relative flex flex-col justify-between rounded-2xl border p-3.5 transition-all ${
+                  isSelected
+                    ? 'border-primary bg-primary/10 shadow-sm shadow-primary/20'
+                    : 'border-border bg-secondary/30 hover:border-border/80'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black text-foreground">
+                    {isAr ? snd.nameAr : snd.nameEn}
+                  </span>
+                  {isSelected && <Check className="h-4 w-4 text-primary" />}
+                </div>
+
+                <div className="flex items-center gap-2 mt-auto pt-2">
+                  <button
+                    type="button"
+                    id={`btn-select-sound-${snd.id}`}
+                    onClick={() => {
+                      onUpdateProfile({ ...profile, restSoundType: snd.id as RestSoundType });
+                      handleTestSound(snd.id as RestSoundType);
+                    }}
+                    className={`flex-1 rounded-xl py-1.5 text-xs font-bold transition-all ${
+                      isSelected
+                        ? 'bg-primary text-primary-foreground'
+                        : 'border border-border bg-card text-foreground hover:bg-secondary'
+                    }`}
+                  >
+                    {isAr ? 'اختيار' : 'Select'}
+                  </button>
+
+                  <button
+                    type="button"
+                    id={`btn-test-sound-${snd.id}`}
+                    onClick={() => handleTestSound(snd.id as RestSoundType)}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-secondary"
+                    title={isAr ? 'استماع للصوت' : 'Test sound'}
+                  >
+                    <Play className="h-3 w-3 fill-current" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Target Bodyweight 80kg Strategy & Measurements Summary */}
+      <div className="rounded-2xl border border-primary/30 bg-card p-6 shadow-md space-y-5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+            <Target className="h-5 w-5 text-primary" />
+            <span>{isAr ? 'هدف الوزن المثالي (Target 80kg Goal)' : 'Target Weight Goal (80 kg)'}</span>
+          </h3>
+          <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-black text-emerald-400 border border-emerald-500/30">
+            {profile.targetWeightKg} kg Target
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded-xl border border-border bg-secondary/30 p-3 text-center">
+            <div className="text-[11px] font-bold text-muted-foreground">{isAr ? 'الوزن الحالي' : 'Current Weight'}</div>
+            <div className="text-xl font-black text-foreground font-mono">{profile.currentWeightKg} kg</div>
+          </div>
+          <div className="rounded-xl border border-primary/30 bg-primary/10 p-3 text-center">
+            <div className="text-[11px] font-bold text-primary">{isAr ? 'الهدف المطلوب' : 'Target Weight'}</div>
+            <div className="text-xl font-black text-primary font-mono">{profile.targetWeightKg} kg</div>
+          </div>
+          <div className="rounded-xl border border-border bg-secondary/30 p-3 text-center">
+            <div className="text-[11px] font-bold text-muted-foreground">{isAr ? 'المتبقي للتخلص منه' : 'To Lose'}</div>
+            <div className="text-xl font-black text-amber-400 font-mono">
+              -{(profile.currentWeightKg - profile.targetWeightKg).toFixed(1)} kg
+            </div>
+          </div>
+          <div className="rounded-xl border border-border bg-secondary/30 p-3 text-center">
+            <div className="text-[11px] font-bold text-muted-foreground">{isAr ? 'نسبة الدهون المستهدفة' : 'Target Fat %'}</div>
+            <div className="text-xl font-black text-emerald-400 font-mono">~15 - 17%</div>
           </div>
         </div>
       </div>

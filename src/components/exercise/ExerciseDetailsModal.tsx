@@ -9,7 +9,10 @@ import {
   ArrowRight, 
   Layers, 
   ShieldCheck,
-  Search
+  Search,
+  Home,
+  Flame,
+  Target
 } from 'lucide-react';
 import { Exercise, UserProfile } from '../../types';
 import { translations } from '../../i18n/translations';
@@ -20,6 +23,7 @@ interface ExerciseDetailsModalProps {
   profile: UserProfile;
   onClose: () => void;
   onSelectAlternative?: (exerciseId: string) => void;
+  onGoHome?: () => void;
 }
 
 export const ExerciseDetailsModal: React.FC<ExerciseDetailsModalProps> = ({
@@ -27,6 +31,7 @@ export const ExerciseDetailsModal: React.FC<ExerciseDetailsModalProps> = ({
   profile,
   onClose,
   onSelectAlternative,
+  onGoHome,
 }) => {
   if (!exercise) return null;
 
@@ -43,30 +48,51 @@ export const ExerciseDetailsModal: React.FC<ExerciseDetailsModalProps> = ({
   const breathing = isAr && exercise.breathingAr ? exercise.breathingAr : exercise.breathing;
   const equipment = isAr && exercise.equipmentAr ? exercise.equipmentAr : exercise.equipment;
 
-  const youtubeQuery = encodeURIComponent(exercise.youtubeSearchQuery || `${exercise.name} form tutorial technique`);
+  const youtubeQuery = encodeURIComponent(exercise.youtubeSearchQuery || `${exercise.name} form tutorial technique fitness`);
   const searchUrl = `https://www.youtube.com/results?search_query=${youtubeQuery}`;
+
+  const handleHomeClick = () => {
+    if (onGoHome) {
+      onGoHome();
+    } else {
+      onClose();
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-4 backdrop-blur-sm overflow-y-auto">
       <div 
-        className="relative flex flex-col w-full max-w-3xl max-h-[92vh] rounded-2xl border border-border bg-card shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        className="relative flex flex-col w-full max-w-3xl max-h-[92vh] rounded-3xl border border-border bg-card shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
         dir={isAr ? 'rtl' : 'ltr'}
       >
         {/* Modal Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/95 px-5 py-4 backdrop-blur">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-foreground sm:text-2xl">{title}</h2>
-              {exercise.tags.includes('back_safe') && (
-                <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-400 border border-emerald-500/30">
-                  <ShieldCheck className="h-3 w-3" />
-                  {isAr ? 'آمن للظهر' : 'Back Safe'}
-                </span>
-              )}
+          <div className="flex items-center gap-3">
+            {/* Home Navigation Button */}
+            <button
+              id="btn-exercise-to-home"
+              onClick={handleHomeClick}
+              className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-sm"
+              title={isAr ? 'العودة للصفحة الرئيسية (Home)' : 'Back to Home Dashboard'}
+            >
+              <Home className="h-4 w-4" />
+              <span>{isAr ? 'الرئيسية' : 'Home'}</span>
+            </button>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg sm:text-xl font-black text-foreground">{title}</h2>
+                {exercise.tags.includes('back_safe') && (
+                  <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-400 border border-emerald-500/30">
+                    <ShieldCheck className="h-3 w-3" />
+                    {isAr ? 'آمن للظهر' : 'Back Safe'}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {primaryMuscle} • {equipment} • {exercise.exerciseType}
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {primaryMuscle} • {equipment} • {exercise.exerciseType}
-            </p>
           </div>
 
           <button
@@ -81,8 +107,23 @@ export const ExerciseDetailsModal: React.FC<ExerciseDetailsModalProps> = ({
 
         {/* Modal Content Scrollable Area */}
         <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
+          {/* 80kg Fat Loss & Muscle Preservation Advisory */}
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex items-start gap-3">
+            <Target className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-xs">
+              <span className="font-bold text-foreground block mb-0.5">
+                {isAr ? 'التوجيه التدريبي للوصول لوزن 80 كجم (Target 80kg):' : 'Training Directive for 80kg Goal:'}
+              </span>
+              <p className="text-muted-foreground leading-relaxed">
+                {isAr 
+                  ? 'ركز على أداء التكرارات بتحكم كامل في مرحلة النزول (Eccentric) لحرق طاقة أعلى والحفاظ على الكتلة العضلية (64.9 كجم) أثناء نزول الدهون من 32.5% إلى المعدل الرياضي.' 
+                  : 'Emphasize a strict 3-second eccentric tempo to maximize mechanical tension and preserve 65kg+ muscle mass while in a caloric deficit towards 80kg.'}
+              </p>
+            </div>
+          </div>
+
           {/* Video or Image Header */}
-          <div className="rounded-xl overflow-hidden border border-border bg-secondary/30">
+          <div className="rounded-2xl overflow-hidden border border-border bg-secondary/30 shadow-inner">
             {showEmbeddedVideo && exercise.youtubeVideoId ? (
               <div className="relative aspect-video w-full">
                 <iframe
@@ -101,15 +142,15 @@ export const ExerciseDetailsModal: React.FC<ExerciseDetailsModalProps> = ({
                   className="h-full w-full object-cover object-center opacity-85 transition-transform duration-500 group-hover:scale-105"
                   loading="lazy"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent flex items-end p-4 justify-between">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent flex items-end p-4 justify-between">
                   <div className="flex flex-wrap gap-2">
-                    <span className="rounded bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground shadow">
+                    <span className="rounded-lg bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground shadow">
                       {exercise.targetRepRange} reps
                     </span>
-                    <span className="rounded bg-black/60 backdrop-blur px-2.5 py-1 text-xs font-semibold text-white border border-white/20">
+                    <span className="rounded-lg bg-black/60 backdrop-blur px-2.5 py-1 text-xs font-semibold text-white border border-white/20">
                       RPE {exercise.rpeTarget}
                     </span>
-                    <span className="rounded bg-black/60 backdrop-blur px-2.5 py-1 text-xs font-semibold text-white border border-white/20">
+                    <span className="rounded-lg bg-black/60 backdrop-blur px-2.5 py-1 text-xs font-semibold text-white border border-white/20">
                       {exercise.restSeconds}s rest
                     </span>
                   </div>
@@ -119,7 +160,7 @@ export const ExerciseDetailsModal: React.FC<ExerciseDetailsModalProps> = ({
                       <button
                         id="btn-play-embedded-video"
                         onClick={() => setShowEmbeddedVideo(true)}
-                        className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow-lg hover:bg-red-500 transition-colors"
+                        className="flex items-center gap-1.5 rounded-xl bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow-lg hover:bg-red-500 transition-colors"
                       >
                         <Play className="h-3.5 w-3.5 fill-current" />
                         <span>{t.common.watchVideo}</span>
@@ -130,7 +171,7 @@ export const ExerciseDetailsModal: React.FC<ExerciseDetailsModalProps> = ({
                       href={searchUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 rounded-lg bg-secondary/80 px-3 py-1.5 text-xs font-semibold text-foreground border border-border hover:bg-secondary transition-colors"
+                      className="flex items-center gap-1.5 rounded-xl bg-secondary/90 px-3 py-1.5 text-xs font-semibold text-foreground border border-border hover:bg-secondary transition-colors"
                     >
                       <Search className="h-3.5 w-3.5" />
                       <span>{t.common.openYoutube}</span>

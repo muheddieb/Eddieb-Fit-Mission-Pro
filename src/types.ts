@@ -256,6 +256,30 @@ export interface BodyMeasurement {
 
 export type ScreenWakeDuration = '1m' | '2m' | '5m' | '10m' | '30m' | 'never';
 export type CardioMotivationFrequency = '1m' | '2m' | 'off';
+export type RestSoundType = 'beep' | 'whistle' | 'chime' | 'buzzer' | 'bell';
+
+export interface BodyCompositionScan {
+  scanDate: string;
+  weightKg: number;
+  goalWeightKg: number;
+  bmi: number;
+  bodyFatPercent: number;
+  bodyFatKg: number;
+  skeletalMuscleKg: number;
+  muscleWeightKg: number;
+  visceralFat: number;
+  waterPercent: number;
+  waterKg: number;
+  proteinPercent: number;
+  proteinKg: number;
+  boneMassKg: number;
+  bmrKcal: number;
+  bodyAge: number;
+  actualAge: number;
+  heightCm: number;
+  weightWithoutFatKg: number;
+  obesityDegreePercent: number;
+}
 
 export interface UserProfile {
   name: string;
@@ -282,6 +306,8 @@ export interface UserProfile {
   cardioMotivationFrequency?: CardioMotivationFrequency;
   autoGpsTracking?: boolean;
   units?: 'km' | 'miles';
+  restSoundType?: RestSoundType;
+  latestScaleScan?: BodyCompositionScan;
 }
 
 export interface Achievement {

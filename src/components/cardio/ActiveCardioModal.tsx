@@ -23,7 +23,8 @@ import {
   Mountain,
   Compass,
   CheckCircle2,
-  Sliders
+  Sliders,
+  Home
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -299,6 +300,17 @@ export const ActiveCardioModal: React.FC<ActiveCardioModalProps> = ({
       {/* Top Floating Action HUD */}
       <div className="relative z-10 flex h-16 items-center justify-between px-4 sm:px-6 border-b border-white/10 bg-black/40 backdrop-blur-md">
         <div className="flex items-center gap-3">
+          {/* Home Button */}
+          <button
+            id="btn-active-cardio-home"
+            onClick={onClose}
+            className="flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/20 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/30 transition-all shadow-sm"
+            title={isAr ? 'العودة للرئيسية' : 'Home'}
+          >
+            <Home className="h-4 w-4" />
+            <span className="hidden sm:inline">{isAr ? 'الرئيسية' : 'Home'}</span>
+          </button>
+
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/20 text-primary border border-primary/30">
             <HeartPulse className="h-5 w-5 animate-pulse" />
           </div>
