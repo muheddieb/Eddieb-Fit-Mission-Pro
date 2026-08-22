@@ -18,11 +18,13 @@ import {
   LogOut,
   X,
   CheckCircle2,
-  HelpCircle
+  HelpCircle,
+  Palette
 } from 'lucide-react';
 import { User } from 'firebase/auth';
-import { UserProfile, WorkoutSession, SyncStatus } from '../../types';
+import { UserProfile, WorkoutSession, SyncStatus, AppTheme } from '../../types';
 import { translations } from '../../i18n/translations';
+import { THEME_OPTIONS } from '../../utils/themeData';
 
 interface NavbarProps {
   profile: UserProfile;
@@ -60,25 +62,30 @@ export const Navbar: React.FC<NavbarProps> = ({
   const t = translations[profile.language];
   const isRTL = profile.language === 'ar';
   const [syncPopoverOpen, setSyncPopoverOpen] = useState(false);
+  const [themePopoverOpen, setThemePopoverOpen] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const themePopoverRef = useRef<HTMLDivElement>(null);
 
   const isSyncUnavailable = !isOnline || syncStatus === 'offline' || syncStatus === 'error';
 
-  // Close popover when clicking outside
+  // Close popovers when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
         setSyncPopoverOpen(false);
       }
+      if (themePopoverRef.current && !themePopoverRef.current.contains(event.target as Node)) {
+        setThemePopoverOpen(false);
+      }
     };
-    if (syncPopoverOpen) {
+    if (syncPopoverOpen || themePopoverOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [syncPopoverOpen]);
+  }, [syncPopoverOpen, themePopoverOpen]);
 
   const toggleLanguage = () => {
     const nextLang = profile.language === 'en' ? 'ar' : 'en';
@@ -357,19 +364,100 @@ export const Navbar: React.FC<NavbarProps> = ({
           <span>{profile.language === 'en' ? 'العربية' : 'EN'}</span>
         </button>
 
-        {/* Theme Switcher Button */}
-        <button
-          id="btn-theme-toggle"
-          onClick={toggleTheme}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-secondary/50 text-foreground hover:bg-secondary transition-colors"
-          title={`Current Theme: ${profile.theme}. Click to change.`}
-        >
-          {profile.theme === 'light' ? (
-            <Sun className="h-4 w-4 text-amber-500" />
-          ) : (
-            <Moon className="h-4 w-4 text-primary" />
+        {/* Theme Switcher Button & Quick Popover */}
+        <div className="relative" ref={themePopoverRef}>
+          <button
+            id="btn-theme-toggle"
+            onClick={() => setThemePopoverOpen(!themePopoverOpen)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-secondary/50 text-foreground hover:bg-secondary transition-colors relative"
+            title={`Active Theme: ${profile.theme}. Click to choose theme.`}
+            aria-label="Change Theme"
+          >
+            {profile.theme === 'light' ? (
+              <Sun className="h-4 w-4 text-amber-500" />
+            ) : (
+              <Palette className="h-4 w-4 text-primary" />
+            )}
+            <span 
+              className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full border border-card shadow-sm"
+              style={{
+                backgroundColor: THEME_OPTIONS.find(th => th.id === profile.theme)?.primaryColor || 'var(--primary)'
+              }}
+            />
+          </button>
+
+          {/* Theme Picker Dropdown Popover */}
+          {themePopoverOpen && (
+            <div 
+              className={`absolute top-full mt-2 z-50 w-72 sm:w-80 rounded-2xl border border-border bg-card p-3 shadow-2xl backdrop-blur-xl ${
+                isRTL ? 'left-0' : 'right-0'
+              }`}
+              dir={isRTL ? 'rtl' : 'ltr'}
+            >
+              <div className="flex items-center justify-between border-b border-border pb-2.5 mb-2.5 px-1">
+                <div className="flex items-center gap-2">
+                  <Palette className="h-4 w-4 text-primary" />
+                  <span className="text-xs font-black text-foreground">
+                    {isRTL ? 'السمات والألوان التحفيزية' : 'Motivational Themes'}
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold text-muted-foreground">
+                  {THEME_OPTIONS.length} Themes
+                </span>
+              </div>
+
+              <div className="max-h-80 overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
+                {THEME_OPTIONS.map((themeOpt) => {
+                  const isSelected = profile.theme === themeOpt.id;
+                  return (
+                    <button
+                      key={themeOpt.id}
+                      onClick={() => {
+                        onUpdateProfile({ ...profile, theme: themeOpt.id });
+                        setThemePopoverOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between gap-2.5 p-2 rounded-xl border text-start transition-all ${
+                        isSelected 
+                          ? 'border-primary bg-primary/10 text-foreground font-bold shadow-sm'
+                          : 'border-transparent hover:border-border hover:bg-secondary/60 text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div 
+                          className="h-4 w-4 rounded-full border border-white/20 shrink-0 shadow-sm"
+                          style={{ backgroundColor: themeOpt.primaryColor }}
+                        />
+                        <div className="min-w-0 truncate">
+                          <div className="text-xs font-bold text-foreground truncate">
+                            {isRTL ? themeOpt.nameAr : themeOpt.nameEn}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground truncate">
+                            {isRTL ? themeOpt.vibeAr : themeOpt.vibeEn}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span 
+                          className="rounded px-1.5 py-0.5 text-[8px] font-extrabold"
+                          style={{
+                            backgroundColor: `${themeOpt.primaryColor}20`,
+                            color: themeOpt.primaryColor
+                          }}
+                        >
+                          {isRTL ? themeOpt.badgeAr : themeOpt.badge}
+                        </span>
+                        {isSelected && (
+                          <div className="h-2 w-2 rounded-full bg-primary" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           )}
-        </button>
+        </div>
       </div>
     </header>
   );

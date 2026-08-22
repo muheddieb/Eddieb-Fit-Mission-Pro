@@ -15,34 +15,157 @@
     --border: #222225;
   }
 
-  [data-theme="elegant_dark"] {
-    --background: #0a0a0b;
-    --foreground: #e0e0e0;
-    --card: #111112;
-    --card-foreground: #f4f4f5;
-    --primary: #4f46e5;
-    --primary-foreground: #ffffff;
-    --secondary: #1a1a1c;
-    --secondary-foreground: #e0e0e0;
-    --muted: #161618;
-    --muted-foreground: #9e9e9e;
-    --border: #222225;
-  }
-
+  /* 1. Fitness Dark (Emerald Neon / Beast Mode) */
   [data-theme="fitness_dark"] {
-    --background: #090d10;
-    --foreground: #f0f6fc;
-    --card: #12181f;
-    --card-foreground: #f0f6fc;
+    --background: #080d0a;
+    --foreground: #f0fdf4;
+    --card: #0f1813;
+    --card-foreground: #f0fdf4;
     --primary: #10b981;
-    --primary-foreground: #ffffff;
-    --secondary: #1a222c;
-    --secondary-foreground: #f0f6fc;
-    --muted: #17202a;
-    --muted-foreground: #8899a6;
-    --border: #253342;
+    --primary-foreground: #000000;
+    --secondary: #16251d;
+    --secondary-foreground: #f0fdf4;
+    --muted: #132018;
+    --muted-foreground: #86efac;
+    --border: #1e382b;
   }
 
+  /* 2. Volcanic Red (PR Beast / Flame Energy) */
+  [data-theme="volcanic_red"] {
+    --background: #0d0708;
+    --foreground: #fff1f2;
+    --card: #170d10;
+    --card-foreground: #fff1f2;
+    --primary: #f43f5e;
+    --primary-foreground: #ffffff;
+    --secondary: #241117;
+    --secondary-foreground: #fff1f2;
+    --muted: #1e0e13;
+    --muted-foreground: #fda4af;
+    --border: #381822;
+  }
+
+  /* 3. Cyber Neon (Electric Cyan / Stealth Tech) */
+  [data-theme="electric_cyan"] {
+    --background: #060e14;
+    --foreground: #ecfeff;
+    --card: #0b1824;
+    --card-foreground: #ecfeff;
+    --primary: #06b6d4;
+    --primary-foreground: #000000;
+    --secondary: #112437;
+    --secondary-foreground: #ecfeff;
+    --muted: #0e1e2f;
+    --muted-foreground: #67e8f9;
+    --border: #163654;
+  }
+
+  /* 4. Cyber Lime (Kinetic Fuel / Acid Stamina) */
+  [data-theme="cyber_lime"] {
+    --background: #070e06;
+    --foreground: #f7fee7;
+    --card: #0e1d0d;
+    --card-foreground: #f7fee7;
+    --primary: #84cc16;
+    --primary-foreground: #000000;
+    --secondary: #172c14;
+    --secondary-foreground: #f7fee7;
+    --muted: #132410;
+    --muted-foreground: #bef264;
+    --border: #24461f;
+  }
+
+  /* 5. Spartan Gold (Victory Arena / Championship) */
+  [data-theme="spartan_gold"] {
+    --background: #0d0a06;
+    --foreground: #fefce8;
+    --card: #19140a;
+    --card-foreground: #fefce8;
+    --primary: #eab308;
+    --primary-foreground: #000000;
+    --secondary: #261e0f;
+    --secondary-foreground: #fefce8;
+    --muted: #20190c;
+    --muted-foreground: #fde047;
+    --border: #3d2f16;
+  }
+
+  /* 6. Solar Blaze (Hyper Ignite / Calorie Burn) */
+  [data-theme="solar_orange"] {
+    --background: #0e0805;
+    --foreground: #fff7ed;
+    --card: #1a100a;
+    --card-foreground: #fff7ed;
+    --primary: #f97316;
+    --primary-foreground: #000000;
+    --secondary: #27170e;
+    --secondary-foreground: #fff7ed;
+    --muted: #21130c;
+    --muted-foreground: #fdba74;
+    --border: #3d2417;
+  }
+
+  /* 7. Apex Violet (Focus Flow / Ultraviolet Grit) */
+  [data-theme="royal_violet"] {
+    --background: #090611;
+    --foreground: #faf5ff;
+    --card: #140d24;
+    --card-foreground: #faf5ff;
+    --primary: #a855f7;
+    --primary-foreground: #ffffff;
+    --secondary: #1f143a;
+    --secondary-foreground: #faf5ff;
+    --muted: #180f2e;
+    --muted-foreground: #d8b4fe;
+    --border: #311c58;
+  }
+
+  /* 8. Arctic Frost (Titanium Ice / Cool Discipline) */
+  [data-theme="arctic_frost"] {
+    --background: #060b11;
+    --foreground: #f0f9ff;
+    --card: #0c1622;
+    --card-foreground: #f0f9ff;
+    --primary: #38bdf8;
+    --primary-foreground: #000000;
+    --secondary: #112134;
+    --secondary-foreground: #f0f9ff;
+    --muted: #0d1b2c;
+    --muted-foreground: #7dd3fc;
+    --border: #18314e;
+  }
+
+  /* 9. Warm Amber (Core Fire) */
+  [data-theme="warm_amber"] {
+    --background: #14100c;
+    --foreground: #faf5f0;
+    --card: #201a14;
+    --card-foreground: #faf5f0;
+    --primary: #f59e0b;
+    --primary-foreground: #000000;
+    --secondary: #2c241c;
+    --secondary-foreground: #faf5f0;
+    --muted: #272018;
+    --muted-foreground: #fcd34d;
+    --border: #3d3227;
+  }
+
+  /* 10. Elegant Dark (Obsidian & Indigo) */
+  [data-theme="elegant_dark"] {
+    --background: #0a0a0c;
+    --foreground: #e0e0e0;
+    --card: #111115;
+    --card-foreground: #f4f4f5;
+    --primary: #6366f1;
+    --primary-foreground: #ffffff;
+    --secondary: #1a1a22;
+    --secondary-foreground: #e0e0e0;
+    --muted: #15151c;
+    --muted-foreground: #a5b4fc;
+    --border: #232330;
+  }
+
+  /* 11. Midnight Dark (Pure Stealth) */
   [data-theme="dark"] {
     --background: #0b0f17;
     --foreground: #f3f4f6;
@@ -57,6 +180,7 @@
     --border: #374151;
   }
 
+  /* 12. Clean Light (Daylight Minimal) */
   [data-theme="light"] {
     --background: #f8fafc;
     --foreground: #0f172a;
@@ -69,20 +193,6 @@
     --muted: #f1f5f9;
     --muted-foreground: #64748b;
     --border: #e2e8f0;
-  }
-
-  [data-theme="warm_amber"] {
-    --background: #14100c;
-    --foreground: #faf5f0;
-    --card: #201a14;
-    --card-foreground: #faf5f0;
-    --primary: #f59e0b;
-    --primary-foreground: #000000;
-    --secondary: #2c241c;
-    --secondary-foreground: #faf5f0;
-    --muted: #272018;
-    --muted-foreground: #a89f91;
-    --border: #3d3227;
   }
 
   body {

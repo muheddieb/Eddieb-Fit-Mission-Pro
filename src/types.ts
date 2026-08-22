@@ -4,7 +4,19 @@ export type TrainingLocation = 'gym' | 'home' | 'both';
 
 export type FitnessLevel = 'beginner' | 'intermediate' | 'advanced';
 
-export type AppTheme = 'elegant_dark' | 'fitness_dark' | 'dark' | 'light' | 'warm_amber';
+export type AppTheme = 
+  | 'fitness_dark' 
+  | 'volcanic_red' 
+  | 'electric_cyan' 
+  | 'cyber_lime' 
+  | 'spartan_gold' 
+  | 'solar_orange' 
+  | 'royal_violet' 
+  | 'arctic_frost' 
+  | 'warm_amber' 
+  | 'elegant_dark' 
+  | 'dark' 
+  | 'light';
 
 export type AppLanguage = 'en' | 'ar';
 

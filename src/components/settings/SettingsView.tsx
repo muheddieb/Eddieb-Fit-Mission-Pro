@@ -14,12 +14,21 @@ import {
   Volume2,
   Play,
   Music,
-  Target
+  Target,
+  Palette,
+  Sparkles,
+  Zap,
+  Flame,
+  Crown,
+  Cpu,
+  Activity,
+  Shield
 } from 'lucide-react';
-import { UserProfile, RestSoundType } from '../../types';
+import { UserProfile, RestSoundType, AppTheme } from '../../types';
 import { translations } from '../../i18n/translations';
 import { StorageService } from '../../services/storage';
 import { AudioService } from '../../services/audioService';
+import { THEME_OPTIONS, ThemeOption } from '../../utils/themeData';
 
 interface SettingsViewProps {
   profile: UserProfile;
@@ -90,58 +99,163 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
-      {/* Preferences (Theme & Language) */}
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-md space-y-5">
+      {/* Preferences (Language) */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-md space-y-4">
         <h3 className="text-base font-bold text-foreground flex items-center gap-2">
           <Globe className="h-5 w-5 text-primary" />
-          <span>{isAr ? 'المظهر واللغة' : 'Appearance & Language'}</span>
+          <span>{isAr ? 'لغة التطبيق' : 'Application Language'}</span>
         </h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Language */}
-          <div>
-            <label className="block text-xs font-bold text-muted-foreground mb-1.5">{t.settings.language}</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => onUpdateProfile({ ...profile, language: 'en' })}
-                className={`rounded-xl border py-2.5 text-xs font-bold transition-all ${
-                  profile.language === 'en'
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border bg-secondary/50 text-muted-foreground hover:bg-secondary'
-                }`}
-              >
-                English (LTR)
-              </button>
-              <button
-                type="button"
-                onClick={() => onUpdateProfile({ ...profile, language: 'ar' })}
-                className={`rounded-xl border py-2.5 text-xs font-bold transition-all ${
-                  profile.language === 'ar'
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border bg-secondary/50 text-muted-foreground hover:bg-secondary'
-                }`}
-              >
-                العربية (RTL)
-              </button>
+        <div className="grid grid-cols-2 gap-3 max-w-md">
+          <button
+            type="button"
+            onClick={() => onUpdateProfile({ ...profile, language: 'en' })}
+            className={`rounded-xl border py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+              profile.language === 'en'
+                ? 'border-primary bg-primary text-primary-foreground shadow-md shadow-primary/20'
+                : 'border-border bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground'
+            }`}
+          >
+            <span>🇺🇸 English (LTR)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onUpdateProfile({ ...profile, language: 'ar' })}
+            className={`rounded-xl border py-3 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+              profile.language === 'ar'
+                ? 'border-primary bg-primary text-primary-foreground shadow-md shadow-primary/20'
+                : 'border-border bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground'
+            }`}
+          >
+            <span>🇪🇬 العربية (RTL)</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Motivational Theme Studio & Gallery */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-md space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 text-primary">
+              <Palette className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                <span>{isAr ? 'استوديو السمات والألوان التحفيزية' : 'Motivational Theme & Color Studio'}</span>
+                <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-extrabold text-primary uppercase tracking-wider">
+                  12 Themes
+                </span>
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                {t.settings.themeSubtitle}
+              </p>
             </div>
           </div>
 
-          {/* Theme */}
-          <div>
-            <label className="block text-xs font-bold text-muted-foreground mb-1.5">{t.settings.theme}</label>
-            <select
-              value={profile.theme}
-              onChange={e => onUpdateProfile({ ...profile, theme: e.target.value as any })}
-              className="w-full rounded-xl border border-border bg-background p-2.5 text-sm text-foreground focus:border-primary focus:outline-none"
-            >
-              <option value="elegant_dark">✨ Elegant Dark (Obsidian & Indigo)</option>
-              <option value="fitness_dark">⚡ Fitness Obsidian & Emerald</option>
-              <option value="dark">🌑 Pure Midnight Dark</option>
-              <option value="light">☀️ Clean Minimal Light</option>
-              <option value="warm_amber">🔥 High-Energy Amber</option>
-            </select>
+          {/* Active Theme Badge */}
+          <div className="flex items-center gap-2 rounded-xl border border-border bg-secondary/60 px-3 py-1.5 self-start sm:self-auto">
+            <span className="text-[11px] text-muted-foreground">{isAr ? 'السمة النشطة:' : 'Active:'}</span>
+            <span className="text-xs font-extrabold text-primary">
+              {THEME_OPTIONS.find(th => th.id === profile.theme)?.[isAr ? 'nameAr' : 'nameEn'] || profile.theme}
+            </span>
           </div>
+        </div>
+
+        {/* Motivational Theme Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
+          {THEME_OPTIONS.map((themeOpt) => {
+            const isSelected = profile.theme === themeOpt.id;
+            return (
+              <button
+                key={themeOpt.id}
+                id={`btn-theme-select-${themeOpt.id}`}
+                type="button"
+                onClick={() => onUpdateProfile({ ...profile, theme: themeOpt.id })}
+                className={`relative flex flex-col text-left rounded-2xl border p-4 transition-all duration-200 group text-start overflow-hidden ${
+                  isSelected
+                    ? 'border-primary ring-2 ring-primary/40 shadow-lg shadow-primary/10 bg-secondary/80'
+                    : 'border-border bg-card hover:border-primary/50 hover:bg-secondary/40'
+                }`}
+              >
+                {/* Top: Name & Tag */}
+                <div className="flex items-start justify-between gap-2 mb-2.5 w-full">
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="h-4 w-4 rounded-full shadow-sm shrink-0 border border-white/20"
+                      style={{ backgroundColor: themeOpt.primaryColor }}
+                    />
+                    <div>
+                      <h4 className="text-xs font-black text-foreground group-hover:text-primary transition-colors">
+                        {isAr ? themeOpt.nameAr : themeOpt.nameEn}
+                      </h4>
+                      <p className="text-[10px] text-muted-foreground font-medium">
+                        {isAr ? themeOpt.vibeAr : themeOpt.vibeEn}
+                      </p>
+                    </div>
+                  </div>
+
+                  <span 
+                    className="rounded-full px-2 py-0.5 text-[9px] font-extrabold tracking-wider shrink-0"
+                    style={{
+                      backgroundColor: `${themeOpt.primaryColor}20`,
+                      color: themeOpt.primaryColor,
+                      border: `1px solid ${themeOpt.primaryColor}40`
+                    }}
+                  >
+                    {isAr ? themeOpt.badgeAr : themeOpt.badge}
+                  </span>
+                </div>
+
+                {/* Theme Visual Palette Mockup Preview */}
+                <div 
+                  className="w-full rounded-xl p-2.5 mb-2.5 border transition-all"
+                  style={{
+                    backgroundColor: themeOpt.bgPreview,
+                    borderColor: themeOpt.borderPreview,
+                    color: themeOpt.textColor
+                  }}
+                >
+                  <div 
+                    className="rounded-lg p-2 flex items-center justify-between border"
+                    style={{
+                      backgroundColor: themeOpt.cardPreview,
+                      borderColor: themeOpt.borderPreview
+                    }}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <div 
+                        className="h-2 w-6 rounded-full"
+                        style={{ backgroundColor: themeOpt.primaryColor }}
+                      />
+                      <div 
+                        className="h-2 w-10 rounded-full opacity-40"
+                        style={{ backgroundColor: themeOpt.textColor }}
+                      />
+                    </div>
+                    <div 
+                      className="px-2 py-0.5 rounded text-[8px] font-bold"
+                      style={{
+                        backgroundColor: themeOpt.primaryColor,
+                        color: themeOpt.id === 'spartan_gold' || themeOpt.id === 'cyber_lime' || themeOpt.id === 'arctic_frost' || themeOpt.id === 'warm_amber' || themeOpt.id === 'solar_orange' || themeOpt.id === 'fitness_dark' || themeOpt.id === 'electric_cyan' ? '#000000' : '#ffffff'
+                      }}
+                    >
+                      {isAr ? 'تمرين' : 'LIFT'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Slogan */}
+                <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2 mt-auto">
+                  {isAr ? themeOpt.sloganAr : themeOpt.sloganEn}
+                </p>
+
+                {/* Active Indicator Bar */}
+                {isSelected && (
+                  <div className="absolute bottom-0 inset-x-0 h-1 bg-primary rounded-b-2xl shadow-sm" />
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
