@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Settings, 
   Globe, 
@@ -9,43 +9,55 @@ import {
   Trash2, 
   AlertTriangle, 
   Check, 
-  Smartphone,
-  ShieldAlert,
-  Volume2,
-  Play,
-  Music,
-  Target,
-  Palette,
-  Sparkles,
-  Zap,
-  Flame,
-  Crown,
-  Cpu,
-  Activity,
-  Shield
+  Smartphone, 
+  ShieldAlert, 
+  Volume2, 
+  Play, 
+  Music, 
+  Target, 
+  Palette, 
+  Sparkles, 
+  Zap, 
+  Flame, 
+  Crown, 
+  Cpu, 
+  Activity, 
+  Shield,
+  ShieldCheck,
+  WifiOff,
+  Maximize
 } from 'lucide-react';
 import { UserProfile, RestSoundType, AppTheme } from '../../types';
 import { translations } from '../../i18n/translations';
 import { StorageService } from '../../services/storage';
 import { AudioService } from '../../services/audioService';
+import { PWAService, PWAState } from '../../services/pwaService';
 import { THEME_OPTIONS, ThemeOption } from '../../utils/themeData';
 
 interface SettingsViewProps {
   profile: UserProfile;
   onUpdateProfile: (profile: UserProfile) => void;
   onResetApp: () => void;
+  onOpenPWAInstallModal?: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   profile,
   onUpdateProfile,
   onResetApp,
+  onOpenPWAInstallModal,
 }) => {
   const t = translations[profile.language];
   const isAr = profile.language === 'ar';
 
   const [confirmReset, setConfirmReset] = useState<boolean>(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [pwaState, setPwaState] = useState<PWAState>(PWAService.getState());
+
+  useEffect(() => {
+    const unsub = PWAService.subscribe((state) => setPwaState(state));
+    return () => unsub();
+  }, []);
 
   const handleTestSound = (sound: RestSoundType) => {
     AudioService.playSound(sound);
@@ -510,6 +522,71 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* PWA Download & Gym Offline Installation */}
+      <div className="rounded-2xl border border-primary/40 bg-gradient-to-br from-card via-primary/5 to-card p-6 shadow-md space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 text-primary border border-primary/30 shadow-inner">
+              <Download className="h-5 w-5 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-foreground">
+                {t.pwa.installTitle}
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                {isAr ? 'تثبيت كـ PWA على الهاتف أو الكمبيوتر للعمل دون إنترنت' : 'Progressive Web App (PWA) with 100% Gym Offline capability'}
+              </p>
+            </div>
+          </div>
+
+          {pwaState.isInstalled ? (
+            <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-black text-emerald-400 border border-emerald-500/30">
+              <ShieldCheck className="h-4 w-4" />
+              <span>{t.pwa.installedBadge}</span>
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 rounded-full bg-primary/20 px-3 py-1 text-xs font-bold text-primary border border-primary/30">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>{isAr ? 'جاهز للتثبيت' : 'Ready to Install'}</span>
+            </span>
+          )}
+        </div>
+
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {pwaState.isInstalled ? t.pwa.installedDesc : t.pwa.installSubtitle}
+        </p>
+
+        {/* Feature Highlights Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+          <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-secondary/40 p-2.5 text-xs">
+            <WifiOff className="h-4 w-4 text-emerald-400 shrink-0" />
+            <span className="text-muted-foreground">{isAr ? '100% بدون نت في الجيم' : '100% Offline Gym Logging'}</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-secondary/40 p-2.5 text-xs">
+            <Zap className="h-4 w-4 text-amber-400 shrink-0" />
+            <span className="text-muted-foreground">{isAr ? 'إقلاع فوري بدون تحميل' : 'Instant Launch & Fast UI'}</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-secondary/40 p-2.5 text-xs">
+            <Maximize className="h-4 w-4 text-cyan-400 shrink-0" />
+            <span className="text-muted-foreground">{isAr ? 'شاشة كاملة وتجربة أصلية' : 'Full-Screen Distraction Free'}</span>
+          </div>
+        </div>
+
+        {/* Action Button */}
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          {onOpenPWAInstallModal && (
+            <button
+              id="btn-settings-open-pwa-modal"
+              onClick={onOpenPWAInstallModal}
+              className="flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-xs font-black text-primary-foreground shadow-md shadow-primary/25 hover:bg-primary/90 transition-all active:scale-95"
+            >
+              <Download className="h-4 w-4" />
+              <span>{pwaState.isInstalled ? (isAr ? 'عرض تفاصيل التثبيت' : 'View Install Details') : t.pwa.installBtn}</span>
+            </button>
+          )}
         </div>
       </div>
 

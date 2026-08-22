@@ -16,7 +16,8 @@ import {
   Settings,
   Image as ImageIcon,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Download
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { translations } from '../../i18n/translations';
@@ -45,6 +46,7 @@ interface SidebarProps {
   profile: UserProfile;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  onOpenPWAInstallModal?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -53,6 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   profile,
   collapsed,
   onToggleCollapse,
+  onOpenPWAInstallModal,
 }) => {
   const t = translations[profile.language];
   const isRTL = profile.language === 'ar';
@@ -120,8 +123,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </nav>
 
-      {/* Collapse Toggle Footer */}
-      <div className="border-t border-border p-3">
+      {/* PWA Download & Collapse Toggle Footer */}
+      <div className="border-t border-border p-3 space-y-2">
+        {onOpenPWAInstallModal && (
+          <button
+            id="btn-sidebar-pwa-install"
+            onClick={onOpenPWAInstallModal}
+            className={`flex w-full items-center gap-2.5 rounded-xl border border-primary/40 bg-primary/10 p-2 text-xs font-bold text-primary hover:bg-primary/20 transition-all ${
+              collapsed ? 'justify-center' : 'justify-start px-3'
+            }`}
+            title={t.pwa.downloadApp}
+          >
+            <Download className="h-4 w-4 shrink-0 animate-bounce" />
+            {!collapsed && (
+              <div className="flex flex-1 items-center justify-between min-w-0">
+                <span className="truncate">{t.pwa.downloadApp}</span>
+                <span className="rounded bg-primary/25 px-1.5 py-0.5 text-[9px] font-black text-primary uppercase">
+                  PWA
+                </span>
+              </div>
+            )}
+          </button>
+        )}
+
         <button
           id="btn-toggle-sidebar"
           onClick={onToggleCollapse}

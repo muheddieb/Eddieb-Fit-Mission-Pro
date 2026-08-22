@@ -16,7 +16,8 @@ import {
   Trophy,
   User,
   Settings,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Download
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { translations } from '../../i18n/translations';
@@ -29,6 +30,7 @@ interface MobileNavProps {
   drawerOpen: boolean;
   onCloseDrawer: () => void;
   onOpenDrawer: () => void;
+  onOpenPWAInstallModal?: () => void;
 }
 
 export const MobileNav: React.FC<MobileNavProps> = ({
@@ -38,6 +40,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
   drawerOpen,
   onCloseDrawer,
   onOpenDrawer,
+  onOpenPWAInstallModal,
 }) => {
   const t = translations[profile.language];
   const isRTL = profile.language === 'ar';
@@ -167,6 +170,23 @@ export const MobileNav: React.FC<MobileNavProps> = ({
                 );
               })}
             </div>
+
+            {/* Mobile Drawer PWA Download Footer */}
+            {onOpenPWAInstallModal && (
+              <div className="border-t border-border p-3">
+                <button
+                  id="btn-mobile-drawer-download-pwa"
+                  onClick={() => {
+                    onCloseDrawer();
+                    onOpenPWAInstallModal();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary/15 border border-primary/40 px-4 py-3 text-xs font-black text-primary hover:bg-primary/25 transition-all shadow-sm"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>{t.pwa.downloadApp} (PWA)</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

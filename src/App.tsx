@@ -22,6 +22,8 @@ import { SettingsView } from './components/settings/SettingsView';
 import { ActiveWorkoutModal } from './components/workout/ActiveWorkoutModal';
 import { ExerciseDetailsModal } from './components/exercise/ExerciseDetailsModal';
 import { ImageGeneratorModal } from './components/generator/ImageGeneratorModal';
+import { PWAInstallModal } from './components/pwa/PWAInstallModal';
+import { PWAService } from './services/pwaService';
 
 export default function App() {
   // Global State
@@ -44,9 +46,13 @@ export default function App() {
   const [activeWorkoutOpen, setActiveWorkoutOpen] = useState<boolean>(false);
   const [selectedExerciseModal, setSelectedExerciseModal] = useState<Exercise | null>(null);
   const [visualizerModalOpen, setVisualizerModalOpen] = useState<boolean>(false);
+  const [pwaInstallModalOpen, setPwaInstallModalOpen] = useState<boolean>(false);
 
-  // Initialize data and Firebase Auth listener on mount
+  // Initialize data, PWA service worker and Firebase Auth listener on mount
   useEffect(() => {
+    // Initialize PWA Service Worker & Install event listeners
+    PWAService.init();
+
     const loadedProfile = StorageService.getProfile();
     setProfile(loadedProfile);
 
@@ -297,6 +303,7 @@ export default function App() {
             profile={profile}
             onUpdateProfile={handleUpdateProfile}
             onResetApp={handleResetApp}
+            onOpenPWAInstallModal={() => setPwaInstallModalOpen(true)}
           />
         );
       default:
@@ -328,6 +335,7 @@ export default function App() {
         onOpenActiveWorkout={() => setActiveWorkoutOpen(true)}
         onToggleMobileDrawer={() => setMobileDrawerOpen(true)}
         onOpenVisualizer={() => setVisualizerModalOpen(true)}
+        onOpenPWAInstallModal={() => setPwaInstallModalOpen(true)}
         onSignInWithGoogle={handleSignIn}
         onSignOut={handleSignOut}
       />
@@ -346,6 +354,7 @@ export default function App() {
           profile={profile}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onOpenPWAInstallModal={() => setPwaInstallModalOpen(true)}
         />
 
         {/* Scrollable Main Content View */}
@@ -369,6 +378,7 @@ export default function App() {
         drawerOpen={mobileDrawerOpen}
         onCloseDrawer={() => setMobileDrawerOpen(false)}
         onOpenDrawer={() => setMobileDrawerOpen(true)}
+        onOpenPWAInstallModal={() => setPwaInstallModalOpen(true)}
       />
 
       {/* Active Workout Session Modal (if active) */}
@@ -403,6 +413,13 @@ export default function App() {
           onClose={() => setVisualizerModalOpen(false)}
         />
       )}
+
+      {/* PWA Progressive Web App Install & Offline Guide Modal */}
+      <PWAInstallModal
+        isOpen={pwaInstallModalOpen}
+        onClose={() => setPwaInstallModalOpen(false)}
+        profile={profile}
+      />
     </div>
   );
 }

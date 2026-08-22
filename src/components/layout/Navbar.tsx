@@ -19,7 +19,8 @@ import {
   X,
   CheckCircle2,
   HelpCircle,
-  Palette
+  Palette,
+  Download
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { UserProfile, WorkoutSession, SyncStatus, AppTheme } from '../../types';
@@ -39,6 +40,7 @@ interface NavbarProps {
   onOpenActiveWorkout: () => void;
   onToggleMobileDrawer: () => void;
   onOpenVisualizer: () => void;
+  onOpenPWAInstallModal?: () => void;
   onSignInWithGoogle: () => void;
   onSignOut: () => void;
 }
@@ -56,6 +58,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenActiveWorkout,
   onToggleMobileDrawer,
   onOpenVisualizer,
+  onOpenPWAInstallModal,
   onSignInWithGoogle,
   onSignOut,
 }) => {
@@ -353,6 +356,20 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Sparkles className="h-4 w-4" />
           <span>Visualizer 1K-4K</span>
         </button>
+
+        {/* PWA Download / Install App Action Button */}
+        {onOpenPWAInstallModal && (
+          <button
+            id="btn-navbar-download-pwa"
+            onClick={onOpenPWAInstallModal}
+            className="flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/10 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 hover:border-primary/60 transition-all shadow-sm shadow-primary/10"
+            title={t.pwa.downloadApp}
+            aria-label="Download App"
+          >
+            <Download className="h-4 w-4 shrink-0 text-primary animate-pulse" />
+            <span className="hidden sm:inline font-black tracking-tight">{t.pwa.downloadApp}</span>
+          </button>
+        )}
 
         {/* Language Switcher Button */}
         <button

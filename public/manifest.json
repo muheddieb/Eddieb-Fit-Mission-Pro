@@ -1,0 +1,73 @@
+{
+  "id": "/",
+  "name": "EDDIEB FIT MISSION - Athletic OS",
+  "short_name": "EDDIEB FIT",
+  "description": "Personal fitness operating system with Push/Pull/Legs programming, fat-loss & recomposition engines, progressive overload, nutrition engine, and Gemini AI Coach.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui", "browser"],
+  "background_color": "#0f1117",
+  "theme_color": "#0f1117",
+  "orientation": "any",
+  "lang": "en",
+  "dir": "auto",
+  "categories": ["fitness", "health", "sports", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Daily Workout",
+      "short_name": "Workout",
+      "description": "Start or resume today's PPL workout session",
+      "url": "/?section=workout",
+      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Gemini AI Coach",
+      "short_name": "AI Coach",
+      "description": "Get personalized training feedback and form analysis",
+      "url": "/?section=aiCoach",
+      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Progress & PRs",
+      "short_name": "Progress",
+      "description": "View strength progression, 1RM charts, and personal records",
+      "url": "/?section=progress",
+      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Nutrition & Macros",
+      "short_name": "Nutrition",
+      "description": "Track daily calories, macros, hydration, and meal logs",
+      "url": "/?section=nutrition",
+      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192" }]
+    }
+  ],
+  "prefer_related_applications": false
+}

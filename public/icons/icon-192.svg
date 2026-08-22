@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="bg192" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f111a" />
+      <stop offset="100%" stop-color="#07080c" />
+    </linearGradient>
+    <linearGradient id="grad192" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <linearGradient id="gold192" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+  </defs>
+
+  <rect width="192" height="192" rx="42" fill="url(#bg192)" />
+  <rect width="186" height="186" x="3" y="3" rx="40" fill="none" stroke="#6366f1" stroke-width="2" stroke-opacity="0.4" />
+
+  <g transform="translate(0, 0)">
+    <rect x="52" y="91" width="88" height="10" rx="5" fill="#ffffff" />
+    
+    <!-- Plates Left -->
+    <rect x="58" y="62" width="11" height="68" rx="4" fill="url(#grad192)" />
+    <rect x="46" y="73" width="8" height="46" rx="3" fill="url(#grad192)" />
+
+    <!-- Plates Right -->
+    <rect x="123" y="62" width="11" height="68" rx="4" fill="url(#grad192)" />
+    <rect x="138" y="73" width="8" height="46" rx="3" fill="url(#grad192)" />
+    
+    <!-- Lightning Bolt -->
+    <path d="M100 42 L88 88 L101 88 L91 150 L112 82 L97 82 Z" fill="url(#gold192)" />
+  </g>
+  <text x="96" y="168" text-anchor="middle" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="13" font-weight="900" letter-spacing="1">EDDIEB</text>
+</svg>
