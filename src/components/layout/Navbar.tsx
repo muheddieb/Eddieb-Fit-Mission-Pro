@@ -179,9 +179,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Offline Sync Details Popover */}
             {syncPopoverOpen && (
               <div 
-                className={`absolute top-full mt-2 w-80 sm:w-96 rounded-2xl border border-amber-500/30 bg-card p-4 shadow-2xl backdrop-blur-md z-50 animate-in fade-in zoom-in-95 duration-150 ${
+                className={`absolute top-full mt-2 w-80 sm:w-96 rounded-2xl border border-amber-500/30 p-4 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 ${
                   isRTL ? 'left-0' : 'right-0'
                 }`}
+                style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
               >
                 {/* Popover Header */}
                 <div className="flex items-start justify-between gap-2 border-b border-border/60 pb-3">
@@ -389,19 +390,24 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Theme Picker Dropdown Popover */}
           {themePopoverOpen && (
             <div 
-              className={`absolute top-full mt-2 z-50 w-72 sm:w-80 rounded-2xl border border-border bg-card p-3 shadow-2xl backdrop-blur-xl ${
+              className={`absolute top-full mt-2 z-50 w-72 sm:w-80 rounded-2xl border p-3.5 shadow-2xl animate-in fade-in zoom-in-95 duration-150 ${
                 isRTL ? 'left-0' : 'right-0'
               }`}
+              style={{ 
+                backgroundColor: 'var(--card)', 
+                borderColor: 'var(--border)',
+                color: 'var(--foreground)'
+              }}
               dir={isRTL ? 'rtl' : 'ltr'}
             >
-              <div className="flex items-center justify-between border-b border-border pb-2.5 mb-2.5 px-1">
+              <div className="flex items-center justify-between border-b border-border/80 pb-2.5 mb-2.5 px-1">
                 <div className="flex items-center gap-2">
                   <Palette className="h-4 w-4 text-primary" />
                   <span className="text-xs font-black text-foreground">
                     {isRTL ? 'السمات والألوان التحفيزية' : 'Motivational Themes'}
                   </span>
                 </div>
-                <span className="text-[10px] font-bold text-muted-foreground">
+                <span className="text-[10px] font-bold text-muted-foreground bg-secondary/80 px-2 py-0.5 rounded-full border border-border">
                   {THEME_OPTIONS.length} Themes
                 </span>
               </div>
@@ -418,13 +424,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                       }}
                       className={`w-full flex items-center justify-between gap-2.5 p-2 rounded-xl border text-start transition-all ${
                         isSelected 
-                          ? 'border-primary bg-primary/10 text-foreground font-bold shadow-sm'
-                          : 'border-transparent hover:border-border hover:bg-secondary/60 text-muted-foreground hover:text-foreground'
+                          ? 'border-primary bg-secondary font-bold shadow-sm ring-1 ring-primary/30'
+                          : 'border-transparent bg-secondary/30 hover:border-border hover:bg-secondary/70 text-muted-foreground hover:text-foreground'
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div 
-                          className="h-4 w-4 rounded-full border border-white/20 shrink-0 shadow-sm"
+                          className="h-4 w-4 rounded-full border border-white/30 shrink-0 shadow-sm"
                           style={{ backgroundColor: themeOpt.primaryColor }}
                         />
                         <div className="min-w-0 truncate">
@@ -441,8 +447,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <span 
                           className="rounded px-1.5 py-0.5 text-[8px] font-extrabold"
                           style={{
-                            backgroundColor: `${themeOpt.primaryColor}20`,
-                            color: themeOpt.primaryColor
+                            backgroundColor: `${themeOpt.primaryColor}25`,
+                            color: themeOpt.primaryColor,
+                            border: `1px solid ${themeOpt.primaryColor}40`
                           }}
                         >
                           {isRTL ? themeOpt.badgeAr : themeOpt.badge}

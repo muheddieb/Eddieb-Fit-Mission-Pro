@@ -692,6 +692,24 @@ export const StorageService = {
       .reduce((sum, item) => sum + item.amountMl, 0);
   },
 
+  removeLastTodayHydration(): void {
+    const today = new Date().toISOString().split('T')[0];
+    const list = this.getHydrationHistory();
+    const index = list.findIndex(h => h.date === today);
+    if (index !== -1) {
+      list.splice(index, 1);
+      localStorage.setItem(STORAGE_KEYS.HYDRATION_HISTORY, JSON.stringify(list));
+      this.checkAndUpdateAchievements();
+    }
+  },
+
+  resetTodayHydration(): void {
+    const today = new Date().toISOString().split('T')[0];
+    const list = this.getHydrationHistory().filter(h => h.date !== today);
+    localStorage.setItem(STORAGE_KEYS.HYDRATION_HISTORY, JSON.stringify(list));
+    this.checkAndUpdateAchievements();
+  },
+
   getMeasurements(): BodyMeasurement[] {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.MEASUREMENTS);

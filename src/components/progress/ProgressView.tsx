@@ -18,6 +18,7 @@ import { translations } from '../../i18n/translations';
 import { PPLEngine } from '../../services/pplEngine';
 import { StorageService } from '../../services/storage';
 import { ProgressCharts } from './ProgressCharts';
+import { IntensityTrendChart } from './IntensityTrendChart';
 
 interface ProgressViewProps {
   profile: UserProfile;
@@ -184,7 +185,14 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
         </p>
       </div>
 
-      {/* Interactive Recharts Progress Analytics */}
+      {/* 30-Day Intensity Trend & Volume Progression (Recharts) */}
+      <IntensityTrendChart
+        history={history}
+        profile={profile}
+        isAr={isAr}
+      />
+
+      {/* Interactive Recharts Progress Analytics & Biometrics */}
       <ProgressCharts
         measurements={measurements}
         profile={profile}

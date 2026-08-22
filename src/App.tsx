@@ -211,6 +211,7 @@ export default function App() {
             activeWorkout={activeWorkout}
             onStartWorkout={handleStartWorkout}
             onNavigate={(sec) => setCurrentSection(sec)}
+            onUpdateProfile={handleUpdateProfile}
           />
         );
       case 'exerciseLibrary':
@@ -254,13 +255,13 @@ export default function App() {
         return <AchievementsView profile={profile} />;
       case 'visualizer':
         return (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-fade-slide-up transition-all duration-300 ease-out transform">
             <div className="flex items-center justify-between">
               <h1 className="text-2xl font-black text-foreground">AI Physique Visualizer (1K-4K)</h1>
               <button
                 id="btn-open-full-generator"
                 onClick={() => setVisualizerModalOpen(true)}
-                className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow"
+                className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow hover:bg-primary/90 transition-colors"
               >
                 Open Studio Generator
               </button>
@@ -269,11 +270,14 @@ export default function App() {
               Powered by gemini-3-pro-image-preview with 1K, 2K, and 4K ultra-high resolution synthesis.
             </p>
             {/* Embedded direct open */}
-            <div className="rounded-2xl border border-border bg-card p-8 text-center space-y-3">
+            <div className="rounded-2xl border border-border bg-card p-8 text-center space-y-3 shadow-md hover:border-primary/40 transition-colors">
               <div className="text-base font-bold text-foreground">Launch Ultra-High Definition Synthesis</div>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                Generate photo-realistic athletic physiques, Egyptian high-protein fuel plates, and biomechanical exercise anatomy diagrams in 1K, 2K, or 4K.
+              </p>
               <button
                 onClick={() => setVisualizerModalOpen(true)}
-                className="rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-lg hover:bg-primary/90"
+                className="rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-lg hover:bg-primary/90 transition-all active:scale-95"
               >
                 Generate 1K/2K/4K Athletic Visuals
               </button>

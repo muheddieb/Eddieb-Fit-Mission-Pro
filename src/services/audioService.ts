@@ -304,5 +304,53 @@ export const AudioService = {
   // 5. Rest Timer Skip / End Early Cue
   playRestSkipCue(volume = 0.25): void {
     this.playBeep(750, 0.1, volume);
+  },
+
+  // 6. Personal Record (PR) Achievement Fanfare Cue
+  // Vibrant, triumphant ascending arpeggio with rich harmonics (C5 -> E5 -> G5 -> C6 -> E6 victory climax)
+  playPRAchievementCue(volume = 0.35): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+
+      // Arpeggio notes: C5, E5, G5, C6, high E6 with brilliance
+      const notes = [
+        { freq: 523.25, start: 0.0, dur: 0.22, vol: 0.3 },   // C5
+        { freq: 659.25, start: 0.09, dur: 0.22, vol: 0.35 }, // E5
+        { freq: 783.99, start: 0.18, dur: 0.26, vol: 0.4 },  // G5
+        { freq: 1046.50, start: 0.28, dur: 0.45, vol: 0.5 }, // C6
+        { freq: 1318.51, start: 0.38, dur: 0.65, vol: 0.6 }, // E6 sustained climax
+      ];
+
+      notes.forEach(({ freq, start, dur, vol }) => {
+        const osc = ctx.createOscillator();
+        const subOsc = ctx.createOscillator(); // harmonic depth
+        const gain = ctx.createGain();
+        const startTime = ctx.currentTime + start;
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, startTime);
+
+        subOsc.type = 'sine';
+        subOsc.frequency.setValueAtTime(freq * 0.5, startTime);
+
+        gain.gain.setValueAtTime(0.001, startTime);
+        gain.gain.linearRampToValueAtTime(volume * vol, startTime + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + dur);
+
+        osc.connect(gain);
+        subOsc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(startTime);
+        subOsc.start(startTime);
+        osc.stop(startTime + dur);
+        subOsc.stop(startTime + dur);
+      });
+    } catch (e) {
+      console.warn('PR audio fanfare failed:', e);
+    }
   }
 };

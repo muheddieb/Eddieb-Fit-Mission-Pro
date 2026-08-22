@@ -103,6 +103,21 @@ export interface SetLog {
   completed: boolean;
   notes?: string;
   timestamp?: number;
+  isPR?: boolean;
+  prType?: 'weight' | 'volume';
+}
+
+export interface PersonalRecordEvent {
+  exerciseId: string;
+  exerciseName: string;
+  exerciseNameAr?: string;
+  prType: 'weight' | 'volume';
+  newValue: number;
+  previousValue: number;
+  unit: string;
+  reps: number;
+  diff: number;
+  setNumber: number;
 }
 
 export interface WorkoutExercise {

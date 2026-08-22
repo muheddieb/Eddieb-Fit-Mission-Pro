@@ -26,6 +26,7 @@ import { StorageService } from '../../services/storage';
 import { GeminiService } from '../../services/geminiService';
 import { NavSection } from '../layout/Sidebar';
 import { SmartWarmupModal } from '../workout/SmartWarmupModal';
+import { HydrationTracker } from './HydrationTracker';
 
 interface DashboardViewProps {
   profile: UserProfile;
@@ -33,6 +34,7 @@ interface DashboardViewProps {
   activeWorkout: WorkoutSession | null;
   onStartWorkout: () => void;
   onNavigate: (section: NavSection) => void;
+  onUpdateProfile?: (profile: UserProfile) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -41,6 +43,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   activeWorkout,
   onStartWorkout,
   onNavigate,
+  onUpdateProfile,
 }) => {
   const t = translations[profile.language];
   const isAr = profile.language === 'ar';
@@ -531,47 +534,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Daily Habits & Hydration Widget Row with Fluid Animated Progress Bars */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Hydration Tracker */}
-        <div className="rounded-2xl border border-border bg-card p-4 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-400">
-                <Droplets className="h-4 w-4" />
-                <span>{t.dashboard.hydration}</span>
-              </div>
-              <button
-                id="btn-quick-add-water"
-                onClick={handleAddQuickWater}
-                className="flex h-7 px-2 items-center justify-center rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors text-xs font-bold"
-                title="Log +250ml Water"
-              >
-                +250 ml
-              </button>
-            </div>
+      {/* Daily Hydration Tracker Component */}
+      <HydrationTracker
+        profile={profile}
+        todayWaterMl={todayWaterMl}
+        onUpdateWater={(newTotal) => setTodayWaterMl(newTotal)}
+        onUpdateProfile={onUpdateProfile}
+      />
 
-            <div className="text-xl font-black text-foreground mt-2">
-              {todayWaterMl} <span className="text-xs text-muted-foreground">/ {profile.dailyWaterTargetMl} ml</span>
-            </div>
-          </div>
-
-          {/* Framer Motion Entry Animated Hydration Progress Bar */}
-          <div className="mt-3 space-y-1">
-            <div className="flex justify-between text-[11px] text-muted-foreground font-semibold">
-              <span>{t.common.completed}</span>
-              <span className="text-blue-400 font-mono">{hydrationPercent}%</span>
-            </div>
-            <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
-              <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400"
-                initial={{ width: 0 }}
-                animate={{ width: `${hydrationPercent}%` }}
-                transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1], delay: 0.25 }}
-              />
-            </div>
-          </div>
-        </div>
+      {/* Daily Habits & Nutrition Snapshot Row */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
 
         {/* Daily Protein Target */}
         <div className="rounded-2xl border border-border bg-card p-4 shadow-sm flex flex-col justify-between">

@@ -24,16 +24,20 @@ import {
   Music,
   CheckCircle2,
   Sparkles,
-  Bell
+  Bell,
+  Award
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
-import { WorkoutSession, WorkoutExercise, SetLog, UserProfile, Exercise, RestSoundType } from '../../types';
+import { WorkoutSession, WorkoutExercise, SetLog, UserProfile, Exercise, RestSoundType, PersonalRecordEvent } from '../../types';
 import { translations } from '../../i18n/translations';
 import { PPLEngine, ProgressionAdvice } from '../../services/pplEngine';
 import { StorageService } from '../../services/storage';
 import { WakeLockService } from '../../services/wakeLockService';
 import { AudioService } from '../../services/audioService';
+import { PRService } from '../../services/prService';
+import { ConfettiEffect } from '../../utils/confetti';
+import { PRAchievementToast } from '../common/PRAchievementToast';
 import { SmartWarmupModal } from './SmartWarmupModal';
 
 interface ActiveWorkoutModalProps {
@@ -82,6 +86,9 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   const [swapExerciseOpen, setSwapExerciseOpen] = useState<boolean>(false);
   const [soundPickerOpen, setSoundPickerOpen] = useState<boolean>(false);
   const [smartWarmupOpen, setSmartWarmupOpen] = useState<boolean>(false);
+  
+  // Achievement Confetti & PR Celebration State
+  const [activePRToast, setActivePRToast] = useState<PersonalRecordEvent | null>(null);
 
   const timerRef = useRef<any>(null);
   const hasTriggeredStartCue = useRef<boolean>(false);
@@ -178,11 +185,33 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
 
   // Handler: Update set values
   const handleUpdateSet = (setId: string, field: keyof SetLog, value: any) => {
+    let prDetected: PersonalRecordEvent | null = null;
+
     const updatedExercises = workout.exercises.map((ex, idx) => {
       if (idx !== currentExerciseIndex) return ex;
       const updatedSets = ex.sets.map(s => {
         if (s.id === setId) {
-          return { ...s, [field]: value };
+          const updated = { ...s, [field]: value };
+          // If set is completed and user changed weight/reps, re-evaluate PR
+          if (updated.completed && (field === 'actualWeight' || field === 'actualReps')) {
+            const pr = PRService.checkForPR(
+              ex.exerciseId,
+              ex.exerciseName,
+              ex.exerciseNameAr,
+              updated,
+              history,
+              workout
+            );
+            if (pr) {
+              updated.isPR = true;
+              updated.prType = pr.prType;
+              prDetected = pr;
+            } else {
+              updated.isPR = false;
+              updated.prType = undefined;
+            }
+          }
+          return updated;
         }
         return s;
       });
@@ -192,14 +221,71 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     });
 
     setWorkout({ ...workout, exercises: updatedExercises });
+
+    if (prDetected) {
+      ConfettiEffect.triggerPRAchievement();
+      if (soundEnabled) {
+        AudioService.playPRAchievementCue(0.35);
+      }
+      setActivePRToast(prDetected);
+    }
   };
 
-  // Toggle set completion and trigger rest timer with audio cue
+  // Toggle set completion, evaluate PR records, trigger Confetti animation and rest timer
   const handleToggleSetCompletion = (setLog: SetLog) => {
     const nextCompleted = !setLog.completed;
-    handleUpdateSet(setLog.id, 'completed', nextCompleted);
+    let prDetected: PersonalRecordEvent | null = null;
 
     if (nextCompleted) {
+      // Check for Personal Record (Weight PR or Volume PR)
+      const candidateSet: SetLog = {
+        ...setLog,
+        completed: true,
+      };
+      prDetected = PRService.checkForPR(
+        currentExercise.exerciseId,
+        currentExercise.exerciseName,
+        currentExercise.exerciseNameAr,
+        candidateSet,
+        history,
+        workout
+      );
+    }
+
+    const updatedExercises = workout.exercises.map((ex, idx) => {
+      if (idx !== currentExerciseIndex) return ex;
+      const updatedSets = ex.sets.map(s => {
+        if (s.id === setLog.id) {
+          return { 
+            ...s, 
+            completed: nextCompleted,
+            isPR: nextCompleted && prDetected ? true : (nextCompleted ? s.isPR : false),
+            prType: nextCompleted && prDetected ? prDetected.prType : (nextCompleted ? s.prType : undefined),
+          };
+        }
+        return s;
+      });
+
+      const allDone = updatedSets.every(s => s.completed);
+      return { ...ex, sets: updatedSets, completed: allDone };
+    });
+
+    setWorkout({ ...workout, exercises: updatedExercises });
+
+    if (nextCompleted) {
+      if (prDetected) {
+        // Trigger high-impact multi-stage achievement confetti effect!
+        ConfettiEffect.triggerPRAchievement();
+        if (soundEnabled) {
+          AudioService.playPRAchievementCue(0.35);
+        }
+        setActivePRToast(prDetected);
+      } else {
+        if (soundEnabled) {
+          AudioService.playBeep(880, 0.1, 0.2);
+        }
+      }
+
       // Trigger rest timer based on exercise rest specification
       const rest = currentExercise.restSeconds || 90;
       startTimer(rest);
@@ -380,7 +466,10 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
             </button>
 
             {soundPickerOpen && (
-              <div className="absolute right-0 top-full mt-2 w-52 rounded-2xl border border-border bg-card p-2 shadow-2xl z-50 space-y-1">
+              <div 
+                className="absolute right-0 top-full mt-2 w-52 rounded-2xl border border-border p-2 shadow-2xl z-50 space-y-1"
+                style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
+              >
                 <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
                   <span>{isAr ? 'المؤثرات الصوتية للجلسة' : 'Workout Audio Cues'}</span>
                   <Bell className="h-3 w-3 text-primary" />
@@ -595,17 +684,30 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.94, height: 0 }}
                         transition={{ duration: 0.16 }}
-                        className={`grid grid-cols-12 items-center gap-2 rounded-xl border p-2.5 transition-colors ${
-                          setLog.completed
-                            ? 'border-emerald-500/40 bg-emerald-500/10'
-                            : 'border-border bg-secondary/30'
+                        className={`grid grid-cols-12 items-center gap-2 rounded-xl border p-2.5 transition-all ${
+                          setLog.isPR
+                            ? 'border-amber-400/60 bg-amber-400/10 shadow-sm shadow-amber-500/15 ring-1 ring-amber-400/30'
+                            : setLog.completed
+                              ? 'border-emerald-500/40 bg-emerald-500/10'
+                              : 'border-border bg-secondary/30'
                         }`}
                       >
-                        {/* Set Number */}
+                        {/* Set Number & PR Badge */}
                         <div className="col-span-2 flex items-center gap-1.5 font-bold text-foreground text-sm">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-secondary text-xs font-black shadow-inner">
+                          <span className={`flex h-7 w-7 items-center justify-center rounded-xl text-xs font-black shadow-inner ${
+                            setLog.isPR ? 'bg-amber-400 text-black shadow-amber-400/30' : 'bg-secondary'
+                          }`}>
                             {setLog.setNumber}
                           </span>
+                          {setLog.isPR && (
+                            <span 
+                              className="hidden sm:inline-flex items-center gap-0.5 rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-black text-amber-400 border border-amber-500/30 animate-pulse"
+                              title={setLog.prType === 'weight' ? (isAr ? 'رقم قياسي في الوزن' : 'Weight PR') : (isAr ? 'رقم قياسي في الحجم' : 'Volume PR')}
+                            >
+                              <Trophy className="h-2.5 w-2.5" />
+                              <span>{isAr ? 'رقم قياسي' : 'PR'}</span>
+                            </span>
+                          )}
                         </div>
 
                         {/* Weight Drop-Down List (Select) */}
@@ -836,6 +938,13 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
         initialWorkoutType={workout.type}
         profile={profile}
         onClose={() => setSmartWarmupOpen(false)}
+      />
+
+      {/* Achievement Confetti PR Toast */}
+      <PRAchievementToast
+        prEvent={activePRToast}
+        profile={profile}
+        onClose={() => setActivePRToast(null)}
       />
     </div>
   );
