@@ -9,7 +9,6 @@ import {
   Menu,
   Cloud,
   CloudOff,
-  CloudCheck,
   RefreshCw,
   WifiOff,
   AlertTriangle,
@@ -26,6 +25,7 @@ import { User } from 'firebase/auth';
 import { UserProfile, WorkoutSession, SyncStatus, AppTheme } from '../../types';
 import { translations } from '../../i18n/translations';
 import { THEME_OPTIONS } from '../../utils/themeData';
+import { LiveHeartRateBadge } from '../devices/LiveHeartRateBadge';
 
 interface NavbarProps {
   profile: UserProfile;
@@ -40,6 +40,7 @@ interface NavbarProps {
   onOpenActiveWorkout: () => void;
   onToggleMobileDrawer: () => void;
   onOpenVisualizer: () => void;
+  onOpenDevicesModal?: () => void;
   onOpenPWAInstallModal?: () => void;
   onSignInWithGoogle: () => void;
   onSignOut: () => void;
@@ -58,6 +59,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenActiveWorkout,
   onToggleMobileDrawer,
   onOpenVisualizer,
+  onOpenDevicesModal,
   onOpenPWAInstallModal,
   onSignInWithGoogle,
   onSignOut,
@@ -302,7 +304,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <CloudCheck className="h-3.5 w-3.5 text-emerald-400" />
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
               )}
               <span className="hidden md:inline max-w-[85px] truncate text-[11px] font-bold">
                 {currentUser.displayName?.split(' ')[0] || t.sync.synced}
@@ -332,6 +334,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="hidden sm:inline">Google Sync</span>
           </button>
         )}
+
+        {/* Live Bluetooth Health Watch Badge */}
+        <LiveHeartRateBadge
+          compact={true}
+          isArabic={profile.language === 'ar'}
+          onOpenDevicesModal={onOpenDevicesModal}
+          className="hidden sm:flex"
+        />
 
         {/* Active Workout Resume Pill (if in progress) */}
         {activeWorkout && (

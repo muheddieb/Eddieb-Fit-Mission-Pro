@@ -12,7 +12,7 @@ import {
   WifiOff, 
   Zap, 
   Maximize, 
-  CloudCheck,
+  Cloud,
   Sparkles,
   ArrowRight,
   ExternalLink,
@@ -293,7 +293,7 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({
                   <span className="text-muted-foreground">{t.pwa.featureFull}</span>
                 </div>
                 <div className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-secondary/30 p-3 text-xs">
-                  <CloudCheck className="h-4 w-4 text-primary shrink-0" />
+                  <Cloud className="h-4 w-4 text-primary shrink-0" />
                   <span className="text-muted-foreground">{t.pwa.featureSync}</span>
                 </div>
               </div>

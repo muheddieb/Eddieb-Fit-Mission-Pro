@@ -228,6 +228,74 @@ export interface RecoverySession {
   timestamp?: number;
 }
 
+export interface SleepLog {
+  id: string;
+  date: string; // Wake up date 'YYYY-MM-DD'
+  bedTime: string; // "23:00"
+  wakeTime: string; // "07:30"
+  durationHours: number; // e.g. 7.5
+  qualityScore: number; // 1 to 100
+  deepSleepMinutes?: number;
+  remSleepMinutes?: number;
+  lightSleepMinutes?: number;
+  awakeMinutes?: number;
+  restingHeartRateBpm?: number;
+  hrvRmssdMs?: number;
+  perceivedRecovery: 1 | 2 | 3 | 4 | 5; // 1=Exhausted, 2=Sluggish, 3=Normal, 4=Energized, 5=Peak / PR Ready
+  factors?: string[]; // e.g. 'dark_cool_room', 'no_screens_60m', 'magnesium', 'no_caffeine_late', 'late_heavy_meal', 'stress'
+  factorsAr?: string[];
+  notes?: string;
+  source?: 'manual' | 'galaxy_watch' | 'apple_health' | 'fitbit' | 'garmin';
+  timestamp: number;
+}
+
+export interface SleepWorkoutCorrelationPoint {
+  date: string;
+  displayDate: string;
+  displayDateAr: string;
+  sleepDurationHours: number;
+  sleepQualityScore: number;
+  perceivedRecovery: number;
+  deepSleepMinutes?: number;
+  remSleepMinutes?: number;
+  restingHeartRateBpm?: number;
+  hrvRmssdMs?: number;
+  hasWorkout: boolean;
+  workoutName?: string;
+  workoutNameAr?: string;
+  workoutType?: string;
+  workoutVolumeKg?: number;
+  workoutVolumeTons?: number;
+  avgWorkoutRpe?: number;
+  workoutDurationMin?: number;
+  completedSets?: number;
+  performanceScore?: number; // 0 to 100 composite index
+  sleepDeficit: boolean; // duration < 6.5h or score < 70
+  notes?: string;
+}
+
+export interface SleepCorrelationSummary {
+  avgSleepDurationHours: number;
+  avgQualityScore: number;
+  avgRestingHeartRate: number;
+  avgHrv: number;
+  volumeBoostOnOptimalSleepPercent: number; // e.g. +17.5% volume when sleep >= 7.5h
+  rpeFatigueDiffOnShortSleep: number; // e.g. +1.1 higher RPE when sleep < 6.5h
+  optimalSleepRange: string;
+  optimalSleepRangeAr: string;
+  highSleepVolumeAvgKg: number;
+  lowSleepVolumeAvgKg: number;
+  correlationStrength: 'strong' | 'moderate' | 'mild';
+  correlationStrengthAr: string;
+  bioInsights: {
+    title: string;
+    titleAr: string;
+    desc: string;
+    descAr: string;
+    impact: 'positive' | 'warning' | 'info';
+  }[];
+}
+
 export interface NutritionEntry {
   id: string;
   date: string;
@@ -324,6 +392,8 @@ export interface UserProfile {
   startDate: string; // YYYY-MM-DD
   dailyCalorieTarget: number;
   dailyProteinTargetGrams: number;
+  dailyCarbsTargetGrams?: number;
+  dailyFatTargetGrams?: number;
   dailyWaterTargetMl: number;
   notes?: string;
   theme: AppTheme;
@@ -386,3 +456,203 @@ export interface AppState {
 }
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error' | 'idle';
+
+export type HeartRateZone = 1 | 2 | 3 | 4 | 5;
+
+export type BluetoothDeviceType = 
+  | 'samsung_galaxy_watch' 
+  | 'apple_watch' 
+  | 'garmin' 
+  | 'polar' 
+  | 'whoop' 
+  | 'wahoo' 
+  | 'generic_hrm';
+
+export type BluetoothConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+
+export interface LiveTelemetryData {
+  timestamp: number;
+  heartRateBpm: number;
+  heartRateZone: HeartRateZone;
+  rrIntervalMs?: number;
+  hrvRmssd?: number;
+  caloriesBurnedRate?: number;
+  sensorLocation?: string;
+  batteryLevel?: number;
+  isSimulated?: boolean;
+}
+
+export interface BluetoothDeviceInfo {
+  id: string;
+  name: string;
+  type: BluetoothDeviceType;
+  batteryLevel?: number;
+  sensorLocation?: string;
+  connectedAt?: number;
+  lastHeartRate?: number;
+}
+
+export interface SamsungHealthDailySummary {
+  id: string;
+  date: string; // YYYY-MM-DD
+  steps: number;
+  stepTarget: number;
+  activeMinutes: number;
+  activeCaloriesBurnedKcal: number;
+  totalCaloriesBurnedKcal: number;
+  distanceKm: number;
+  restingHeartRateBpm?: number;
+  minHeartRateBpm?: number;
+  maxHeartRateBpm?: number;
+  avgHeartRateBpm?: number;
+  bloodOxygenSpO2Percent?: number;
+  sleepDurationMinutes?: number;
+  sleepScore?: number;
+  sleepDeepMinutes?: number;
+  sleepRemMinutes?: number;
+  sleepLightMinutes?: number;
+  sleepAwakeMinutes?: number;
+  bloodPressureSystolic?: number;
+  bloodPressureDiastolic?: number;
+  stressLevel?: 'low' | 'moderate' | 'high';
+  bodyComposition?: {
+    weightKg: number;
+    bodyFatPercent: number;
+    skeletalMuscleKg: number;
+    bodyFatKg: number;
+    waterPercent: number;
+    bmrKcal: number;
+    visceralFat?: number;
+  };
+  source: 'samsung_health_file' | 'health_connect' | 'manual_entry' | 'sample_data';
+  importedAt: number;
+}
+
+export interface SamsungHealthSyncRecord {
+  id: string;
+  timestamp: number;
+  fileName?: string;
+  fileType?: string;
+  recordsImported: number;
+  dateRange: string;
+  status: 'success' | 'warning' | 'error';
+  summary: string;
+  summaryAr: string;
+}
+
+export type BluetoothActivityCategory = 'workout' | 'cardio' | 'walking' | 'hiit' | 'mobility' | 'daily_tracking';
+
+export interface HeartRate24hPoint {
+  timestamp: number;
+  timeLabel: string;
+  hour: number;
+  heartRate: number;
+  restingHr: number;
+  minHr: number;
+  maxHr: number;
+  hrvRmssd?: number;
+  zone: HeartRateZone;
+  zoneNameEn: string;
+  zoneNameAr: string;
+  activityEn: string;
+  activityAr: string;
+  isWorkout: boolean;
+  isSleep: boolean;
+  source: string;
+}
+
+export interface BluetoothActivityLog {
+  id: string;
+  deviceId: string;
+  deviceName: string;
+  deviceType: BluetoothDeviceType;
+  timestamp: number;
+  dateStr: string;
+  activityTitle: string;
+  activityTitleAr: string;
+  category: BluetoothActivityCategory;
+  durationMinutes: number;
+  steps: number;
+  hrvRmssd: number; // Heart Rate Variability (RMSSD in ms)
+  hrvStatus: 'optimal' | 'good' | 'fatigued' | 'recovering';
+  activeCalories: number; // Active calories burned (kcal)
+  totalCalories?: number;
+  avgHeartRateBpm: number;
+  maxHeartRateBpm: number;
+  minHeartRateBpm?: number;
+  primaryZone: HeartRateZone;
+  timeInZones?: {
+    zone1Mins: number;
+    zone2Mins: number;
+    zone3Mins: number;
+    zone4Mins: number;
+    zone5Mins: number;
+  };
+  distanceKm?: number;
+  cadenceAvgRpm?: number;
+  sensorLocation?: string;
+  batteryLevelAtSync?: number;
+  source: 'live_ble_sync' | 'watch_memory_pull' | 'manual_device_log' | 'simulated_ble';
+  syncedAt: number;
+  notes?: string;
+}
+
+export interface TrainingBlockInfo {
+  blockNumber: number;
+  blockTitle: string;
+  blockTitleAr: string;
+  phaseType: 'hypertrophy_foundation' | 'progressive_overload' | 'strength_peak' | 'active_deload';
+  startWeek: number;
+  endWeek: number;
+  totalTonnageKg: number;
+  avgWeeklyVolumeKg: number;
+  totalSets: number;
+  totalReps: number;
+  completedWorkouts: number;
+  overloadGainPercent: number;
+  status: 'completed' | 'active' | 'upcoming';
+}
+
+export interface WeeklyVolumeBlockPoint {
+  weekNumber: number;
+  blockNumber: number;
+  weekInBlock: number; // 1, 2, 3, 4
+  weekLabel: string;
+  weekLabelAr: string;
+  dateRange: string;
+  volumeKg: number;
+  volumeTons: number;
+  previousBlockVolumeKg?: number;
+  previousBlockVolumeTons?: number;
+  overloadDeltaPercent?: number;
+  targetVolumeKg: number;
+  pushVolumeKg: number;
+  pullVolumeKg: number;
+  legsVolumeKg: number;
+  completedSets: number;
+  completedReps: number;
+  workoutsCount: number;
+  avgIntensityRpe: number;
+  isOverloadAchieved: boolean;
+  isDeload: boolean;
+  isCurrentWeek: boolean;
+  milestones: string[];
+  milestonesAr: string[];
+}
+
+export interface OverloadMilestone {
+  id: string;
+  title: string;
+  titleAr: string;
+  description: string;
+  descriptionAr: string;
+  category: 'tonnage' | 'block_gain' | 'streak' | 'intensity' | 'pr';
+  thresholdValue: number;
+  currentValue: number;
+  unit: string;
+  achieved: boolean;
+  achievedDate?: string;
+  badgeColor: string;
+  iconName: string;
+}
+

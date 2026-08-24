@@ -19,6 +19,7 @@ import { PPLEngine } from '../../services/pplEngine';
 import { StorageService } from '../../services/storage';
 import { ProgressCharts } from './ProgressCharts';
 import { IntensityTrendChart } from './IntensityTrendChart';
+import { WeeklyVolumeProgressionChart } from './WeeklyVolumeProgressionChart';
 
 interface ProgressViewProps {
   profile: UserProfile;
@@ -184,6 +185,13 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
           {isAr ? trendAnalysis.explanationAr : trendAnalysis.explanation}
         </p>
       </div>
+
+      {/* Weekly Volume Progression & Training Block Overload Chart (Recharts) */}
+      <WeeklyVolumeProgressionChart
+        history={history}
+        profile={profile}
+        isAr={isAr}
+      />
 
       {/* 30-Day Intensity Trend & Volume Progression (Recharts) */}
       <IntensityTrendChart

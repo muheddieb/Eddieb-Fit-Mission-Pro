@@ -17,7 +17,8 @@ import {
   Image as ImageIcon,
   ChevronLeft,
   ChevronRight,
-  Download
+  Download,
+  Watch
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { translations } from '../../i18n/translations';
@@ -37,6 +38,7 @@ export type NavSection =
   | 'motivation' 
   | 'achievements' 
   | 'visualizer' 
+  | 'devices'
   | 'profile' 
   | 'settings';
 
@@ -64,6 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: t.nav.dashboard, icon: LayoutDashboard },
     { id: 'aiCoach', label: t.nav.aiCoach, icon: Bot, badge: 'AI' },
     { id: 'workout', label: t.nav.workout, icon: Dumbbell },
+    { id: 'devices', label: t.nav.devices, icon: Watch, badge: 'BLE' },
     { id: 'exerciseLibrary', label: t.nav.exerciseLibrary, icon: BookOpen },
     { id: 'home', label: t.nav.home, icon: HomeIcon },
     { id: 'nutrition', label: t.nav.nutrition, icon: Utensils },

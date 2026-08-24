@@ -1,6 +1,6 @@
 {
   "name": "EDDIEB FIT MISSION",
-  "description": "Personal fitness operating system with Push/Pull/Legs programming, fat-loss & recomposition engines, progressive overload, exercise library, nutrition, and Gemini AI Coach.",
+  "description": "Personal fitness operating system with Push/Pull/Legs programming, Samsung Health & Bluetooth smartwatch biometric integration, fat-loss & recomposition engines, progressive overload, nutrition, and Gemini AI Coach.",
   "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

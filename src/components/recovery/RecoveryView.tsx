@@ -11,12 +11,15 @@ import {
   Check, 
   ShieldCheck, 
   Plus,
-  Activity
+  Activity,
+  Sliders
 } from 'lucide-react';
-import { RecoverySession, UserProfile } from '../../types';
+import { RecoverySession, UserProfile, SleepLog, WorkoutSession } from '../../types';
 import { translations } from '../../i18n/translations';
 import { StorageService } from '../../services/storage';
 import { SmartWarmupModal } from '../workout/SmartWarmupModal';
+import { SleepPerformanceCorrelationChart } from './SleepPerformanceCorrelationChart';
+import { SleepQualityLoggerModal } from './SleepQualityLoggerModal';
 
 interface RecoveryViewProps {
   profile: UserProfile;
@@ -29,6 +32,9 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
   const isAr = profile.language === 'ar';
 
   const [recoveryLogs, setRecoveryLogs] = useState<RecoverySession[]>([]);
+  const [sleepLogs, setSleepLogs] = useState<SleepLog[]>([]);
+  const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
+
   const [selectedType, setSelectedType] = useState<RecoverySession['type']>('sauna');
   const [durationMin, setDurationMin] = useState<number>(15);
   const [timerSeconds, setTimerSeconds] = useState<number>(0);
@@ -36,10 +42,20 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
   const [warmupModalOpen, setWarmupModalOpen] = useState<boolean>(false);
   const [warmupType, setWarmupType] = useState<'push' | 'pull' | 'legs' | 'full_body'>('full_body');
 
+  // Sleep Logger Modal State
+  const [sleepModalOpen, setSleepModalOpen] = useState<boolean>(false);
+  const [editingSleepLog, setEditingSleepLog] = useState<SleepLog | null>(null);
+
   const timerRef = useRef<any>(null);
 
-  useEffect(() => {
+  const loadData = () => {
     setRecoveryLogs(StorageService.getRecoveryHistory());
+    setSleepLogs(StorageService.getSleepHistory());
+    setWorkoutHistory(StorageService.getWorkoutHistory());
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   useEffect(() => {
@@ -66,6 +82,13 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
   };
 
   const handleLogRecovery = () => {
+    if (selectedType === 'sleep') {
+      // If user selected sleep from dropdown, open the full Sleep Quality Logger Modal
+      setEditingSleepLog(null);
+      setSleepModalOpen(true);
+      return;
+    }
+
     const session: RecoverySession = {
       id: 'rec_' + Date.now(),
       date: new Date().toISOString().split('T')[0],
@@ -79,8 +102,17 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
     setRecoveryLogs(StorageService.getRecoveryHistory());
   };
 
+  const handleOpenSleepLogger = (log?: SleepLog) => {
+    setEditingSleepLog(log || null);
+    setSleepModalOpen(true);
+  };
+
+  const handleSleepSaved = () => {
+    loadData();
+  };
+
   return (
-    <div className="space-y-6 pb-12" dir={isAr ? 'rtl' : 'ltr'}>
+    <div className="space-y-8 pb-12" dir={isAr ? 'rtl' : 'ltr'}>
       {/* Header */}
       <div>
         <h1 className="text-2xl font-black text-foreground sm:text-3xl">
@@ -131,10 +163,18 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
         </div>
 
         {/* Sleep Optimization */}
-        <div className="rounded-2xl border border-purple-500/25 bg-purple-500/5 p-4 space-y-2 shadow-sm">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-purple-400">
-            <Moon className="h-4 w-4" />
-            <span>{isAr ? 'النوم العميق (7.5-8.5 ساعة)' : 'Deep Sleep Optimization'}</span>
+        <div 
+          onClick={() => handleOpenSleepLogger()}
+          className="rounded-2xl border border-purple-500/30 bg-purple-500/10 p-4 space-y-2 shadow-sm cursor-pointer hover:bg-purple-500/15 hover:border-purple-500/50 transition-all group"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-purple-400">
+              <Moon className="h-4 w-4" />
+              <span>{isAr ? 'النوم العميق والجاهزية' : 'Deep Sleep Optimization'}</span>
+            </div>
+            <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] font-bold text-purple-300 group-hover:bg-purple-500 group-hover:text-white transition-colors">
+              {isAr ? 'تسجيل' : 'Log'}
+            </span>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
             {isAr
@@ -143,6 +183,16 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
           </p>
         </div>
       </div>
+
+      {/* SLEEP QUALITY & WORKOUT PERFORMANCE CORRELATION COMPONENT */}
+      <SleepPerformanceCorrelationChart
+        sleepLogs={sleepLogs}
+        workoutHistory={workoutHistory}
+        profile={profile}
+        onOpenLogger={handleOpenSleepLogger}
+        onRefresh={loadData}
+        isAr={isAr}
+      />
 
       {/* Smart Warm-up & Dynamic Joint Mobilization Section */}
       <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-card to-card p-6 shadow-md space-y-4">
@@ -215,7 +265,7 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
               <option value="steam">{isAr ? 'غرفة بخار (Steam Room)' : 'Steam Room'}</option>
               <option value="jacuzzi">{isAr ? 'جاكوزي مائي (Jacuzzi)' : 'Jacuzzi'}</option>
               <option value="stretching">{isAr ? 'جلسة إطالات كاملة (Stretching)' : 'Full Body Stretching'}</option>
-              <option value="sleep">{isAr ? 'نوم عميق واستشفاء' : 'Sleep Recovery'}</option>
+              <option value="sleep">{isAr ? 'تسجيل جودة النوم والاستشفاء (Sleep)' : 'Sleep & Biometrics'}</option>
             </select>
           </div>
 
@@ -278,15 +328,24 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
           onClick={handleLogRecovery}
           className="w-full flex items-center justify-center gap-2 rounded-xl bg-secondary py-3 text-xs font-bold text-foreground border border-border hover:bg-secondary/80 transition-colors"
         >
-          <Plus className="h-4 w-4 text-primary" />
-          <span>{isAr ? 'تسجيل إكمال جلسة الاستشفاء' : 'Log Completed Recovery Session'}</span>
+          {selectedType === 'sleep' ? (
+            <>
+              <Moon className="h-4 w-4 text-purple-400" />
+              <span>{isAr ? 'فتح نافذة تسجيل جودة النوم الشاملة' : 'Open Comprehensive Sleep Quality Logger'}</span>
+            </>
+          ) : (
+            <>
+              <Plus className="h-4 w-4 text-primary" />
+              <span>{isAr ? 'تسجيل إكمال جلسة الاستشفاء' : 'Log Completed Recovery Session'}</span>
+            </>
+          )}
         </button>
       </div>
 
-      {/* History */}
+      {/* Modality Sessions History */}
       <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
         <h3 className="text-base font-bold text-foreground">
-          {isAr ? 'سجل جلسات الاستشفاء' : 'Recovery History'} ({recoveryLogs.length})
+          {isAr ? 'سجل جلسات الساونا والجاكوزي' : 'Sauna & Hydrotherapy Session Logs'} ({recoveryLogs.length})
         </h3>
 
         {recoveryLogs.length === 0 ? (
@@ -323,6 +382,19 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
         initialWorkoutType={warmupType}
         profile={profile}
         onClose={() => setWarmupModalOpen(false)}
+      />
+
+      {/* Sleep Quality Logger Modal */}
+      <SleepQualityLoggerModal
+        isOpen={sleepModalOpen}
+        existingLog={editingSleepLog}
+        profile={profile}
+        onClose={() => {
+          setSleepModalOpen(false);
+          setEditingSleepLog(null);
+        }}
+        onSaved={handleSleepSaved}
+        isAr={isAr}
       />
     </div>
   );

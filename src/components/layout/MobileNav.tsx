@@ -17,7 +17,8 @@ import {
   User,
   Settings,
   Image as ImageIcon,
-  Download
+  Download,
+  Watch
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { translations } from '../../i18n/translations';
@@ -53,6 +54,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
   ];
 
   const drawerSections: { id: NavSection; label: string; icon: React.FC<{ className?: string }>; badge?: string }[] = [
+    { id: 'devices', label: t.nav.devices, icon: Watch, badge: 'BLE' },
     { id: 'home', label: t.nav.home, icon: Home },
     { id: 'nutrition', label: t.nav.nutrition, icon: Utensils },
     { id: 'preWorkout', label: t.nav.preWorkout, icon: Flame },

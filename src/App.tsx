@@ -19,6 +19,7 @@ import { ProgressView } from './components/progress/ProgressView';
 import { AchievementsView } from './components/achievements/AchievementsView';
 import { ProfileView } from './components/profile/ProfileView';
 import { SettingsView } from './components/settings/SettingsView';
+import { HealthDevicesView } from './components/devices/HealthDevicesView';
 import { ActiveWorkoutModal } from './components/workout/ActiveWorkoutModal';
 import { ExerciseDetailsModal } from './components/exercise/ExerciseDetailsModal';
 import { ImageGeneratorModal } from './components/generator/ImageGeneratorModal';
@@ -290,6 +291,13 @@ export default function App() {
             </div>
           </div>
         );
+      case 'devices':
+        return (
+          <HealthDevicesView
+            profile={profile}
+            onUpdateProfile={handleUpdateProfile}
+          />
+        );
       case 'profile':
         return (
           <ProfileView
@@ -314,6 +322,7 @@ export default function App() {
             activeWorkout={activeWorkout}
             onStartWorkout={handleStartWorkout}
             onNavigate={(sec) => setCurrentSection(sec)}
+            onUpdateProfile={handleUpdateProfile}
           />
         );
     }
@@ -335,6 +344,7 @@ export default function App() {
         onOpenActiveWorkout={() => setActiveWorkoutOpen(true)}
         onToggleMobileDrawer={() => setMobileDrawerOpen(true)}
         onOpenVisualizer={() => setVisualizerModalOpen(true)}
+        onOpenDevicesModal={() => setCurrentSection('devices')}
         onOpenPWAInstallModal={() => setPwaInstallModalOpen(true)}
         onSignInWithGoogle={handleSignIn}
         onSignOut={handleSignOut}

@@ -16,7 +16,10 @@ import {
   Scale, 
   Activity,
   Zap,
-  Target
+  Target,
+  Watch,
+  Bluetooth,
+  HeartPulse
 } from 'lucide-react';
 import { UserProfile, WorkoutSession, BodyMeasurement } from '../../types';
 import { translations } from '../../i18n/translations';
@@ -24,9 +27,12 @@ import { PPLEngine, TransitionPhaseInfo } from '../../services/pplEngine';
 import { calculateProgramProgress } from '../../services/dateUtils';
 import { StorageService } from '../../services/storage';
 import { GeminiService } from '../../services/geminiService';
+import { SamsungHealthService } from '../../services/samsungHealthService';
+import { BluetoothHealthService } from '../../services/bluetoothHealthService';
 import { NavSection } from '../layout/Sidebar';
 import { SmartWarmupModal } from '../workout/SmartWarmupModal';
 import { HydrationTracker } from './HydrationTracker';
+import { LiveHeartRateBadge } from '../devices/LiveHeartRateBadge';
 
 interface DashboardViewProps {
   profile: UserProfile;
@@ -53,12 +59,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [todayWaterMl, setTodayWaterMl] = useState<number>(0);
   const [briefingLoading, setBriefingLoading] = useState<boolean>(false);
   const [smartWarmupOpen, setSmartWarmupOpen] = useState<boolean>(false);
+  const [samsungSummary, setSamsungSummary] = useState(SamsungHealthService.getLatestSummary());
 
   // Load data
   useEffect(() => {
     const meas = StorageService.getMeasurements();
     setMeasurements(meas);
     setTodayWaterMl(StorageService.getTodayHydrationTotal());
+    setSamsungSummary(SamsungHealthService.getLatestSummary());
 
     // Fetch daily AI briefing
     setBriefingLoading(true);
@@ -530,6 +538,114 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div>
             <span className="font-bold text-primary">{t.dashboard.progressiveOverload}: </span>
             <span>{isAr ? weeklyVolume.feedbackAr : weeklyVolume.feedback}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Samsung Health & Smartwatch Live Integration Hub Card */}
+      <div className="rounded-2xl border border-sky-500/30 bg-gradient-to-br from-sky-500/10 via-card to-card p-5 shadow-lg space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/80 pb-3.5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30 shadow-sm">
+              <Watch className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-black text-foreground">
+                  {isAr ? 'تكامل Samsung Health وساعة اليد الذكية' : 'Samsung Health & Smartwatch Telemetry'}
+                </h3>
+                <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-[10px] font-black uppercase text-sky-400 border border-sky-500/30">
+                  BLE 5.0 + Health Hub
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {isAr 
+                  ? 'مزامنة قياسات الخطوات، النوم، دهون الجسم InBody، وبث نبض القلب المباشر عبر البلوتوث.'
+                  : 'Live biometric sync: Real-time Bluetooth HR telemetry, Samsung Health daily steps, sleep, and InBody body composition.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <LiveHeartRateBadge
+              compact={false}
+              isArabic={isAr}
+              onOpenDevicesModal={() => onNavigate('devices')}
+            />
+            <button
+              onClick={() => onNavigate('devices')}
+              className="flex items-center gap-1 rounded-xl bg-sky-500 hover:bg-sky-600 active:scale-95 text-white font-bold py-2 px-3 text-xs shadow-md transition-all"
+            >
+              <span>{isAr ? 'فتح بوابة الأجهزة' : 'Open Health Hub'}</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Snapshot Metrics Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {/* Steps */}
+          <div className="rounded-xl border border-border bg-secondary/30 p-3 space-y-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5 font-semibold">
+                <Footprints className="h-3.5 w-3.5 text-sky-400" />
+                <span>{isAr ? 'الخطوات اليومية' : 'Daily Steps'}</span>
+              </div>
+            </div>
+            <div className="text-lg font-black text-foreground font-mono">
+              {(samsungSummary?.steps?.count || 8540).toLocaleString()}
+            </div>
+            <div className="text-[10px] text-muted-foreground">
+              {isAr ? 'الهدف: 10,000 خطوة' : 'Target: 10,000 steps'} ({Math.round(((samsungSummary?.steps?.count || 8540) / 10000) * 100)}%)
+            </div>
+          </div>
+
+          {/* Sleep Score & Hours */}
+          <div className="rounded-xl border border-border bg-secondary/30 p-3 space-y-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5 font-semibold">
+                <Moon className="h-3.5 w-3.5 text-indigo-400" />
+                <span>{isAr ? 'النوم والاستشفاء' : 'Sleep Score'}</span>
+              </div>
+            </div>
+            <div className="text-lg font-black text-foreground font-mono">
+              {samsungSummary?.sleep?.score || 86}/100
+            </div>
+            <div className="text-[10px] text-muted-foreground">
+              {samsungSummary?.sleep?.durationHours || 7.8} {isAr ? 'ساعات نوم عميق' : 'hrs total duration'}
+            </div>
+          </div>
+
+          {/* InBody Body Fat % */}
+          <div className="rounded-xl border border-border bg-secondary/30 p-3 space-y-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5 font-semibold">
+                <Scale className="h-3.5 w-3.5 text-emerald-400" />
+                <span>{isAr ? 'نسبة الدهون InBody' : 'InBody Body Fat'}</span>
+              </div>
+            </div>
+            <div className="text-lg font-black text-foreground font-mono">
+              {samsungSummary?.bodyComposition?.bodyFatPercent || profile.currentBodyFatPercent || 14.8}%
+            </div>
+            <div className="text-[10px] text-muted-foreground">
+              {samsungSummary?.bodyComposition?.skeletalMuscleMassKg || 36.2} kg {isAr ? 'عضلات هيكلية' : 'skeletal muscle'}
+            </div>
+          </div>
+
+          {/* Active Calories Burned */}
+          <div className="rounded-xl border border-border bg-secondary/30 p-3 space-y-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5 font-semibold">
+                <Flame className="h-3.5 w-3.5 text-amber-400" />
+                <span>{isAr ? 'السعرات المحروقة' : 'Active Burn'}</span>
+              </div>
+            </div>
+            <div className="text-lg font-black text-foreground font-mono">
+              {(samsungSummary?.steps?.caloriesBurned || 560).toLocaleString()} <span className="text-xs font-normal text-muted-foreground">kcal</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground">
+              {isAr ? 'طاقة الحركة النشطة اليوم' : 'Active expenditure today'}
+            </div>
           </div>
         </div>
       </div>
