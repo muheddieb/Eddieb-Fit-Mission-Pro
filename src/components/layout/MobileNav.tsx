@@ -54,6 +54,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
   ];
 
   const drawerSections: { id: NavSection; label: string; icon: React.FC<{ className?: string }>; badge?: string }[] = [
+    { id: 'returnToTraining', label: t.nav.returnToTraining, icon: Sparkles, badge: 'Smart' },
     { id: 'devices', label: t.nav.devices, icon: Watch, badge: 'BLE' },
     { id: 'home', label: t.nav.home, icon: Home },
     { id: 'nutrition', label: t.nav.nutrition, icon: Utensils },

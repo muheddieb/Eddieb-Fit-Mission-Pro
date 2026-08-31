@@ -154,12 +154,14 @@ Language preference: ${profile.language === 'ar' ? 'Arabic (Modern, professional
   // Quick suggestion chips
   const quickChips = isAr
     ? [
+        'كيف أرجع للتدريب بأمان بعد انقطاع؟',
         'كيف أطبق زيادة الحمل التدريبي بأمان؟',
         'خطة وجبات مصرية غنية بالبروتين (160 جم)',
         'تقييم نزول محيط الخصر مقابل الوزن',
         'بدائل تمرين السكوات لحماية أسفل الظهر',
       ]
     : [
+        'How to safely return to training after a break?',
         'How do I calculate progressive overload for my bench press?',
         'High-protein Egyptian meal plan (165g protein)',
         'Interpret my waist circumference vs weight trend',

@@ -8,6 +8,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default defineConfig(() => {
+  const isHmrDisabled = process.env.DISABLE_HMR === 'true';
+
   return {
     plugins: [
       tailwindcss(),
@@ -20,13 +22,34 @@ export default defineConfig(() => {
       dedupe: ['react', 'react-dom'],
     },
     optimizeDeps: {
-      include: ['react', 'react-dom', 'motion', 'motion/react', 'recharts', 'lucide-react', 'canvas-confetti'],
+      include: [
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        'motion',
+        'motion/react',
+        'recharts',
+        'lucide-react',
+        'canvas-confetti',
+      ],
+      exclude: ['@google/genai'],
     },
     server: {
       host: '0.0.0.0',
       port: 3000,
-      hmr: process.env.DISABLE_HMR !== 'true',
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      strictPort: true,
+      hmr: isHmrDisabled
+        ? false
+        : {
+            overlay: true,
+          },
+      watch: isHmrDisabled
+        ? { ignored: ['**/*'] }
+        : {
+            usePolling: false,
+            ignored: ['**/node_modules/**', '**/dist/**', '**/.git/**'],
+          },
     },
   };
 });
+

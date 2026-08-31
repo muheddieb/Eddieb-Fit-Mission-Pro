@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   X, 
   Check, 
@@ -13,6 +13,9 @@ import {
   Plus, 
   Trash2, 
   TrendingUp, 
+  TrendingDown,
+  Equal,
+  Zap,
   Volume2, 
   VolumeX,
   Play,
@@ -25,7 +28,9 @@ import {
   CheckCircle2,
   Sparkles,
   Bell,
-  Award
+  Award,
+  Calculator,
+  Gauge
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -36,9 +41,12 @@ import { StorageService } from '../../services/storage';
 import { WakeLockService } from '../../services/wakeLockService';
 import { AudioService } from '../../services/audioService';
 import { PRService } from '../../services/prService';
+import { RPECalculatorService, RPESuggestionResult } from '../../services/rpeService';
 import { ConfettiEffect } from '../../utils/confetti';
 import { PRAchievementToast } from '../common/PRAchievementToast';
 import { SmartWarmupModal } from './SmartWarmupModal';
+import { ExerciseHistoryComparison } from './ExerciseHistoryComparison';
+import { RPECalculatorModal } from './RPECalculatorModal';
 
 interface ActiveWorkoutModalProps {
   workout: WorkoutSession;
@@ -80,18 +88,27 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   
   // Rest timer states
   const [timerSeconds, setTimerSeconds] = useState<number>(0);
+  const [totalTimerDuration, setTotalTimerDuration] = useState<number>(90);
   const [timerActive, setTimerActive] = useState<boolean>(false);
+  const [restCompleteToast, setRestCompleteToast] = useState<boolean>(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [selectedSound, setSelectedSound] = useState<RestSoundType>(profile.restSoundType || 'beep');
   const [swapExerciseOpen, setSwapExerciseOpen] = useState<boolean>(false);
   const [soundPickerOpen, setSoundPickerOpen] = useState<boolean>(false);
+  const [showRestPresets, setShowRestPresets] = useState<boolean>(false);
   const [smartWarmupOpen, setSmartWarmupOpen] = useState<boolean>(false);
   
+  // RPE Calculator & Auto-Regulation State
+  const [rpeCalculatorOpen, setRpeCalculatorOpen] = useState<boolean>(false);
+  const [rpeCalcInitialData, setRpeCalcInitialData] = useState<{ weight?: number; reps?: number; rpe?: number } | null>(null);
+
   // Achievement Confetti & PR Celebration State
   const [activePRToast, setActivePRToast] = useState<PersonalRecordEvent | null>(null);
 
   const timerRef = useRef<any>(null);
   const hasTriggeredStartCue = useRef<boolean>(false);
+  // Tracks exercise IDs that have been automatically prefilled in this session
+  const autoPrefilledExerciseIds = useRef<Set<string>>(new Set());
 
   // Play Workout Start Audio Cue on modal mount
   useEffect(() => {
@@ -117,7 +134,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   // Play configured rest completion sound (beep / whistle / chime / buzzer / bell)
   const triggerRestSound = () => {
     if (!soundEnabled) return;
-    AudioService.playSound(selectedSound, 0.4);
+    AudioService.playSound(selectedSound, 0.45);
   };
 
   // Timer countdown interval with 5-second prepare chime, 3-2-1 countdown audio cues & end cue
@@ -128,7 +145,20 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
           if (prev <= 1) {
             clearInterval(timerRef.current);
             setTimerActive(false);
+            setRestCompleteToast(true);
             triggerRestSound();
+
+            // Try sending a browser system notification if permitted
+            if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+              try {
+                new Notification(isAr ? 'انتهت فترة الراحة!' : 'Rest Complete!', {
+                  body: isAr ? 'حان وقت أداء مجموعتك التالية بكامل قوتك.' : 'Time to crush your next set.',
+                  icon: '/favicon.ico',
+                });
+              } catch {
+                // safe fallback
+              }
+            }
             return 0;
           }
           // 5-second prepare cue: subtle chime to signal user to prepare for next set
@@ -151,11 +181,14 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     }
 
     return () => clearInterval(timerRef.current);
-  }, [timerActive, timerSeconds, soundEnabled, selectedSound]);
+  }, [timerActive, timerSeconds, soundEnabled, selectedSound, isAr]);
 
   const startTimer = (seconds: number) => {
-    setTimerSeconds(seconds);
+    const duration = Math.max(5, seconds);
+    setTotalTimerDuration(duration);
+    setTimerSeconds(duration);
     setTimerActive(true);
+    setRestCompleteToast(false);
     if (soundEnabled) {
       AudioService.playRestStartCue(0.25);
     }
@@ -165,13 +198,24 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     if (timerRef.current) clearInterval(timerRef.current);
     setTimerSeconds(0);
     setTimerActive(false);
+    setRestCompleteToast(false);
     if (soundEnabled) {
       AudioService.playRestSkipCue(0.25);
     }
   };
 
   const adjustTimer = (delta: number) => {
-    setTimerSeconds(prev => Math.max(0, prev + delta));
+    setRestCompleteToast(false);
+    setTimerSeconds(prev => {
+      const next = Math.max(0, prev + delta);
+      if (next > totalTimerDuration) {
+        setTotalTimerDuration(next);
+      }
+      if (next > 0 && !timerActive) {
+        setTimerActive(true);
+      }
+      return next;
+    });
   };
 
   const currentExercise = workout.exercises[currentExerciseIndex] || workout.exercises[0];
@@ -292,6 +336,95 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     }
   };
 
+  /**
+   * Helper function that automatically pre-fills the input fields with the last session's
+   * weight and reps for the current or specified exercise to streamline progression tracking.
+   *
+   * @param exerciseIndex - The target exercise index in workout.exercises (default: currentExerciseIndex)
+   * @param forceOverride - If true, replaces existing values even if not pristine
+   * @returns boolean - Whether historical sets were found and successfully pre-filled
+   */
+  const prefillExerciseWithLastSession = useCallback((
+    exerciseIndex: number = currentExerciseIndex,
+    forceOverride: boolean = false
+  ): boolean => {
+    const targetExercise = workout.exercises[exerciseIndex];
+    if (!targetExercise) return false;
+
+    const { lastSession } = PPLEngine.getExerciseComparison(targetExercise.exerciseId, history);
+    if (!lastSession || !lastSession.sets || lastSession.sets.length === 0) {
+      return false;
+    }
+
+    let modified = false;
+    const updatedExercises = workout.exercises.map((ex, idx) => {
+      if (idx !== exerciseIndex) return ex;
+
+      const updatedSets = ex.sets.map((s, sIdx) => {
+        // Do not overwrite completed sets unless explicitly forced
+        if (s.completed && !forceOverride) return s;
+
+        const prevSet = lastSession.sets[sIdx] || lastSession.sets[lastSession.sets.length - 1];
+        if (!prevSet) return s;
+
+        modified = true;
+        return {
+          ...s,
+          targetWeight: prevSet.weight,
+          actualWeight: prevSet.weight,
+          targetReps: prevSet.reps,
+          actualReps: prevSet.reps,
+          rpe: prevSet.rpe ?? s.rpe ?? 8,
+        };
+      });
+
+      return { ...ex, sets: updatedSets };
+    });
+
+    if (modified) {
+      setWorkout(prev => ({ ...prev, exercises: updatedExercises }));
+      return true;
+    }
+    return false;
+  }, [workout.exercises, currentExerciseIndex, history]);
+
+  // Automatically pre-fill the current exercise's input fields with last session's weight and reps
+  useEffect(() => {
+    const ex = workout.exercises[currentExerciseIndex];
+    if (!ex) return;
+
+    if (!autoPrefilledExerciseIds.current.has(ex.exerciseId)) {
+      const anyCompleted = ex.sets.some(s => s.completed);
+      if (!anyCompleted) {
+        const success = prefillExerciseWithLastSession(currentExerciseIndex, false);
+        if (success) {
+          autoPrefilledExerciseIds.current.add(ex.exerciseId);
+        }
+      }
+    }
+  }, [currentExerciseIndex, prefillExerciseWithLastSession, workout.exercises]);
+
+  // Handler: Apply preset sets from history comparison shortcuts
+  const handleApplyPresetSets = (newSetsData: Partial<SetLog>[]) => {
+    const updatedExercises = workout.exercises.map((ex, idx) => {
+      if (idx !== currentExerciseIndex) return ex;
+      const updatedSets = ex.sets.map((s, sIdx) => {
+        const preset = newSetsData[sIdx];
+        if (!preset) return s;
+        return {
+          ...s,
+          ...preset,
+        };
+      });
+      return { ...ex, sets: updatedSets };
+    });
+
+    setWorkout({ ...workout, exercises: updatedExercises });
+    if (soundEnabled) {
+      AudioService.playBeep(880, 0.1, 0.2);
+    }
+  };
+
   // Add extra set
   const handleAddSet = () => {
     const lastSet = currentExercise.sets[currentExercise.sets.length - 1];
@@ -344,6 +477,9 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
 
   // Exercise substitution
   const handleSwapExercise = (newExercise: Exercise) => {
+    // Allow new exercise to be auto-prefilled from its own history
+    autoPrefilledExerciseIds.current.delete(newExercise.id);
+
     const updatedExercises = workout.exercises.map((ex, idx) => {
       if (idx !== currentExerciseIndex) return ex;
       return {
@@ -404,6 +540,99 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   const substitutes = fullExerciseData
     ? PPLEngine.getAlternativeExercises(fullExerciseData.id)
     : [];
+
+  const comparisonData = PPLEngine.getExerciseComparison(currentExercise?.exerciseId, history);
+
+  // Computed Rest Timer Variables
+  const progressFraction = totalTimerDuration > 0 ? (timerSeconds / totalTimerDuration) : 0;
+  const elapsedPercent = Math.min(100, Math.max(0, (1 - progressFraction) * 100));
+  const remainingPercent = Math.min(100, Math.max(0, progressFraction * 100));
+
+  // Determine next upcoming set in this exercise or next exercise
+  const uncompletedSets = currentExercise ? currentExercise.sets.filter(s => !s.completed) : [];
+  const nextSet = uncompletedSets[0];
+  const nextExercise = workout.exercises[currentExerciseIndex + 1];
+
+  // Dynamic RPE Auto-Regulation Suggestion calculation based on most recent completed set
+  const completedSetsForCurrentExercise = currentExercise ? currentExercise.sets.filter(s => s.completed) : [];
+  const lastCompletedSet = completedSetsForCurrentExercise[completedSetsForCurrentExercise.length - 1];
+  
+  const liveRpeSuggestion: RPESuggestionResult | null = useMemo(() => {
+    if (!lastCompletedSet || uncompletedSets.length === 0) return null;
+    return RPECalculatorService.calculateSuggestion({
+      currentWeight: lastCompletedSet.actualWeight || 0,
+      actualReps: lastCompletedSet.actualReps || 1,
+      actualRpe: lastCompletedSet.rpe || 8,
+      targetRpe: currentExercise.targetRpe || 8,
+      targetReps: typeof nextSet?.targetReps === 'number' 
+        ? nextSet.targetReps 
+        : (typeof nextSet?.targetReps === 'string' ? parseInt(nextSet.targetReps, 10) || 10 : 10),
+      exerciseName: currentExercise.exerciseName,
+    });
+  }, [lastCompletedSet, uncompletedSets.length, currentExercise?.targetRpe, currentExercise?.exerciseName, nextSet?.targetReps]);
+
+  // Handler: Apply RPE suggested weight to next incomplete set
+  const handleApplyRPEWeightToNextSet = (suggestedWeight: number, targetReps?: number, targetRpe?: number) => {
+    if (!nextSet) return;
+    const updatedExercises = workout.exercises.map((ex, idx) => {
+      if (idx !== currentExerciseIndex) return ex;
+      const updatedSets = ex.sets.map(s => {
+        if (s.id === nextSet.id) {
+          return {
+            ...s,
+            targetWeight: suggestedWeight,
+            actualWeight: suggestedWeight,
+            targetReps: targetReps ?? s.targetReps,
+            actualReps: targetReps ?? s.actualReps,
+            rpe: targetRpe ?? s.rpe ?? 8,
+          };
+        }
+        return s;
+      });
+      return { ...ex, sets: updatedSets };
+    });
+
+    setWorkout({ ...workout, exercises: updatedExercises });
+    if (soundEnabled) {
+      AudioService.playBeep(880, 0.1, 0.2);
+    }
+  };
+
+  // Handler: Apply RPE suggested weight to all remaining incomplete sets
+  const handleApplyRPEWeightToAllRemaining = (suggestedWeight: number, targetReps?: number, targetRpe?: number) => {
+    const updatedExercises = workout.exercises.map((ex, idx) => {
+      if (idx !== currentExerciseIndex) return ex;
+      const updatedSets = ex.sets.map(s => {
+        if (!s.completed) {
+          return {
+            ...s,
+            targetWeight: suggestedWeight,
+            actualWeight: suggestedWeight,
+            targetReps: targetReps ?? s.targetReps,
+            actualReps: targetReps ?? s.actualReps,
+            rpe: targetRpe ?? s.rpe ?? 8,
+          };
+        }
+        return s;
+      });
+      return { ...ex, sets: updatedSets };
+    });
+
+    setWorkout({ ...workout, exercises: updatedExercises });
+    if (soundEnabled) {
+      AudioService.playBeep(880, 0.1, 0.2);
+    }
+  };
+
+  // Handler: Open RPE Calculator with optional prefilled values
+  const handleOpenRPECalculator = (weight?: number, reps?: number, rpe?: number) => {
+    setRpeCalcInitialData({
+      weight: weight ?? lastCompletedSet?.actualWeight ?? currentExercise?.sets[0]?.actualWeight ?? 50,
+      reps: reps ?? lastCompletedSet?.actualReps ?? currentExercise?.sets[0]?.actualReps ?? 10,
+      rpe: rpe ?? lastCompletedSet?.rpe ?? 8,
+    });
+    setRpeCalculatorOpen(true);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-md" dir={isAr ? 'rtl' : 'ltr'}>
@@ -586,7 +815,22 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center flex-wrap gap-2">
+                  {/* RPE Auto-Regulation & Load Calculator Button */}
+                  <button
+                    id="btn-open-rpe-calculator"
+                    type="button"
+                    onClick={() => handleOpenRPECalculator()}
+                    className="flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-sm"
+                    title={t.workout.rpeCalculatorSubtitle}
+                  >
+                    <Calculator className="h-3.5 w-3.5" />
+                    <span>{t.workout.rpeCalculatorBtn}</span>
+                    <span className="rounded-md bg-primary/20 px-1.5 py-0.2 text-[10px] font-black text-primary">
+                      RPE {currentExercise.targetRpe || 8}
+                    </span>
+                  </button>
+
                   {fullExerciseData && (
                     <button
                       id="btn-view-exercise-guide"
@@ -623,6 +867,15 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Historical Performance Comparison & Overload Progression Tracker */}
+              <ExerciseHistoryComparison
+                currentExercise={currentExercise}
+                history={history}
+                profile={profile}
+                isAr={isAr}
+                onApplyPreset={handleApplyPresetSets}
+              />
 
               {/* Exercise Substitute Modal Drawer */}
               <AnimatePresence>
@@ -666,6 +919,247 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
 
               {/* Sets Logging Table with Dropdown Lists for Weight & Reps */}
               <div className="space-y-3">
+                {/* Auto-Prefill Status Indicator with Quick Re-sync Action */}
+                {comparisonData.lastSession && comparisonData.lastSession.sets.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/25 bg-primary/10 px-3.5 py-2 text-xs">
+                    <div className="flex items-center gap-2 text-foreground font-semibold">
+                      <Sparkles className="h-4 w-4 text-primary shrink-0" />
+                      <span>{t.workout.autoPrefillBadge}</span>
+                      <span className="text-[11px] font-mono text-muted-foreground">
+                        ({comparisonData.lastSession.sets[0]?.weight} kg × {comparisonData.lastSession.sets[0]?.reps} reps)
+                      </span>
+                    </div>
+                    <button
+                      id="btn-reapply-last-prefill"
+                      type="button"
+                      onClick={() => prefillExerciseWithLastSession(currentExerciseIndex, true)}
+                      className="text-xs font-bold text-primary hover:underline hover:text-primary/80 transition-colors"
+                      title={t.workout.autoPrefilledNote}
+                    >
+                      {t.workout.quickFillLast}
+                    </button>
+                  </div>
+                )}
+
+                {/* Live In-Exercise Active Rest Banner with Visual Progress Gauge */}
+                <AnimatePresence>
+                  {timerActive && timerSeconds > 0 && (
+                    <motion.div
+                      id="banner-in-exercise-rest-timer"
+                      initial={{ opacity: 0, height: 0, y: -8 }}
+                      animate={{ opacity: 1, height: 'auto', y: 0 }}
+                      exit={{ opacity: 0, height: 0, y: -8 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden rounded-2xl border border-primary/40 bg-gradient-to-r from-primary/15 via-card to-primary/10 p-3.5 shadow-md shadow-primary/10"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center">
+                            {/* Circular SVG Gauge */}
+                            <svg className="h-11 w-11 -rotate-90" viewBox="0 0 44 44">
+                              <circle
+                                cx="22"
+                                cy="22"
+                                r="17"
+                                className="stroke-muted/30"
+                                strokeWidth="3.5"
+                                fill="transparent"
+                              />
+                              <circle
+                                cx="22"
+                                cy="22"
+                                r="17"
+                                className={`transition-all duration-300 ease-linear ${
+                                  timerSeconds <= 5
+                                    ? 'stroke-amber-400'
+                                    : timerSeconds <= 15
+                                      ? 'stroke-cyan-400'
+                                      : 'stroke-primary'
+                                }`}
+                                strokeWidth="3.5"
+                                strokeDasharray={106.8}
+                                strokeDashoffset={106.8 * (1 - (timerSeconds / (totalTimerDuration || 1)))}
+                                strokeLinecap="round"
+                                fill="transparent"
+                              />
+                            </svg>
+                            <span className="absolute text-[11px] font-black font-mono text-foreground">
+                              {timerSeconds}s
+                            </span>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-1.5 text-xs font-black text-foreground">
+                              <span>{isAr ? '⏳ استراحة نشطة بين المجموعات' : '⏳ Active Rest Countdown'}</span>
+                              {timerSeconds <= 5 && (
+                                <span className="rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-400 border border-amber-500/40 animate-pulse">
+                                  {isAr ? '🔔 استعد للمجموعة!' : '🔔 Get Ready!'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground mt-0.5">
+                              {nextSet ? (
+                                <span>
+                                  {isAr
+                                    ? `المجموعة القادمة: ${nextSet.setNumber} (${nextSet.actualWeight} كجم × ${nextSet.actualReps} تكرار)`
+                                    : `Up Next: Set ${nextSet.setNumber} (${nextSet.actualWeight} kg × ${nextSet.actualReps} reps)`}
+                                </span>
+                              ) : nextExercise ? (
+                                <span>
+                                  {isAr ? `التالي: ${nextExercise.exerciseNameAr || nextExercise.exerciseName}` : `Next Exercise: ${nextExercise.exerciseName}`}
+                                </span>
+                              ) : (
+                                <span>{isAr ? 'تم إكمال جميع مجموعات هذا التمرين!' : 'All sets for this exercise finished!'}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            id="btn-in-banner-add-30"
+                            type="button"
+                            onClick={() => adjustTimer(30)}
+                            className="rounded-xl border border-border bg-secondary/80 px-2.5 py-1.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors"
+                          >
+                            +30s
+                          </button>
+                          <button
+                            id="btn-in-banner-skip-rest"
+                            type="button"
+                            onClick={endRestImmediately}
+                            className="flex items-center gap-1 rounded-xl bg-amber-500/20 px-3 py-1.5 text-xs font-bold text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 transition-colors shadow-sm"
+                            title={isAr ? 'إنهاء الراحة والبدء بالمجموعة' : 'Skip rest and start next set'}
+                          >
+                            <FastForward className="h-3.5 w-3.5" />
+                            <span>{isAr ? 'تخطي الراحة' : 'Skip Rest'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Live Animated Linear Progress Bar */}
+                      <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-secondary/70">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ease-linear ${
+                            timerSeconds <= 5
+                              ? 'bg-amber-400'
+                              : timerSeconds <= 15
+                                ? 'bg-cyan-400'
+                                : 'bg-primary'
+                          }`}
+                          style={{ width: `${elapsedPercent}%` }}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Live Smart RPE Auto-Regulation Suggestion Banner */}
+                <AnimatePresence>
+                  {liveRpeSuggestion && lastCompletedSet && (
+                    <motion.div
+                      id="card-live-rpe-suggestion"
+                      initial={{ opacity: 0, y: -6, height: 0 }}
+                      animate={{ opacity: 1, y: 0, height: 'auto' }}
+                      exit={{ opacity: 0, y: -6, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className={`overflow-hidden rounded-2xl border p-4 shadow-lg transition-all ${
+                        liveRpeSuggestion.action === 'increase'
+                          ? 'border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-card to-card'
+                          : liveRpeSuggestion.action === 'decrease'
+                            ? 'border-rose-500/40 bg-gradient-to-r from-rose-500/15 via-card to-card'
+                            : 'border-primary/40 bg-gradient-to-r from-primary/15 via-card to-card'
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="flex items-center gap-1 text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+                              <Sparkles className="h-3.5 w-3.5 text-primary" />
+                              <span>{t.workout.rpeSmartAdviceBadge}</span>
+                            </span>
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black ${
+                              liveRpeSuggestion.action === 'increase'
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : liveRpeSuggestion.action === 'decrease'
+                                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                  : 'bg-primary/20 text-primary border border-primary/30'
+                            }`}>
+                              {liveRpeSuggestion.action === 'increase' && <TrendingUp className="h-3 w-3" />}
+                              {liveRpeSuggestion.action === 'decrease' && <TrendingDown className="h-3 w-3" />}
+                              {liveRpeSuggestion.action === 'maintain' && <Equal className="h-3 w-3" />}
+                              <span>
+                                {liveRpeSuggestion.action === 'increase'
+                                  ? (isAr ? `توصية بزيادة الوزن (+${liveRpeSuggestion.weightDelta} kg)` : `Suggested Increase (+${liveRpeSuggestion.weightDelta} kg)`)
+                                  : liveRpeSuggestion.action === 'decrease'
+                                    ? (isAr ? `توصية بخفض الوزن (${liveRpeSuggestion.weightDelta} kg)` : `Suggested Decrease (${liveRpeSuggestion.weightDelta} kg)`)
+                                    : (isAr ? 'الوزن الحالي مثالي' : 'Current Weight Optimal')}
+                              </span>
+                            </span>
+                            <span className="text-[10px] font-mono text-muted-foreground">
+                              {isAr
+                                ? `المجموعة ${lastCompletedSet.setNumber}: ${lastCompletedSet.actualWeight} كجم @ RPE ${lastCompletedSet.rpe || 8}`
+                                : `Set ${lastCompletedSet.setNumber}: ${lastCompletedSet.actualWeight} kg @ RPE ${lastCompletedSet.rpe || 8}`}
+                            </span>
+                          </div>
+
+                          <div className="flex items-baseline gap-2 pt-0.5">
+                            <span className="text-xl sm:text-2xl font-black font-mono text-foreground">
+                              {liveRpeSuggestion.suggestedWeight} kg
+                            </span>
+                            <span className="text-xs text-muted-foreground font-semibold">
+                              {isAr ? `للمجموعة ${nextSet?.setNumber || 'القادمة'} (هدف RPE ${liveRpeSuggestion.targetRpe})` : `for Set ${nextSet?.setNumber || 'Next'} (target RPE ${liveRpeSuggestion.targetRpe})`}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-muted-foreground leading-relaxed max-w-xl">
+                            {isAr ? liveRpeSuggestion.reasonAr : liveRpeSuggestion.reasonEn}
+                          </p>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex sm:flex-col items-stretch justify-end gap-2 shrink-0 pt-1 sm:pt-0">
+                          {nextSet && (
+                            <button
+                              id="btn-apply-live-rpe-next"
+                              type="button"
+                              onClick={() => handleApplyRPEWeightToNextSet(liveRpeSuggestion.suggestedWeight, liveRpeSuggestion.targetReps, liveRpeSuggestion.targetRpe)}
+                              className="flex items-center justify-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground shadow-md hover:bg-primary/90 active:scale-[0.98] transition-all"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                              <span>{isAr ? `تطبيق على المجموعة ${nextSet.setNumber}` : `Apply to Set ${nextSet.setNumber}`}</span>
+                            </button>
+                          )}
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              id="btn-apply-live-rpe-all"
+                              type="button"
+                              onClick={() => handleApplyRPEWeightToAllRemaining(liveRpeSuggestion.suggestedWeight, liveRpeSuggestion.targetReps, liveRpeSuggestion.targetRpe)}
+                              className="w-full flex items-center justify-center gap-1 rounded-xl border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-[11px] font-bold text-primary hover:bg-primary/20 transition-colors"
+                              title={t.workout.rpeApplyToAllRemaining}
+                            >
+                              <Zap className="h-3 w-3" />
+                              <span>{isAr ? 'تطبيق على الكل' : 'Apply All'}</span>
+                            </button>
+
+                            <button
+                              id="btn-open-rpe-from-banner"
+                              type="button"
+                              onClick={() => handleOpenRPECalculator(lastCompletedSet.actualWeight, lastCompletedSet.actualReps, lastCompletedSet.rpe)}
+                              className="flex items-center justify-center gap-1 rounded-xl border border-border bg-secondary/80 px-2.5 py-1.5 text-[11px] font-bold text-foreground hover:bg-secondary transition-colors"
+                              title={t.workout.rpeCalculatorTitle}
+                            >
+                              <Calculator className="h-3 w-3 text-primary" />
+                              <span>{isAr ? 'حاسبة RPE' : 'Calculator'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div className="grid grid-cols-12 gap-2 text-center text-xs font-bold text-muted-foreground px-2">
                   <div className="col-span-2 text-left">{t.workout.set}</div>
                   <div className="col-span-4">{isAr ? 'الوزن (قائمة منسدلة)' : 'Weight (Drop-Down)'}</div>
@@ -748,14 +1242,16 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                           </select>
                         </div>
 
-                        {/* RPE Selector (1 - 10) */}
-                        <div className="col-span-2">
+                        {/* RPE Selector (6 - 10) with RIR and Calculator Shortcut */}
+                        <div className="col-span-2 flex flex-col items-center">
                           <select
+                            id={`select-rpe-${setLog.id}`}
                             value={setLog.rpe || 8}
                             onChange={e => handleUpdateSet(setLog.id, 'rpe', parseFloat(e.target.value))}
                             className="w-full rounded-xl border border-border bg-card py-2 px-1 text-center text-xs font-semibold text-foreground focus:border-primary focus:outline-none cursor-pointer"
                           >
                             <option value="6">RPE 6</option>
+                            <option value="6.5">6.5</option>
                             <option value="7">RPE 7</option>
                             <option value="7.5">7.5</option>
                             <option value="8">RPE 8</option>
@@ -764,6 +1260,15 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                             <option value="9.5">9.5</option>
                             <option value="10">10 (Max)</option>
                           </select>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRPECalculator(setLog.actualWeight, setLog.actualReps, setLog.rpe)}
+                            className="mt-0.5 text-[9px] text-muted-foreground hover:text-primary transition-colors flex items-center gap-0.5"
+                            title={isAr ? 'فتح حاسبة RPE' : 'Open RPE Calculator'}
+                          >
+                            <Calculator className="h-2.5 w-2.5" />
+                            <span>{Math.max(0, Math.round((10 - (setLog.rpe || 8)) * 10) / 10)} RIR</span>
+                          </button>
                         </div>
 
                         {/* Completed Checkbox Button */}
@@ -841,15 +1346,56 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
         </div>
       </div>
 
-      {/* Floating Interactive Rest Timer Bar with Instant End / Skip Rest Button */}
-      <div className="border-t border-border bg-card/95 p-3 backdrop-blur sm:px-6 shadow-2xl">
-        <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3">
+      {/* Floating Interactive Rest Timer Bar with Full-Width Visual Progress and Sound Alert */}
+      <div className="relative border-t border-border bg-card/95 p-3 backdrop-blur sm:px-6 shadow-2xl">
+        {/* Top Edge Full-Width Animated Glowing Progress Line */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-secondary/50 overflow-hidden">
+          <div 
+            className={`h-full transition-all duration-300 ease-linear ${
+              timerSeconds <= 5 && timerSeconds > 0
+                ? 'bg-amber-400 shadow-md shadow-amber-400/50'
+                : timerSeconds <= 15 && timerSeconds > 0
+                  ? 'bg-cyan-400 shadow-md shadow-cyan-400/50'
+                  : 'bg-primary shadow-md shadow-primary/50'
+            }`}
+            style={{ width: `${timerSeconds > 0 ? elapsedPercent : 0}%` }}
+          />
+        </div>
+
+        <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 pt-1">
           <div className="flex items-center gap-3">
-            <div className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
-              timerActive ? 'bg-primary text-primary-foreground animate-pulse' : 'bg-secondary text-primary'
-            }`}>
-              <Timer className="h-5 w-5" />
+            {/* Circular Gauge Ring */}
+            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center">
+              <svg className="h-11 w-11 -rotate-90" viewBox="0 0 44 44">
+                <circle
+                  cx="22"
+                  cy="22"
+                  r="17"
+                  className="stroke-muted/30"
+                  strokeWidth="3.5"
+                  fill="transparent"
+                />
+                <circle
+                  cx="22"
+                  cy="22"
+                  r="17"
+                  className={`transition-all duration-300 ease-linear ${
+                    timerSeconds <= 5 && timerSeconds > 0
+                      ? 'stroke-amber-400'
+                      : timerSeconds <= 15 && timerSeconds > 0
+                        ? 'stroke-cyan-400'
+                        : 'stroke-primary'
+                  }`}
+                  strokeWidth="3.5"
+                  strokeDasharray={106.8}
+                  strokeDashoffset={106.8 * (1 - (timerSeconds / (totalTimerDuration || 1)))}
+                  strokeLinecap="round"
+                  fill="transparent"
+                />
+              </svg>
+              <Timer className={`absolute h-4 w-4 ${timerActive ? 'text-primary animate-pulse' : 'text-muted-foreground'}`} />
             </div>
+
             <div>
               <div className="text-[10px] uppercase font-black text-muted-foreground tracking-wider flex items-center gap-1.5">
                 <span>{t.workout.restTimer}</span>
@@ -862,13 +1408,35 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                   </span>
                 )}
               </div>
-              <div className="text-xl font-black text-foreground font-mono">
-                {Math.floor(timerSeconds / 60)}:{(timerSeconds % 60).toString().padStart(2, '0')}
+              <div className="flex items-baseline gap-2">
+                <span className="text-xl font-black text-foreground font-mono">
+                  {Math.floor(timerSeconds / 60)}:{(timerSeconds % 60).toString().padStart(2, '0')}
+                </span>
+                {timerSeconds > 0 && (
+                  <span className="text-[10px] font-mono text-muted-foreground font-semibold">
+                    / {Math.floor(totalTimerDuration / 60)}:{(totalTimerDuration % 60).toString().padStart(2, '0')} ({Math.round(elapsedPercent)}%)
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
           <div className="flex items-center flex-wrap gap-2">
+            {/* Toggle Presets Drawer Button */}
+            <button
+              id="btn-toggle-rest-presets"
+              type="button"
+              onClick={() => setShowRestPresets(!showRestPresets)}
+              className={`rounded-xl border px-2.5 py-1.5 text-xs font-bold transition-colors ${
+                showRestPresets
+                  ? 'border-primary bg-primary/15 text-primary'
+                  : 'border-border bg-secondary/50 text-muted-foreground hover:text-foreground hover:bg-secondary'
+              }`}
+              title={isAr ? 'عرض فترات الراحة الجاهزة' : 'Show Rest Presets'}
+            >
+              <span className="text-[11px]">{isAr ? 'فترات سريعة' : 'Presets'}</span>
+            </button>
+
             {/* Quick Adjustment Buttons */}
             <button
               id="btn-timer-minus-15"
@@ -885,7 +1453,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
               +30s
             </button>
 
-            {/* End Rest Now Button (Mandated by user: اقدر انهي الراحه متى شئت) */}
+            {/* End Rest Now Button */}
             {timerSeconds > 0 && (
               <button
                 id="btn-end-rest-now"
@@ -910,11 +1478,11 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
             ) : (
               <button
                 id="btn-start-timer-90"
-                onClick={() => startTimer(currentExercise.restSeconds || 90)}
+                onClick={() => startTimer(timerSeconds > 0 ? timerSeconds : (currentExercise.restSeconds || 90))}
                 className="flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-colors shadow-md shadow-primary/20"
               >
                 <Play className="h-3.5 w-3.5 fill-current" />
-                <span>{t.workout.startRest} ({currentExercise.restSeconds || 90}s)</span>
+                <span>{timerSeconds > 0 ? (isAr ? 'استئناف' : 'Resume') : `${t.workout.startRest} (${currentExercise.restSeconds || 90}s)`}</span>
               </button>
             )}
 
@@ -930,7 +1498,115 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
             )}
           </div>
         </div>
+
+        {/* Expandable Rest Presets Bar */}
+        <AnimatePresence>
+          {showRestPresets && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mx-auto max-w-4xl border-t border-border/60 pt-2.5 mt-2 flex flex-wrap items-center justify-between gap-2"
+            >
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-bold text-muted-foreground">{t.workout.restPresets}:</span>
+                {[30, 45, 60, 90, 120, 180].map(pSec => (
+                  <button
+                    key={pSec}
+                    type="button"
+                    onClick={() => {
+                      startTimer(pSec);
+                      setShowRestPresets(false);
+                    }}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-all ${
+                      totalTimerDuration === pSec && timerActive
+                        ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/30'
+                        : 'border border-border bg-secondary/50 text-foreground hover:bg-secondary'
+                    }`}
+                  >
+                    {pSec}s
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSoundEnabled(!soundEnabled);
+                  }}
+                  className="flex items-center gap-1 rounded-lg border border-border bg-secondary/50 px-2 py-1 text-xs font-semibold text-foreground hover:bg-secondary"
+                  title={soundEnabled ? t.workout.muteSound : t.workout.unmuteSound}
+                >
+                  {soundEnabled ? <Volume2 className="h-3.5 w-3.5 text-primary" /> : <VolumeX className="h-3.5 w-3.5 text-muted-foreground" />}
+                  <span>{soundEnabled ? (isAr ? 'صوت مفعّل' : 'Sound On') : (isAr ? 'صامت' : 'Muted')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => AudioService.preview(selectedSound)}
+                  className="rounded-lg border border-border bg-secondary/50 px-2 py-1 text-xs font-semibold text-foreground hover:bg-secondary"
+                  title={t.workout.soundPreview}
+                >
+                  🔔 {t.workout.soundPreview}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
+
+      {/* Rest Complete Floating Notification Toast */}
+      <AnimatePresence>
+        {restCompleteToast && (
+          <motion.div
+            id="toast-rest-complete"
+            initial={{ opacity: 0, y: 30, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.95 }}
+            transition={{ duration: 0.25 }}
+            className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-lg rounded-2xl border border-emerald-500/40 bg-card/95 p-4 shadow-2xl backdrop-blur-md ring-1 ring-emerald-500/20"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-bounce">
+                  <Bell className="h-5 w-5 fill-current" />
+                </div>
+                <div>
+                  <div className="text-sm font-black text-foreground flex items-center gap-1.5">
+                    <span>{isAr ? '🔔 انتهت فترة الراحة!' : '🔔 Rest Complete!'}</span>
+                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {nextSet ? (
+                      <span>
+                        {isAr
+                          ? `جاهز للمجموعة ${nextSet.setNumber} (${nextSet.actualWeight} كجم × ${nextSet.actualReps} تكرار)`
+                          : `Ready for Set ${nextSet.setNumber} (${nextSet.actualWeight} kg × ${nextSet.actualReps} reps)`}
+                      </span>
+                    ) : nextExercise ? (
+                      <span>
+                        {isAr
+                          ? `جاهز للتمرين التالي: ${nextExercise.exerciseNameAr || nextExercise.exerciseName}`
+                          : `Ready for next exercise: ${nextExercise.exerciseName}`}
+                      </span>
+                    ) : (
+                      <span>{t.workout.restCompleteAlert}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button
+                id="btn-dismiss-rest-toast"
+                type="button"
+                onClick={() => setRestCompleteToast(false)}
+                className="rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-emerald-500 transition-colors shrink-0"
+              >
+                {isAr ? 'بدء المجموعة' : 'Start Set'}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Smart Warm-up 5-Minute Modal */}
       <SmartWarmupModal
@@ -938,6 +1614,27 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
         initialWorkoutType={workout.type}
         profile={profile}
         onClose={() => setSmartWarmupOpen(false)}
+      />
+
+      {/* RPE & Auto-Regulation Load Adjustment Modal */}
+      <RPECalculatorModal
+        isOpen={rpeCalculatorOpen}
+        onClose={() => {
+          setRpeCalculatorOpen(false);
+          setRpeCalcInitialData(null);
+        }}
+        initialWeight={rpeCalcInitialData?.weight ?? lastCompletedSet?.actualWeight ?? currentExercise?.sets[0]?.actualWeight ?? 50}
+        initialReps={rpeCalcInitialData?.reps ?? lastCompletedSet?.actualReps ?? currentExercise?.sets[0]?.actualReps ?? 10}
+        initialRpe={rpeCalcInitialData?.rpe ?? lastCompletedSet?.rpe ?? 8}
+        targetRpe={currentExercise?.targetRpe ?? 8}
+        exerciseName={isAr && currentExercise?.exerciseNameAr ? currentExercise.exerciseNameAr : currentExercise?.exerciseName || ''}
+        isAr={isAr}
+        onApplyWeightToNextSet={(weight, reps, rpe) => {
+          handleApplyRPEWeightToNextSet(weight, reps, rpe);
+        }}
+        onApplyWeightToAllRemaining={(weight, reps, rpe) => {
+          handleApplyRPEWeightToAllRemaining(weight, reps, rpe);
+        }}
       />
 
       {/* Achievement Confetti PR Toast */}

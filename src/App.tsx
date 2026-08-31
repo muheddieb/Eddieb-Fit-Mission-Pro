@@ -20,6 +20,8 @@ import { AchievementsView } from './components/achievements/AchievementsView';
 import { ProfileView } from './components/profile/ProfileView';
 import { SettingsView } from './components/settings/SettingsView';
 import { HealthDevicesView } from './components/devices/HealthDevicesView';
+import { ReturnToTrainingView } from './components/return/ReturnToTrainingView';
+import { ReturnToTrainingEngine } from './services/returnToTrainingEngine';
 import { ActiveWorkoutModal } from './components/workout/ActiveWorkoutModal';
 import { ExerciseDetailsModal } from './components/exercise/ExerciseDetailsModal';
 import { ImageGeneratorModal } from './components/generator/ImageGeneratorModal';
@@ -131,6 +133,13 @@ export default function App() {
     setActiveWorkoutOpen(true);
   };
 
+  // Handler: Start Return to Training Workout
+  const handleStartReturnWorkout = (session: WorkoutSession) => {
+    setActiveWorkout(session);
+    StorageService.saveActiveWorkout(session);
+    setActiveWorkoutOpen(true);
+  };
+
   // Handler: Save in-progress workout
   const handleSaveActiveWorkout = (w: WorkoutSession) => {
     setActiveWorkout(w);
@@ -189,6 +198,9 @@ export default function App() {
     }
   };
 
+  // Analyze interruption status for Return to Training
+  const interruptionAnalysis = ReturnToTrainingEngine.analyzeInterruption(workoutHistory, profile);
+
   // Render Current Section View
   const renderCurrentView = () => {
     switch (currentSection) {
@@ -200,6 +212,17 @@ export default function App() {
             activeWorkout={activeWorkout}
             onStartWorkout={handleStartWorkout}
             onNavigate={(sec) => setCurrentSection(sec)}
+          />
+        );
+      case 'returnToTraining':
+        return (
+          <ReturnToTrainingView
+            profile={profile}
+            history={workoutHistory}
+            onStartReturnWorkout={handleStartReturnWorkout}
+            onResumeStandardProgram={() => setCurrentSection('dashboard')}
+            onNavigate={(sec) => setCurrentSection(sec)}
+            onNavigateToSection={(sec) => setCurrentSection(sec)}
           />
         );
       case 'aiCoach':
@@ -365,6 +388,7 @@ export default function App() {
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
           onOpenPWAInstallModal={() => setPwaInstallModalOpen(true)}
+          isInterrupted={interruptionAnalysis.isInterrupted}
         />
 
         {/* Scrollable Main Content View */}

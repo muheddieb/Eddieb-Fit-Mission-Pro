@@ -24,6 +24,7 @@ import {
 import { UserProfile, WorkoutSession, BodyMeasurement } from '../../types';
 import { translations } from '../../i18n/translations';
 import { PPLEngine, TransitionPhaseInfo } from '../../services/pplEngine';
+import { ReturnToTrainingEngine } from '../../services/returnToTrainingEngine';
 import { calculateProgramProgress } from '../../services/dateUtils';
 import { StorageService } from '../../services/storage';
 import { GeminiService } from '../../services/geminiService';
@@ -85,6 +86,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   }, [profile, history]);
 
   const pplPhase = PPLEngine.getTodayPPLPhase(history, profile);
+  const interruptionAnalysis = ReturnToTrainingEngine.analyzeInterruption(history, profile);
   const programProgress = calculateProgramProgress(profile.startDate);
   const transitionPhase = PPLEngine.getAdaptiveProgramTimeline(profile.startDate);
   const weeklyVolume = PPLEngine.calculateWeeklyVolume(history);
@@ -186,15 +188,66 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           ) : (
             <button
               id="btn-start-dashboard-hero"
-              onClick={onStartWorkout}
+              onClick={() => {
+                if (interruptionAnalysis.isInterrupted) {
+                  onNavigate('returnToTraining');
+                } else {
+                  onStartWorkout();
+                }
+              }}
               className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all"
             >
               <Play className="h-4 w-4 fill-current" />
-              <span>{t.dashboard.startWorkout} ({pplPhase.toUpperCase()})</span>
+              <span>
+                {interruptionAnalysis.isInterrupted 
+                  ? (isAr ? 'بدء مسار العودة الآمنة' : 'Start Safe Return')
+                  : `${t.dashboard.startWorkout} (${pplPhase.toUpperCase()})`}
+              </span>
             </button>
           )}
         </div>
       </div>
+
+      {/* Return to Training Smart Interruption Banner (If Interrupted >= 4 days) */}
+      {interruptionAnalysis.isInterrupted && (
+        <div className="relative overflow-hidden rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 via-neutral-900 to-neutral-900 p-5 shadow-xl">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-neutral-950 shadow-md shadow-amber-500/30">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-500 text-neutral-950">
+                    {isAr ? interruptionAnalysis.levelLabelAr : interruptionAnalysis.levelLabel}
+                  </span>
+                  <span className="text-xs font-semibold text-amber-400">
+                    {isAr 
+                      ? `${interruptionAnalysis.daysSinceLastWorkout} يوماً منذ آخر تمرين`
+                      : `${interruptionAnalysis.daysSinceLastWorkout} days since last session`}
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-white">
+                  {t.returnToTraining.bannerAlert}
+                </h3>
+                <p className="text-xs text-neutral-300 max-w-2xl leading-relaxed">
+                  {isAr ? interruptionAnalysis.summaryGuidanceAr : interruptionAnalysis.summaryGuidance}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => onNavigate('returnToTraining')}
+                className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
+              >
+                <span>{t.returnToTraining.title}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Gemini AI Daily Athletic Briefing Card */}
       <div className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card p-5 shadow-lg relative overflow-hidden">

@@ -147,6 +147,7 @@ export interface WorkoutSession {
   completed: boolean;
   startedAt?: number;
   completedAt?: number;
+  timestamp?: number;
 }
 
 export type CardioModality = 
@@ -597,6 +598,105 @@ export interface BluetoothActivityLog {
   notes?: string;
 }
 
+export type MajorMuscleGroup = 
+  | 'chest'
+  | 'back'
+  | 'shoulders'
+  | 'triceps'
+  | 'biceps'
+  | 'quads'
+  | 'hamstrings_glutes'
+  | 'calves'
+  | 'core';
+
+export interface MuscleGroupVolumePoint {
+  weekNumber: number;
+  weekLabel: string;
+  weekLabelAr: string;
+  dateRange: string;
+  // Volume in kg (sets x reps x weight)
+  chestKg: number;
+  backKg: number;
+  shouldersKg: number;
+  tricepsKg: number;
+  bicepsKg: number;
+  quadsKg: number;
+  hamstringsGlutesKg: number;
+  calvesKg: number;
+  coreKg: number;
+  totalKg: number;
+  // Sets counts
+  chestSets: number;
+  backSets: number;
+  shouldersSets: number;
+  tricepsSets: number;
+  bicepsSets: number;
+  quadsSets: number;
+  hamstringsGlutesSets: number;
+  calvesSets: number;
+  coreSets: number;
+  totalSets: number;
+  // Top exercise drivers per muscle group
+  topExercises?: {
+    [key: string]: string[];
+  };
+}
+
+export interface MuscleGroupSummary {
+  id: MajorMuscleGroup;
+  name: string;
+  nameAr: string;
+  splitCategory: 'push' | 'pull' | 'legs' | 'core';
+  color: string;
+  currentWeeklyVolumeKg: number;
+  previousWeeklyVolumeKg: number;
+  deltaPercent: number;
+  currentWeeklySets: number;
+  recommendedSetRange: string;
+  volumeStatus: 'optimal_hypertrophy' | 'maintenance' | 'overloaded' | 'deload';
+  volumeStatusAr: string;
+  topExerciseNames: string[];
+  allTimeVolumeKg: number;
+}
+
+export interface ExerciseLastPerformance {
+  date: string;
+  formattedDate: string;
+  daysAgo: number;
+  workoutName: string;
+  sets: {
+    setNumber: number;
+    weight: number;
+    reps: number;
+    rpe?: number;
+    volumeKg: number;
+  }[];
+  totalVolumeKg: number;
+  maxWeight: number;
+  maxReps: number;
+  avgRpe: number;
+  totalSets: number;
+}
+
+export interface ExerciseOverloadRecord {
+  timesOverloaded: number; // How many times the user beat prior performance
+  totalSessionsRecorded: number;
+  overloadRatePercent: number;
+  allTimeMaxWeight: number;
+  allTimeMaxReps: number;
+  allTimeMaxVolumeKg: number;
+  recentSessions: {
+    date: string;
+    formattedDate: string;
+    bestWeight: number;
+    bestReps: number;
+    totalVolumeKg: number;
+    totalSets: number;
+    exceededPrior: boolean;
+    overloadType?: 'weight' | 'reps' | 'volume' | 'baseline';
+  }[];
+}
+
 export interface TrainingBlockInfo {
   blockNumber: number;
   blockTitle: string;
@@ -654,5 +754,140 @@ export interface OverloadMilestone {
   achievedDate?: string;
   badgeColor: string;
   iconName: string;
+}
+
+// ==========================================
+// Return to Training / العودة بعد الانقطاع Types
+// ==========================================
+
+export type ReturnToTrainingLevel = 'normal' | 'light' | 'moderate' | 'reconditioning' | 'restart';
+
+export interface InterruptionAnalysis {
+  daysSinceLastWorkout: number;
+  lastWorkoutDate: string | null;
+  lastWorkoutName?: string;
+  lastWorkoutNameAr?: string;
+  interruptionLevel: ReturnToTrainingLevel;
+  interruptionLevelNumber: 0 | 1 | 2 | 3 | 4;
+  levelLabel: string;
+  levelLabelAr: string;
+  isInterrupted: boolean; // true if days >= 4
+  currentReadinessScore: number; // 0 to 100
+  readinessLevel: 'optimal' | 'good' | 'moderate' | 'low' | 'reconditioning';
+  readinessLabel: string;
+  readinessLabelAr: string;
+  totalReturnSessionsNeeded: number; // 1, 2, or 3+
+  currentReturnSessionIndex: number; // 1-indexed (e.g. 1 of 2)
+  recurringBreakPattern: boolean;
+  totalPreviousBreaks: number;
+  recommendedLoadFactor: number; // e.g. 0.65 (65% of last working weight)
+  recommendedVolumeFactor: number; // e.g. 0.70 (70% of sets)
+  recommendedRpeTarget: number; // e.g. 6 to 7
+  reasonText: string;
+  reasonTextAr: string;
+  summaryGuidance: string;
+  summaryGuidanceAr: string;
+  lastPerformanceSummary?: {
+    totalVolumeKg: number;
+    avgRpe: number;
+    primaryExercises: string[];
+  };
+}
+
+export interface PreReturnCheckin {
+  feeling: 'great' | 'good' | 'normal' | 'tired' | 'very_tired';
+  painLevel: 'none' | 'mild' | 'pain';
+  painArea?: string;
+  energyLevel: number; // 1 to 10
+  sleepQuality: number; // 1 to 10
+  timestamp: number;
+}
+
+export interface PostReturnFeedback {
+  id: string;
+  date: string;
+  sessionNumber: number;
+  energyRating: number; // 1-5
+  fatigueRating: number; // 1-5
+  muscleSoreness: 'none' | 'mild' | 'moderate' | 'severe';
+  difficultyRating: 'too_easy' | 'just_right' | 'challenging' | 'too_hard';
+  sessionRpe: number; // 1-10
+  completedAllExercises: boolean;
+  experiencedShortnessOfBreath: boolean;
+  experiencedPain: boolean;
+  painDetails?: string;
+  timestamp: number;
+  aiDecision: 'ready_to_resume' | 'take_extra_recovery' | 'extend_reconditioning' | 'medical_consultation_advised';
+  aiDecisionText: string;
+  aiDecisionTextAr: string;
+}
+
+export type ReturnPhaseStage = 'warmup' | 'mobility' | 'activation' | 'light_strength' | 'cooldown';
+
+export interface ReturnExerciseItem {
+  id: string;
+  exerciseId: string;
+  name: string;
+  nameAr: string;
+  stage: ReturnPhaseStage;
+  stageLabel: string;
+  stageLabelAr: string;
+  targetSets: number;
+  targetReps: string;
+  suggestedWeightKg: number;
+  historicalWorkingWeightKg?: number;
+  weightReductionPercent?: number;
+  durationSeconds?: number;
+  restSeconds: number;
+  targetRpe: number;
+  instructions: string[];
+  instructionsAr: string[];
+  safetyNotes?: string;
+  safetyNotesAr?: string;
+  primaryMuscle: string;
+  primaryMuscleAr?: string;
+  imageUrl?: string;
+  alternatives?: string[];
+  completed?: boolean;
+}
+
+export interface ReturnWorkoutPlan {
+  id: string;
+  sessionIndex: number; // 1, 2, 3...
+  totalSessions: number;
+  level: ReturnToTrainingLevel;
+  levelNumber: number;
+  title: string;
+  titleAr: string;
+  subtitle: string;
+  subtitleAr: string;
+  estimatedDurationMinutes: number;
+  targetIntensity: 'light' | 'light_moderate' | 'moderate';
+  targetRpeRange: string;
+  estimatedCalories: number;
+  stages: {
+    warmup: ReturnExerciseItem[];
+    mobility: ReturnExerciseItem[];
+    activation: ReturnExerciseItem[];
+    lightStrength: ReturnExerciseItem[];
+    cooldown: ReturnExerciseItem[];
+  };
+  totalExercisesCount: number;
+  primaryGoal: string;
+  primaryGoalAr: string;
+  adaptiveNote?: string;
+  adaptiveNoteAr?: string;
+}
+
+export interface ReturnTrainingState {
+  isInReturnMode: boolean;
+  analysis: InterruptionAnalysis | null;
+  activePlan: ReturnWorkoutPlan | null;
+  completedSessionsCount: number;
+  targetSessionsCount: number;
+  preCheckinHistory: PreReturnCheckin[];
+  postFeedbackHistory: PostReturnFeedback[];
+  userDismissed: boolean;
+  resumedStandardAt?: number;
 }
 

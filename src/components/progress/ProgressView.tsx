@@ -20,6 +20,7 @@ import { StorageService } from '../../services/storage';
 import { ProgressCharts } from './ProgressCharts';
 import { IntensityTrendChart } from './IntensityTrendChart';
 import { WeeklyVolumeProgressionChart } from './WeeklyVolumeProgressionChart';
+import { MuscleGroupVolumeChart } from './MuscleGroupVolumeChart';
 
 interface ProgressViewProps {
   profile: UserProfile;
@@ -185,6 +186,13 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
           {isAr ? trendAnalysis.explanationAr : trendAnalysis.explanation}
         </p>
       </div>
+
+      {/* PPL Major Muscle Group Weekly Total Volume Trends (Recharts) */}
+      <MuscleGroupVolumeChart
+        history={history}
+        profile={profile}
+        isAr={isAr}
+      />
 
       {/* Weekly Volume Progression & Training Block Overload Chart (Recharts) */}
       <WeeklyVolumeProgressionChart
