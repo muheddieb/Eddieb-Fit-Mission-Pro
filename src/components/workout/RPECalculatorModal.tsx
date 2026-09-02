@@ -23,8 +23,8 @@ import { WorkoutExercise, UserProfile } from '../../types';
 import { translations } from '../../i18n/translations';
 
 interface RPECalculatorModalProps {
-  exercise: WorkoutExercise;
-  profile: UserProfile;
+  exercise?: WorkoutExercise;
+  profile?: UserProfile;
   isOpen: boolean;
   onClose: () => void;
   onApplyWeightToNextSet: (suggestedWeight: number, targetReps?: number, targetRpe?: number) => void;
@@ -32,6 +32,9 @@ interface RPECalculatorModalProps {
   initialWeight?: number;
   initialReps?: number;
   initialRpe?: number;
+  targetRpe?: number;
+  exerciseName?: string;
+  isAr?: boolean;
 }
 
 export const RPECalculatorModal: React.FC<RPECalculatorModalProps> = ({
@@ -44,13 +47,17 @@ export const RPECalculatorModal: React.FC<RPECalculatorModalProps> = ({
   initialWeight,
   initialReps,
   initialRpe,
+  targetRpe: propTargetRpe,
+  exerciseName: propExerciseName,
+  isAr: propIsAr,
 }) => {
-  const isAr = profile.language === 'ar';
-  const t = translations[profile.language];
+  const lang = profile?.language || (propIsAr ? 'ar' : 'en');
+  const isAr = propIsAr ?? (lang === 'ar');
+  const t = translations[lang] || translations.en;
 
   // Pick default values from last completed set or defaults
-  const completedSets = exercise.sets.filter(s => s.completed);
-  const lastSet = completedSets[completedSets.length - 1] || exercise.sets[0];
+  const completedSets = exercise?.sets ? exercise.sets.filter(s => s.completed) : [];
+  const lastSet = completedSets[completedSets.length - 1] || exercise?.sets?.[0];
 
   const [weight, setWeight] = useState<number>(
     initialWeight ?? (lastSet?.actualWeight || lastSet?.targetWeight || 50)
@@ -62,13 +69,28 @@ export const RPECalculatorModal: React.FC<RPECalculatorModalProps> = ({
     initialRpe ?? (lastSet?.rpe || 8)
   );
   const [targetRpe, setTargetRpe] = useState<number>(
-    exercise.targetRpe || 8
+    propTargetRpe ?? (exercise?.targetRpe || 8)
   );
   const [targetReps, setTargetReps] = useState<number>(
-    typeof lastSet?.targetReps === 'number' ? lastSet.targetReps : (typeof lastSet?.targetReps === 'string' ? parseInt(lastSet.targetReps, 10) || 10 : 10)
+    typeof lastSet?.targetReps === 'number' 
+      ? lastSet.targetReps 
+      : (typeof lastSet?.targetReps === 'string' ? parseInt(lastSet.targetReps, 10) || 10 : 10)
   );
   const [activeTab, setActiveTab] = useState<'calculator' | 'matrix' | 'guide'>('calculator');
   const [appliedNotification, setAppliedNotification] = useState<string | null>(null);
+
+  // Sync state if initial props change when opened
+  React.useEffect(() => {
+    if (isOpen) {
+      if (initialWeight !== undefined) setWeight(initialWeight);
+      if (initialReps !== undefined) setReps(initialReps);
+      if (initialRpe !== undefined) setActualRpe(initialRpe);
+      if (propTargetRpe !== undefined) setTargetRpe(propTargetRpe);
+      else if (exercise?.targetRpe !== undefined) setTargetRpe(exercise.targetRpe);
+    }
+  }, [isOpen, initialWeight, initialReps, initialRpe, propTargetRpe, exercise?.targetRpe]);
+
+  const currentExerciseName = propExerciseName || exercise?.exerciseName || '';
 
   // Compute dynamic suggestion live
   const suggestion: RPESuggestionResult = useMemo(() => {
@@ -78,9 +100,9 @@ export const RPECalculatorModal: React.FC<RPECalculatorModalProps> = ({
       actualRpe,
       targetRpe,
       targetReps,
-      exerciseName: exercise.exerciseName,
+      exerciseName: currentExerciseName,
     });
-  }, [weight, reps, actualRpe, targetRpe, targetReps, exercise.exerciseName]);
+  }, [weight, reps, actualRpe, targetRpe, targetReps, currentExerciseName]);
 
   // Compute Matrix of weights
   const weightMatrix = useMemo(() => {

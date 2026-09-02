@@ -18,12 +18,203 @@ const STORAGE_KEYS = {
   BT_LAST_DEVICE: 'eddieb_last_bt_device',
 };
 
+// Universal Device Brands for UI and GATT Profiles
+export interface SupportedDeviceBrand {
+  id: BluetoothDeviceType;
+  name: string;
+  nameAr: string;
+  category: 'watch' | 'strap' | 'ring' | 'band' | 'generic';
+  description: string;
+  descriptionAr: string;
+  iconName: string;
+  color: string;
+  badge: string;
+  badgeAr: string;
+  defaultLocation: string;
+  popularModels: string[];
+}
+
+export const SUPPORTED_DEVICE_BRANDS: SupportedDeviceBrand[] = [
+  {
+    id: 'apple_watch',
+    name: 'Apple Watch Series & Ultra',
+    nameAr: 'ساعة آبل (Apple Watch & Ultra)',
+    category: 'watch',
+    description: 'BLE HRM broadcast / companion live heart rate, HRV and Active Calories.',
+    descriptionAr: 'بث معدل نبضات القلب المباشر عبر البلوتوث وحساب السعرات والـ HRV بدقة.',
+    iconName: 'Apple',
+    color: 'from-zinc-500/20 to-slate-500/10 border-zinc-500/30 text-zinc-300',
+    badge: 'Standard BLE',
+    badgeAr: 'بلوتوث قياسي',
+    defaultLocation: 'Wrist',
+    popularModels: ['Apple Watch Ultra 2', 'Series 9 / 10', 'Apple Watch SE'],
+  },
+  {
+    id: 'garmin',
+    name: 'Garmin Smartwatch & HRM',
+    nameAr: 'جارمن (Garmin Fenix, Forerunner & HRM)',
+    category: 'watch',
+    description: 'Direct BLE Heart Rate broadcasting, running cadence and physiological load.',
+    descriptionAr: 'بث مباشر لنبضات القلب والتحمل وخطوات الجري ومعدل الجهد البدني.',
+    iconName: 'Compass',
+    color: 'from-sky-500/20 to-blue-500/10 border-sky-500/30 text-sky-400',
+    badge: 'Pro Athlete',
+    badgeAr: 'رياضي متقدم',
+    defaultLocation: 'Wrist',
+    popularModels: ['Forerunner 965/265', 'Fenix 7/8 Pro', 'Venu 3', 'Garmin HRM-Pro Plus'],
+  },
+  {
+    id: 'polar',
+    name: 'Polar Heart Rate Monitors & Watches',
+    nameAr: 'بولار (Polar H10, Verity Sense & Vantage)',
+    category: 'strap',
+    description: 'Gold-standard ECG chest strap precision and optical arm sensor BLE telemetry.',
+    descriptionAr: 'المعيار الذهبي لدقة نبضات القلب والـ HRV عبر حزام الصدر الطبي أو حساس الذراع.',
+    iconName: 'Activity',
+    color: 'from-rose-500/20 to-red-500/10 border-rose-500/30 text-rose-400',
+    badge: 'ECG Precision',
+    badgeAr: 'دقة تخطيط القلب',
+    defaultLocation: 'Chest',
+    popularModels: ['Polar H10 Chest Strap', 'Polar Verity Sense Armband', 'Polar Vantage V3'],
+  },
+  {
+    id: 'samsung_galaxy_watch',
+    name: 'Samsung Galaxy Watch & Fit',
+    nameAr: 'سامسونج (Samsung Galaxy Watch & Fit)',
+    category: 'watch',
+    description: 'BioActive sensor live telemetry, pulse rate, continuous stress and sleep sync.',
+    descriptionAr: 'حساس BioActive المتطور لمعدل النبض وحرق السعرات ومزامنة بيانات النوم.',
+    iconName: 'Watch',
+    color: 'from-blue-500/20 to-indigo-500/10 border-blue-500/30 text-blue-400',
+    badge: 'BioActive',
+    badgeAr: 'حساس حيوي',
+    defaultLocation: 'Wrist',
+    popularModels: ['Galaxy Watch 7 / Ultra', 'Galaxy Watch 6 Pro', 'Galaxy Watch 5', 'Galaxy Fit 3'],
+  },
+  {
+    id: 'whoop',
+    name: 'WHOOP 4.0 / 3.0 Strap',
+    nameAr: 'ووب (WHOOP 4.0 / 3.0)',
+    category: 'strap',
+    description: 'Heart rate broadcast mode, strain score mapping and continuous recovery tracking.',
+    descriptionAr: 'بث نبضات القلب المباشر، قياس الإجهاد والاستشفاء العصبي العضلي.',
+    iconName: 'Zap',
+    color: 'from-amber-500/20 to-orange-500/10 border-amber-500/30 text-amber-400',
+    badge: 'Strain & Recovery',
+    badgeAr: 'إجهاد واستشفاء',
+    defaultLocation: 'Wrist',
+    popularModels: ['WHOOP 4.0 Sensor Band', 'WHOOP Bicep Band'],
+  },
+  {
+    id: 'huawei_watch',
+    name: 'Huawei Watch & Band',
+    nameAr: 'هواوي (Huawei Watch GT & Band)',
+    category: 'watch',
+    description: 'TruSeen biometric heart rate monitor, SpO2 blood oxygen and workout zones.',
+    descriptionAr: 'مستشعر TruSeen لقياس النبض ونسبة تشبع الأكسجين ونطاقات التدريب.',
+    iconName: 'Shield',
+    color: 'from-red-500/20 to-orange-500/10 border-red-500/30 text-red-400',
+    badge: 'TruSeen',
+    badgeAr: 'مستشعر دقيق',
+    defaultLocation: 'Wrist',
+    popularModels: ['Huawei Watch GT 4 / 5', 'Huawei Watch Ultimate', 'Huawei Band 9'],
+  },
+  {
+    id: 'xiaomi_amazfit',
+    name: 'Xiaomi & Amazfit Watches',
+    nameAr: 'شاومي وأمازفيت (Xiaomi / Amazfit)',
+    category: 'watch',
+    description: 'BioTracker PPG telemetry, continuous pulse, PAI metrics and calories.',
+    descriptionAr: 'حساس BioTracker لقياس النبض واستهلاك السعرات أثناء التمارين.',
+    iconName: 'Flame',
+    color: 'from-orange-500/20 to-amber-500/10 border-orange-500/30 text-orange-400',
+    badge: 'BioTracker',
+    badgeAr: 'تتبع متواصل',
+    defaultLocation: 'Wrist',
+    popularModels: ['Amazfit Balance / Cheetah', 'Amazfit T-Rex Ultra', 'Xiaomi Smart Band 8/9'],
+  },
+  {
+    id: 'coros',
+    name: 'COROS Pace & Apex',
+    nameAr: 'كوروس (COROS Pace & Apex)',
+    category: 'watch',
+    description: 'High-efficiency optical pulse tracking, running dynamics and training load.',
+    descriptionAr: 'تتبع نبضات القلب للتمارين الطويلة والماراثون والتحمل العالي.',
+    iconName: 'Target',
+    color: 'from-emerald-500/20 to-teal-500/10 border-emerald-500/30 text-emerald-400',
+    badge: 'Endurance',
+    badgeAr: 'تحمل فائق',
+    defaultLocation: 'Wrist',
+    popularModels: ['COROS Pace 3', 'COROS Apex 2 Pro', 'COROS Heart Rate Monitor'],
+  },
+  {
+    id: 'wahoo',
+    name: 'Wahoo TICKR & ELEMNT',
+    nameAr: 'واهو (Wahoo TICKR & Sensors)',
+    category: 'strap',
+    description: 'Dual-band BLE/ANT+ heart rate chest straps and arm monitors for athletic tracking.',
+    descriptionAr: 'حزام الصدر والذراع ثنائي التردد لقياس نبضات القلب بدقة متناهية.',
+    iconName: 'Cpu',
+    color: 'from-cyan-500/20 to-blue-500/10 border-cyan-500/30 text-cyan-400',
+    badge: 'Dual Band',
+    badgeAr: 'تردد مزدوج',
+    defaultLocation: 'Chest',
+    popularModels: ['Wahoo TICKR X', 'Wahoo TICKR Fit Armband'],
+  },
+  {
+    id: 'suunto',
+    name: 'Suunto Watches & Smart Sensor',
+    nameAr: 'سونتو (Suunto Race, Peak & 9)',
+    category: 'watch',
+    description: 'Nordic precision sports watches and BLE heart rate sensor chest straps.',
+    descriptionAr: 'ساعات وأحزمة سونتو الرياضية لقياس النبض والمناطق القلبية.',
+    iconName: 'Navigation',
+    color: 'from-teal-500/20 to-cyan-500/10 border-teal-500/30 text-teal-400',
+    badge: 'Nordic Build',
+    badgeAr: 'تصميم رياضي',
+    defaultLocation: 'Wrist',
+    popularModels: ['Suunto Race', 'Suunto 9 Peak Pro', 'Suunto Smart Sensor'],
+  },
+  {
+    id: 'smart_ring',
+    name: 'Smart Health Ring (Oura / Ultrahuman / RingConn)',
+    nameAr: 'الخاتم الذكي (Oura / Ultrahuman / RingConn)',
+    category: 'ring',
+    description: 'Finger-artery optical PPG telemetry for resting HR, recovery and temperature.',
+    descriptionAr: 'قياس النبض والاستشفاء وحرارة الجلد من شرايين الأصابع مباشرة.',
+    iconName: 'CircleDot',
+    color: 'from-purple-500/20 to-indigo-500/10 border-purple-500/30 text-purple-400',
+    badge: 'Arterial PPG',
+    badgeAr: 'نبض شرياني',
+    defaultLocation: 'Finger',
+    popularModels: ['Oura Ring Gen 3 / 4', 'Ultrahuman Ring AIR', 'RingConn Gen 2'],
+  },
+  {
+    id: 'generic_hrm',
+    name: 'Generic BLE Heart Rate Monitor / Smartwatch',
+    nameAr: 'أي ساعة أو جهاز ذكي يدعم البلوتوث (BLE)',
+    category: 'generic',
+    description: 'Standard Bluetooth GATT Heart Rate (0x180D) and Battery (0x180F) service.',
+    descriptionAr: 'متوافق مع أي جهاز ذكي أو حزام يدعم بروتوكول البلوتوث القياسي للقلب.',
+    iconName: 'Bluetooth',
+    color: 'from-slate-500/20 to-zinc-500/10 border-slate-500/30 text-slate-300',
+    badge: 'Universal GATT',
+    badgeAr: 'بروتوكول عام',
+    defaultLocation: 'Wrist',
+    popularModels: ['Any Bluetooth 4.0+ HRM', 'Generic Smartwatches & Bands'],
+  },
+];
+
 // Bluetooth GATT UUIDs
 const GATT_SERVICES = {
   HEART_RATE: 0x180D,
   BATTERY: 0x180F,
   RUNNING_SPEED_CADENCE: 0x1814,
   CYCLING_SPEED_CADENCE: 0x1816,
+  HEALTH_THERMOMETER: 0x1809,
+  PULSE_OXIMETER: 0x1822,
+  DEVICE_INFORMATION: 0x180A,
+  USER_DATA: 0x181C,
 };
 
 const GATT_CHARACTERISTICS = {
@@ -86,6 +277,54 @@ class BluetoothHealthManager {
   // Check if Web Bluetooth is supported in current environment
   public isSupported(): boolean {
     return typeof navigator !== 'undefined' && 'bluetooth' in navigator;
+  }
+
+  // Check if the app is currently running inside an embedded iframe (which restricts Web Bluetooth by default)
+  public isIframeEnvironment(): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.self !== window.top;
+    } catch (e) {
+      return true; // Cross-origin frame throws SecurityError -> definitely in an iframe
+    }
+  }
+
+  // Parse raw Web Bluetooth errors into actionable bilingual categories
+  public parseBluetoothError(err: any): { code: string; isPolicyRestricted: boolean; isUserCancelled: boolean } {
+    const msg = (err?.message || '').toLowerCase();
+    const name = err?.name || '';
+
+    const isPolicy = 
+      name === 'SecurityError' ||
+      msg.includes('permissions policy') ||
+      msg.includes('disallowed') ||
+      msg.includes('not allowed') ||
+      name === 'NotAllowedError';
+
+    const isCancelled = 
+      name === 'NotFoundError' || 
+      name === 'AbortError' ||
+      msg.includes('user cancelled') || 
+      msg.includes('user canceled') || 
+      msg.includes('cancelled') ||
+      msg.includes('abort');
+
+    let code = 'UNKNOWN_ERROR';
+    if (isPolicy) {
+      code = 'PERMISSIONS_POLICY_DISALLOWED';
+    } else if (isCancelled) {
+      code = 'USER_CANCELLED';
+    } else if (msg.includes('bluetooth adapter') || msg.includes('disabled') || msg.includes('turn on')) {
+      code = 'BLUETOOTH_ADAPTER_DISABLED';
+    } else if (msg.includes('no device') || msg.includes('not found')) {
+      code = 'NO_DEVICE_FOUND';
+    }
+
+    return {
+      code,
+      isPolicyRestricted: isPolicy,
+      isUserCancelled: isCancelled,
+    };
   }
 
   public getStatus(): BluetoothConnectionStatus {
@@ -182,11 +421,18 @@ class BluetoothHealthManager {
     return Math.round(Math.sqrt(sumDiffSq / (this.rrIntervals.length - 1)));
   }
 
-  // Connect via Web Bluetooth API
-  public async requestAndConnect(preferredType: BluetoothDeviceType = 'samsung_galaxy_watch'): Promise<boolean> {
+  // Get list of all supported wearable device brands
+  public getAvailableDeviceBrands(): SupportedDeviceBrand[] {
+    return SUPPORTED_DEVICE_BRANDS;
+  }
+
+  // Connect via Web Bluetooth API for any brand or generic BLE device
+  public async requestAndConnect(preferredType?: BluetoothDeviceType): Promise<{ success: boolean; errorCode?: string; errorMessage?: string }> {
     if (!this.isSupported()) {
-      this.notifyDeviceState('Web Bluetooth is not supported in this browser. You can use the Live Telemetry Simulator mode.');
-      return false;
+      const err = 'BROWSER_UNSUPPORTED';
+      this.currentStatus = 'error';
+      this.notifyDeviceState(err);
+      return { success: false, errorCode: err, errorMessage: 'Web Bluetooth is not supported in this browser' };
     }
 
     try {
@@ -194,18 +440,43 @@ class BluetoothHealthManager {
       this.currentStatus = 'connecting';
       this.notifyDeviceState();
 
-      // Request Bluetooth Device with Heart Rate Service
       const navBt = (navigator as any).bluetooth;
-      this.device = await navBt.requestDevice({
-        filters: [
-          { services: [GATT_SERVICES.HEART_RATE] },
-        ],
-        optionalServices: [
-          GATT_SERVICES.BATTERY,
-          GATT_SERVICES.RUNNING_SPEED_CADENCE,
-          GATT_SERVICES.CYCLING_SPEED_CADENCE,
-        ],
-      });
+
+      // Scan with universal options: Accept all devices or wide range of service UUIDs
+      try {
+        this.device = await navBt.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [
+            GATT_SERVICES.HEART_RATE,
+            GATT_SERVICES.BATTERY,
+            GATT_SERVICES.RUNNING_SPEED_CADENCE,
+            GATT_SERVICES.CYCLING_SPEED_CADENCE,
+            GATT_SERVICES.HEALTH_THERMOMETER,
+            GATT_SERVICES.PULSE_OXIMETER,
+            GATT_SERVICES.DEVICE_INFORMATION,
+            GATT_SERVICES.USER_DATA,
+          ],
+        });
+      } catch (filterErr: any) {
+        const parsed = this.parseBluetoothError(filterErr);
+        // If it's a permissions policy restriction or user cancellation, throw immediately
+        if (parsed.isPolicyRestricted || parsed.isUserCancelled) {
+          throw filterErr;
+        }
+
+        // Secondary fallback if browser requires service filter
+        this.device = await navBt.requestDevice({
+          filters: [
+            { services: [GATT_SERVICES.HEART_RATE] },
+          ],
+          optionalServices: [
+            GATT_SERVICES.BATTERY,
+            GATT_SERVICES.RUNNING_SPEED_CADENCE,
+            GATT_SERVICES.CYCLING_SPEED_CADENCE,
+            GATT_SERVICES.DEVICE_INFORMATION,
+          ],
+        });
+      }
 
       if (!this.device) {
         throw new Error('No device selected');
@@ -216,27 +487,31 @@ class BluetoothHealthManager {
       // Connect to GATT Server
       this.server = await this.device.gatt.connect();
 
-      // Get Heart Rate Service
-      const hrService = await this.server.getPrimaryService(GATT_SERVICES.HEART_RATE);
-      this.hrCharacteristic = await hrService.getCharacteristic(GATT_CHARACTERISTICS.HEART_RATE_MEASUREMENT);
-
-      // Start notifications
-      await this.hrCharacteristic.startNotifications();
-      this.hrCharacteristic.addEventListener('characteristicvaluechanged', this.handleHeartRateData.bind(this));
-
-      // Try reading sensor location
-      let location = 'Wrist';
+      // Get Heart Rate Service if available
       try {
-        const locationChar = await hrService.getCharacteristic(GATT_CHARACTERISTICS.BODY_SENSOR_LOCATION);
-        const locVal = await locationChar.readValue();
-        const locCode = locVal.getUint8(0);
-        location = SENSOR_LOCATIONS[locCode] || 'Wrist';
-      } catch (e) {
-        // optional characteristic
+        const hrService = await this.server.getPrimaryService(GATT_SERVICES.HEART_RATE);
+        this.hrCharacteristic = await hrService.getCharacteristic(GATT_CHARACTERISTICS.HEART_RATE_MEASUREMENT);
+
+        // Start notifications
+        await this.hrCharacteristic.startNotifications();
+        this.hrCharacteristic.addEventListener('characteristicvaluechanged', this.handleHeartRateData.bind(this));
+
+        // Try reading sensor location
+        let location = 'Wrist';
+        try {
+          const locationChar = await hrService.getCharacteristic(GATT_CHARACTERISTICS.BODY_SENSOR_LOCATION);
+          const locVal = await locationChar.readValue();
+          const locCode = locVal.getUint8(0);
+          location = SENSOR_LOCATIONS[locCode] || 'Wrist';
+        } catch (e) {
+          // optional
+        }
+      } catch (hrErr) {
+        console.warn('Heart rate service not immediately available on device:', hrErr);
       }
 
       // Try reading battery level
-      let battery = 85;
+      let battery = 90;
       try {
         const batteryService = await this.server.getPrimaryService(GATT_SERVICES.BATTERY);
         this.batteryCharacteristic = await batteryService.getCharacteristic(GATT_CHARACTERISTICS.BATTERY_LEVEL);
@@ -255,43 +530,76 @@ class BluetoothHealthManager {
         // optional battery service
       }
 
-      // Determine detected device type from name
+      // Determine detected device type from name and manufacturer
       const name = this.device.name || 'Bluetooth Health Watch';
-      let type: BluetoothDeviceType = preferredType;
       const lowerName = name.toLowerCase();
-      if (lowerName.includes('galaxy') || lowerName.includes('samsung') || lowerName.includes('watch')) {
-        type = 'samsung_galaxy_watch';
-      } else if (lowerName.includes('apple')) {
-        type = 'apple_watch';
-      } else if (lowerName.includes('polar')) {
-        type = 'polar';
-      } else if (lowerName.includes('garmin')) {
-        type = 'garmin';
+      let detectedType: BluetoothDeviceType = preferredType || 'generic_hrm';
+      let brandLabel = 'Generic Bluetooth Device';
+
+      if (lowerName.includes('apple') || (lowerName.includes('watch') && lowerName.includes('series'))) {
+        detectedType = 'apple_watch';
+        brandLabel = 'Apple Watch';
+      } else if (lowerName.includes('garmin') || lowerName.includes('fenix') || lowerName.includes('forerunner') || lowerName.includes('venu')) {
+        detectedType = 'garmin';
+        brandLabel = 'Garmin';
+      } else if (lowerName.includes('polar') || lowerName.includes('h10') || lowerName.includes('verity') || lowerName.includes('vantage')) {
+        detectedType = 'polar';
+        brandLabel = 'Polar';
+      } else if (lowerName.includes('galaxy') || lowerName.includes('samsung') || lowerName.includes('gear')) {
+        detectedType = 'samsung_galaxy_watch';
+        brandLabel = 'Samsung Galaxy Watch';
       } else if (lowerName.includes('whoop')) {
-        type = 'whoop';
+        detectedType = 'whoop';
+        brandLabel = 'WHOOP';
+      } else if (lowerName.includes('huawei') || lowerName.includes('honor') || lowerName.includes('band')) {
+        detectedType = 'huawei_watch';
+        brandLabel = 'Huawei Watch / Band';
+      } else if (lowerName.includes('amazfit') || lowerName.includes('xiaomi') || lowerName.includes('mi')) {
+        detectedType = 'xiaomi_amazfit';
+        brandLabel = 'Xiaomi / Amazfit';
+      } else if (lowerName.includes('coros') || lowerName.includes('pace') || lowerName.includes('apex')) {
+        detectedType = 'coros';
+        brandLabel = 'COROS';
       } else if (lowerName.includes('wahoo') || lowerName.includes('tickr')) {
-        type = 'wahoo';
+        detectedType = 'wahoo';
+        brandLabel = 'Wahoo';
+      } else if (lowerName.includes('suunto')) {
+        detectedType = 'suunto';
+        brandLabel = 'Suunto';
+      } else if (lowerName.includes('oura') || lowerName.includes('ring') || lowerName.includes('ultrahuman')) {
+        detectedType = 'smart_ring';
+        brandLabel = 'Smart Ring';
       }
 
       this.currentDeviceInfo = {
         id: this.device.id || 'bt_device_' + Date.now(),
         name: name,
-        type: type,
+        type: detectedType,
+        brandLabel: brandLabel,
         batteryLevel: battery,
-        sensorLocation: location,
+        sensorLocation: detectedType === 'polar' || detectedType === 'wahoo' ? 'Chest' : detectedType === 'smart_ring' ? 'Finger' : 'Wrist',
         connectedAt: Date.now(),
+        supportedMetrics: ['heart_rate', 'hrv', 'calories', 'battery'],
       };
 
       this.currentStatus = 'connected';
       localStorage.setItem('eddieb_last_bt_device', JSON.stringify(this.currentDeviceInfo));
       this.notifyDeviceState();
-      return true;
+      return { success: true };
     } catch (err: any) {
       console.warn('Bluetooth connection error:', err);
+      const parsed = this.parseBluetoothError(err);
+      
+      if (parsed.isUserCancelled) {
+        this.currentStatus = 'disconnected';
+        this.notifyDeviceState();
+        return { success: false, errorCode: 'USER_CANCELLED' };
+      }
+
       this.currentStatus = 'error';
-      const msg = err?.message || 'Failed to connect to Bluetooth device';
-      this.notifyDeviceState(msg);
-      return false;
+      const code = parsed.code || 'UNKNOWN_ERROR';
+      this.notifyDeviceState(code);
+      return { success: false, errorCode: code, errorMessage: err?.message };
     }
   }
 

@@ -25,7 +25,8 @@ import {
   Trash2,
   ChevronRight,
   Wifi,
-  WifiOff
+  WifiOff,
+  ExternalLink
 } from 'lucide-react';
 import { 
   UserProfile, 
@@ -33,10 +34,11 @@ import {
   BluetoothDeviceInfo, 
   BluetoothConnectionStatus, 
   HeartRateZone, 
+  BluetoothDeviceType,
   SamsungHealthDailySummary, 
   SamsungHealthSyncRecord 
 } from '../../types';
-import { BluetoothHealthService } from '../../services/bluetoothHealthService';
+import { BluetoothHealthService, SUPPORTED_DEVICE_BRANDS, SupportedDeviceBrand } from '../../services/bluetoothHealthService';
 import { SamsungHealthService } from '../../services/samsungHealthService';
 import { StorageService } from '../../services/storage';
 import { BluetoothActivityLogsTab } from './BluetoothActivityLogsTab';
@@ -179,16 +181,85 @@ export const HealthDevicesView: React.FC<HealthDevicesViewProps> = ({
     };
   }, []);
 
-  // Connect via Web Bluetooth API
-  const handleConnectBluetooth = async () => {
+  const [selectedBrandId, setSelectedBrandId] = useState<BluetoothDeviceType>('generic_hrm');
+  const [showBrandGuideModal, setShowBrandGuideModal] = useState<boolean>(false);
+  const [activeGuideBrand, setActiveGuideBrand] = useState<SupportedDeviceBrand | null>(null);
+
+  // Connect via Web Bluetooth API directly within user-initiated click context
+  const handleConnectBluetooth = async (preferredType?: BluetoothDeviceType) => {
     setBtErrorMessage('');
-    const success = await BluetoothHealthService.requestAndConnect('samsung_galaxy_watch');
-    if (!success && !BluetoothHealthService.isSupported()) {
-      setBtErrorMessage(
-        isAr 
-          ? 'المتصفح لا يدعم واجهة Web Bluetooth في هذا الوضع. يمكنك استخدام وضع المحاكي المباشر (Live Simulator).' 
-          : 'Web Bluetooth is not supported or permitted in this context. You can start the Live Telemetry Simulator mode.'
-      );
+    const brandToUse = preferredType || selectedBrandId;
+
+    try {
+      // Fast pre-check for browser Web Bluetooth support
+      if (!BluetoothHealthService.isSupported()) {
+        setBtErrorMessage(
+          isAr 
+            ? 'المتصفح الحالي لا يدعم تقنية Web Bluetooth (يُفضل استخدام متصفح Chrome أو Edge على الحاسوب أو أجهزة الأندرويد).' 
+            : 'Web Bluetooth is not supported in this browser. Please use Chrome or Edge.'
+        );
+        return;
+      }
+
+      // Execute request directly within the user-initiated click event stack
+      const result = await BluetoothHealthService.requestAndConnect(brandToUse);
+      
+      if (!result.success) {
+        // Handle user cancellation / AbortError gracefully without triggering alert banners
+        if (result.errorCode === 'USER_CANCELLED') {
+          setBtErrorMessage('');
+          return;
+        }
+        
+        if (result.errorCode === 'PERMISSIONS_POLICY_DISALLOWED' || result.errorMessage?.includes('permissions policy') || result.errorMessage?.includes('disallowed')) {
+          setBtErrorMessage('PERMISSIONS_POLICY_DISALLOWED');
+        } else if (result.errorCode === 'BROWSER_UNSUPPORTED') {
+          setBtErrorMessage(
+            isAr 
+              ? 'المتصفح الحالي لا يدعم تقنية Web Bluetooth (يُفضل استخدام متصفح Chrome أو Edge أو Opera على الحاسوب/الأندرويد).' 
+              : 'Web Bluetooth is not supported in this browser. Please use Chrome, Edge, or a WebBLE browser.'
+          );
+        } else if (result.errorCode === 'BLUETOOTH_ADAPTER_DISABLED') {
+          setBtErrorMessage(
+            isAr 
+              ? 'يرجى التأكد من تشغيل البلوتوث (Bluetooth) في إعدادات جهازك ثم إعادة المحاولة.' 
+              : 'Please ensure Bluetooth is turned ON in your device settings and try again.'
+          );
+        } else {
+          setBtErrorMessage(
+            result.errorMessage || (
+              isAr 
+                ? 'تعذر العثور على الجهاز أو إتمام الاقتران. يمكنك استخدام وضع المحاكي المباشر.' 
+                : 'Could not discover device or complete pairing. You can use Live Simulator mode.'
+            )
+          );
+        }
+      }
+    } catch (err: any) {
+      // Gracefully catch synchronous or unexpected AbortError, NotFoundError, or user cancellations
+      const isAbortOrCancel = 
+        err?.name === 'AbortError' || 
+        err?.name === 'NotFoundError' || 
+        (err?.message && (err.message.toLowerCase().includes('cancel') || err.message.toLowerCase().includes('abort')));
+
+      if (isAbortOrCancel) {
+        // User closed or dismissed the device picker dialog — exit gracefully without opening secondary windows
+        setBtErrorMessage('');
+        return;
+      }
+
+      console.warn('Bluetooth connection error:', err);
+      if (err?.name === 'SecurityError' || err?.message?.includes('permissions policy') || err?.message?.includes('disallowed')) {
+        setBtErrorMessage('PERMISSIONS_POLICY_DISALLOWED');
+      } else {
+        setBtErrorMessage(
+          err?.message || (
+            isAr 
+              ? 'حدث خطأ أثناء محاولة الاتصال بالبلوتوث.' 
+              : 'An error occurred while attempting to connect to Bluetooth.'
+          )
+        );
+      }
     }
   };
 
@@ -196,13 +267,16 @@ export const HealthDevicesView: React.FC<HealthDevicesViewProps> = ({
     BluetoothHealthService.disconnect();
   };
 
-  const handleToggleSimulator = () => {
+  const handleToggleSimulator = (preferredType?: BluetoothDeviceType) => {
     if (isSimulating) {
       BluetoothHealthService.stopSimulator();
       setIsSimulating(false);
       setBtStatus('disconnected');
     } else {
-      BluetoothHealthService.startSimulator('samsung_galaxy_watch', 'Samsung Galaxy Watch 6 Pro (Simulated)');
+      const brandId = preferredType || selectedBrandId;
+      const brandMeta = SUPPORTED_DEVICE_BRANDS.find(b => b.id === brandId) || SUPPORTED_DEVICE_BRANDS[0];
+      const simName = `${brandMeta.name} (Simulated Live)`;
+      BluetoothHealthService.startSimulator(brandId, simName);
       setIsSimulating(true);
       setBtStatus('connected');
     }
@@ -432,20 +506,70 @@ export const HealthDevicesView: React.FC<HealthDevicesViewProps> = ({
           </div>
         </div>
 
-        {/* Error Notification if any */}
+        {/* Bluetooth Error & Permissions Policy Alert */}
         {btErrorMessage && (
-          <div className="mt-4 flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
-              <span>{btErrorMessage}</span>
+          btErrorMessage === 'PERMISSIONS_POLICY_DISALLOWED' ? (
+            <div className="mt-4 rounded-2xl border border-sky-500/40 bg-gradient-to-r from-sky-500/15 via-background to-cyan-500/10 p-4 shadow-lg animate-in fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                      <span>{isAr ? 'واجهة البلوتوث مقيدة داخل نافذة المعاينة المدمجة' : 'Web Bluetooth in Preview Frame'}</span>
+                      <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-[10px] font-bold text-sky-400 border border-sky-500/30">
+                        {isAr ? 'بيئة المعاينة' : 'Preview Sandbox'}
+                      </span>
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-1 max-w-2xl leading-relaxed">
+                      {isAr 
+                        ? 'تمنع متصفحات الويب (Chrome / Edge) مسح أجهزة البلوتوث الحقيقية مباشرة داخل إطارات المعاينة المضمنة (iFrame) لأسباب أمنية. لتجربة الاتصال الفعلي بساعتك، استخدم زر فتح التطبيق في المتصفح أو قم بتشغيل المحاكي الحي المباشر.' 
+                        : 'Web browsers restrict Web Bluetooth requests inside embedded preview iframes. Open the standalone app or use the Live Telemetry Simulator for real-time cardiac zones.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    id="btn-start-sim-from-err"
+                    onClick={() => {
+                      setBtErrorMessage('');
+                      handleToggleSimulator();
+                    }}
+                    className="flex items-center gap-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-600 text-slate-950 text-xs font-bold px-4 py-2 shadow-sm transition-all active:scale-95"
+                  >
+                    <Zap className="h-3.5 w-3.5 fill-current" />
+                    <span>{isAr ? 'تشغيل المحاكي الحي الآن' : 'Start Live Simulator'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setBtErrorMessage('')}
+                    className="rounded-xl border border-border bg-secondary/50 p-2 text-muted-foreground hover:text-foreground text-xs"
+                    title={isAr ? 'إغلاق التنبيه' : 'Dismiss'}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
             </div>
-            <button
-              onClick={() => setBtErrorMessage('')}
-              className="text-muted-foreground hover:text-foreground text-[11px] font-bold"
-            >
-              {isAr ? 'إغلاق' : 'Dismiss'}
-            </button>
-          </div>
+          ) : (
+            <div className="mt-4 flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+                <span>{btErrorMessage}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBtErrorMessage('')}
+                className="text-muted-foreground hover:text-foreground text-[11px] font-bold"
+              >
+                {isAr ? 'إغلاق' : 'Dismiss'}
+              </button>
+            </div>
+          )
         )}
 
         {/* Import Status Alert */}
@@ -774,44 +898,215 @@ export const HealthDevicesView: React.FC<HealthDevicesViewProps> = ({
             </button>
           </div>
 
-          {/* Compatible Wearable Devices Card */}
-          <div className="rounded-3xl border border-border bg-card p-6 space-y-4">
-            <h3 className="text-base font-bold text-foreground">
-              {isAr ? 'الساعات والأجهزة الرياضية المدعومة بتقنية البلوتوث' : 'Supported Smartwatches & Bluetooth HRM Sensors'}
-            </h3>
+          {/* Universal Wearable Device Selector & Connection Hub */}
+          <div className="rounded-3xl border border-border bg-card p-6 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border pb-4">
+              <div>
+                <h3 className="text-base font-bold text-foreground">
+                  {isAr ? 'الأجهزة الرياضية والساعات الذكية المدعومة (Universal BLE)' : 'Supported Wearables & Bluetooth HRM Sensors'}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {isAr 
+                    ? 'اختر نوع ساعتك أو جهازك للربط المباشر أو تفعيل المحاكي المخصص وقراءة دليل الإعداد.' 
+                    : 'Select your wearable brand for direct Bluetooth pairing, brand-specific telemetry simulation, or pairing guides.'}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-muted-foreground">
+                  {isAr ? `${SUPPORTED_DEVICE_BRANDS.length} ماركة مدعومة` : `${SUPPORTED_DEVICE_BRANDS.length} Brands Supported`}
+                </span>
+              </div>
+            </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              <div className="flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-3.5">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/20 text-primary">
-                  <Watch className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-foreground">Samsung Galaxy Watch</div>
-                  <div className="text-[11px] text-muted-foreground">Galaxy Watch 4 / 5 / 6 / 7 / Ultra</div>
-                </div>
-              </div>
+            {/* Grid of all 12 Universal Brands */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {SUPPORTED_DEVICE_BRANDS.map((brand) => {
+                const isSelected = selectedBrandId === brand.id;
+                const isCurrentlyConnected = btDevice?.type === brand.id && btStatus === 'connected';
 
-              <div className="flex items-center gap-3 rounded-2xl border border-border bg-secondary/30 p-3.5">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground">
-                  <Watch className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-foreground">Apple Watch</div>
-                  <div className="text-[11px] text-muted-foreground">Series 4-9 / Ultra / SE (BLE Broadcast)</div>
-                </div>
-              </div>
+                return (
+                  <div
+                    key={brand.id}
+                    className={`relative flex flex-col justify-between rounded-2xl border p-4 transition-all ${
+                      isCurrentlyConnected
+                        ? 'border-emerald-500/50 bg-emerald-500/10 shadow-sm'
+                        : isSelected
+                        ? 'border-primary/50 bg-primary/5 shadow-sm'
+                        : 'border-border/70 bg-secondary/20 hover:border-border hover:bg-secondary/40'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border bg-gradient-to-br ${brand.color}`}>
+                            {brand.category === 'watch' ? (
+                              <Watch className="h-4 w-4" />
+                            ) : brand.category === 'ring' ? (
+                              <Sparkles className="h-4 w-4" />
+                            ) : brand.category === 'strap' ? (
+                              <Activity className="h-4 w-4" />
+                            ) : (
+                              <Bluetooth className="h-4 w-4" />
+                            )}
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-bold text-foreground leading-tight">
+                              {isAr ? brand.nameAr : brand.name}
+                            </h4>
+                            <span className="text-[10px] text-muted-foreground">
+                              {brand.popularModels[0]}
+                            </span>
+                          </div>
+                        </div>
 
-              <div className="flex items-center gap-3 rounded-2xl border border-border bg-secondary/30 p-3.5">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground">
-                  <Activity className="h-5 w-5" />
+                        <span className="rounded-full bg-secondary px-2 py-0.5 text-[9px] font-bold text-muted-foreground shrink-0 border border-border">
+                          {isAr ? brand.badgeAr : brand.badge}
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2 mt-1">
+                        {isAr ? brand.descriptionAr : brand.description}
+                      </p>
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveGuideBrand(brand);
+                          setShowBrandGuideModal(true);
+                        }}
+                        className="text-[11px] font-semibold text-muted-foreground hover:text-foreground flex items-center gap-1"
+                      >
+                        <Info className="h-3 w-3" />
+                        <span>{isAr ? 'طريقة الربط' : 'Setup Guide'}</span>
+                      </button>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedBrandId(brand.id);
+                            handleToggleSimulator(brand.id);
+                          }}
+                          className={`rounded-lg px-2 py-1 text-[10px] font-bold transition-all border ${
+                            isSimulating && btDevice?.type === brand.id
+                              ? 'border-cyan-500 bg-cyan-500/20 text-cyan-400'
+                              : 'border-border bg-secondary/50 text-muted-foreground hover:text-foreground'
+                          }`}
+                          title={isAr ? 'محاكاة هذا الجهاز' : 'Simulate this device'}
+                        >
+                          <Zap className="h-3 w-3 inline mr-0.5" />
+                          {isAr ? 'محاكاة' : 'Simulate'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedBrandId(brand.id);
+                            handleConnectBluetooth(brand.id);
+                          }}
+                          className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold transition-all ${
+                            isCurrentlyConnected
+                              ? 'bg-emerald-500 text-white'
+                              : 'bg-primary text-primary-foreground hover:bg-primary/90'
+                          }`}
+                        >
+                          <Bluetooth className="h-3 w-3" />
+                          <span>{isCurrentlyConnected ? (isAr ? 'متصل' : 'Connected') : (isAr ? 'ربط BLE' : 'Pair')}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Wearable Brand Setup Guide Modal */}
+          {showBrandGuideModal && activeGuideBrand && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in">
+              <div className="w-full max-w-lg rounded-3xl border border-border bg-card p-6 shadow-2xl space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border bg-gradient-to-br ${activeGuideBrand.color}`}>
+                      <Watch className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-foreground">
+                        {isAr ? activeGuideBrand.nameAr : activeGuideBrand.name}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {isAr ? 'دليل إعداد الاتصال بالبلوتوث' : 'Bluetooth GATT Pairing Instructions'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowBrandGuideModal(false)}
+                    className="rounded-xl border border-border bg-secondary/50 p-2 text-muted-foreground hover:text-foreground"
+                  >
+                    ✕
+                  </button>
                 </div>
-                <div>
-                  <div className="text-xs font-bold text-foreground">Polar & Garmin</div>
-                  <div className="text-[11px] text-muted-foreground">Polar H10 / Verity / Garmin Forerunner</div>
+
+                <div className="space-y-3 rounded-2xl border border-border bg-secondary/20 p-4 text-xs">
+                  <h4 className="font-bold text-foreground flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    <span>{isAr ? 'خطوات التوصيل المباشر:' : 'Direct Connection Steps:'}</span>
+                  </h4>
+
+                  {activeGuideBrand.id === 'apple_watch' ? (
+                    <ol className="list-decimal list-inside space-y-1.5 text-muted-foreground leading-relaxed">
+                      <li>{isAr ? 'افتح تطبيق Workout على ساعة Apple Watch أو تطبيق Heart Rate Broadcast.' : 'Open Heart Rate Broadcast or BLE Companion on your Apple Watch.'}</li>
+                      <li>{isAr ? 'تأكد من تفعيل مشاركة النبض عبر البلوتوث (Bluetooth Broadcast).' : 'Ensure Bluetooth Heart Rate broadcasting is active.'}</li>
+                      <li>{isAr ? 'اضغط على زر (ربط BLE) في التطبيق واختر ساعتك من نافذة المتصفح.' : 'Click "Pair BLE" in this app and choose your Apple Watch in browser prompt.'}</li>
+                    </ol>
+                  ) : activeGuideBrand.id === 'garmin' ? (
+                    <ol className="list-decimal list-inside space-y-1.5 text-muted-foreground leading-relaxed">
+                      <li>{isAr ? 'في ساعة جارمن: اذهب إلى الإعدادات > المستشعرات > نبضات القلب > بث النبض (Broadcast HR).' : 'On Garmin watch: Go to Settings > Sensors & Accessories > Wrist Heart Rate > Broadcast Heart Rate.'}</li>
+                      <li>{isAr ? 'فعل البث المباشر (Broadcast During Activity أو Broadcast Live).' : 'Enable Broadcast Live during your session.'}</li>
+                      <li>{isAr ? 'اضغط (ربط BLE) وسيتعرف التطبيق فوراً على نبضاتك بدقة رياضية.' : 'Click "Pair BLE" to link your Garmin cardiac telemetry.'}</li>
+                    </ol>
+                  ) : activeGuideBrand.id === 'polar' || activeGuideBrand.id === 'wahoo' ? (
+                    <ol className="list-decimal list-inside space-y-1.5 text-muted-foreground leading-relaxed">
+                      <li>{isAr ? 'ارتدِ حزام الصدر (Polar H10 أو Wahoo TICKR) وتأكد من ترطيب القطبين الموصلين.' : 'Put on the chest strap and moisten electrode pads for solid skin contact.'}</li>
+                      <li>{isAr ? 'يتم تفعيل البلوتوث تلقائياً بمجرد إغلاق القفل ولمس الجلد.' : 'Bluetooth transmits automatically when snapped on.'}</li>
+                      <li>{isAr ? 'اضغط (ربط BLE) للاتصال فورا وقراءة أدق نبضات وتخطيط HRV.' : 'Click "Pair BLE" for gold-standard ECG & HRV telemetry.'}</li>
+                    </ol>
+                  ) : activeGuideBrand.id === 'whoop' ? (
+                    <ol className="list-decimal list-inside space-y-1.5 text-muted-foreground leading-relaxed">
+                      <li>{isAr ? 'في تطبيق WHOOP على هاتفك: اذهب إلى Device Settings > Heart Rate Broadcast.' : 'In WHOOP app: Go to Device Settings > Heart Rate Broadcast.'}</li>
+                      <li>{isAr ? 'فعل خيار "Broadcast Heart Rate".' : 'Toggle on "Broadcast Heart Rate".'}</li>
+                      <li>{isAr ? 'اضغط (ربط BLE) هنا للاتصال المباشر بحزام ووب.' : 'Click "Pair BLE" to link your WHOOP band.'}</li>
+                    </ol>
+                  ) : (
+                    <ol className="list-decimal list-inside space-y-1.5 text-muted-foreground leading-relaxed">
+                      <li>{isAr ? 'تأكد من تشغيل البلوتوث على جهازك وسماح مشاركة قياسات النبض.' : 'Ensure Bluetooth is ON and HRM broadcasting is enabled.'}</li>
+                      <li>{isAr ? 'اجعل الجهاز قريباً من الهاتف أو الحاسوب.' : 'Keep device in close proximity.'}</li>
+                      <li>{isAr ? 'اضغط على (ربط BLE) لاكتشافه واقترانه.' : 'Click "Pair BLE" to scan and link.'}</li>
+                    </ol>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBrandGuideModal(false);
+                      handleConnectBluetooth(activeGuideBrand.id);
+                    }}
+                    className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90"
+                  >
+                    <Bluetooth className="h-4 w-4" />
+                    <span>{isAr ? 'بدء الاقتران الآن' : 'Start Pairing Now'}</span>
+                  </button>
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 

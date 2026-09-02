@@ -47,6 +47,7 @@ import { PRAchievementToast } from '../common/PRAchievementToast';
 import { SmartWarmupModal } from './SmartWarmupModal';
 import { ExerciseHistoryComparison } from './ExerciseHistoryComparison';
 import { RPECalculatorModal } from './RPECalculatorModal';
+import { WorkoutSubstitutionModal } from './WorkoutSubstitutionModal';
 
 interface ActiveWorkoutModalProps {
   workout: WorkoutSession;
@@ -94,6 +95,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [selectedSound, setSelectedSound] = useState<RestSoundType>(profile.restSoundType || 'beep');
   const [swapExerciseOpen, setSwapExerciseOpen] = useState<boolean>(false);
+  const [substitutionModalOpen, setSubstitutionModalOpen] = useState<boolean>(false);
   const [soundPickerOpen, setSoundPickerOpen] = useState<boolean>(false);
   const [showRestPresets, setShowRestPresets] = useState<boolean>(false);
   const [smartWarmupOpen, setSmartWarmupOpen] = useState<boolean>(false);
@@ -134,7 +136,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   // Play configured rest completion sound (beep / whistle / chime / buzzer / bell)
   const triggerRestSound = () => {
     if (!soundEnabled) return;
-    AudioService.playSound(selectedSound, 0.45);
+    AudioService.playRestCompleteCue(selectedSound, 0.45);
   };
 
   // Timer countdown interval with 5-second prepare chime, 3-2-1 countdown audio cues & end cue
@@ -151,7 +153,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
             // Try sending a browser system notification if permitted
             if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
               try {
-                new Notification(isAr ? 'انتهت فترة الراحة!' : 'Rest Complete!', {
+                new Notification(isAr ? '🔔 انتهت فترة الراحة!' : '🔔 Rest Complete!', {
                   body: isAr ? 'حان وقت أداء مجموعتك التالية بكامل قوتك.' : 'Time to crush your next set.',
                   icon: '/favicon.ico',
                 });
@@ -184,6 +186,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   }, [timerActive, timerSeconds, soundEnabled, selectedSound, isAr]);
 
   const startTimer = (seconds: number) => {
+    AudioService.unlockAudio();
     const duration = Math.max(5, seconds);
     setTotalTimerDuration(duration);
     setTimerSeconds(duration);
@@ -476,19 +479,27 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   };
 
   // Exercise substitution
-  const handleSwapExercise = (newExercise: Exercise) => {
+  // Smart Substitution for current exercise with logging
+  const handleSubstituteExercise = (
+    originalExerciseId: string,
+    newExercise: Exercise,
+    reason?: string
+  ) => {
     // Allow new exercise to be auto-prefilled from its own history
     autoPrefilledExerciseIds.current.delete(newExercise.id);
 
     const updatedExercises = workout.exercises.map((ex, idx) => {
-      if (idx !== currentExerciseIndex) return ex;
+      if (idx !== currentExerciseIndex && ex.exerciseId !== originalExerciseId) return ex;
       return {
         exerciseId: newExercise.id,
         exerciseName: newExercise.name,
         exerciseNameAr: newExercise.nameAr,
         primaryMuscle: newExercise.primaryMuscle,
         targetRpe: 8,
-        restSeconds: newExercise.restSeconds,
+        restSeconds: newExercise.restSeconds || 90,
+        isSubstituted: true,
+        originalExerciseId: originalExerciseId,
+        substitutionReason: reason || 'User requested exercise substitution during active workout',
         sets: ex.sets.map(s => ({
           ...s,
           completed: false,
@@ -497,11 +508,77 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
       };
     });
 
-    setWorkout({ ...workout, exercises: updatedExercises });
+    const updatedWorkout: WorkoutSession = {
+      ...workout,
+      exercises: updatedExercises,
+    };
+
+    setWorkout(updatedWorkout);
+    StorageService.saveActiveWorkout(updatedWorkout);
+
+    // Record substitution log
+    StorageService.addWorkoutSubstitution({
+      id: 'sub_' + Date.now(),
+      timestamp: Date.now(),
+      date: new Date().toISOString().split('T')[0],
+      sessionId: workout.id,
+      type: 'exercise_swap',
+      originalItem: currentExercise.exerciseName,
+      originalItemAr: currentExercise.exerciseNameAr || currentExercise.exerciseName,
+      newItem: newExercise.name,
+      newItemAr: newExercise.nameAr || newExercise.name,
+      originalId: originalExerciseId,
+      originalName: currentExercise.exerciseName,
+      substitutedId: newExercise.id,
+      substitutedName: newExercise.name,
+      reason: reason || 'Alternative equipment or preference',
+      reasonAr: reason || 'تفضيل أو توفر أجهزة بديلة',
+    });
+
+    if (soundEnabled) {
+      AudioService.playBeep(660, 0.1, 0.2);
+    }
+  };
+
+  // Substitute entire workout day split (e.g. Push -> Pull or Full Body)
+  const handleSubstituteWorkout = (
+    newSession: WorkoutSession,
+    reason?: string
+  ) => {
+    setWorkout(newSession);
+    setCurrentExerciseIndex(0);
+    StorageService.saveActiveWorkout(newSession);
+
+    // Record workout split substitution log
+    StorageService.addWorkoutSubstitution({
+      id: 'sub_split_' + Date.now(),
+      timestamp: Date.now(),
+      date: new Date().toISOString().split('T')[0],
+      sessionId: workout.id,
+      type: 'day_swap',
+      originalItem: workout.name,
+      originalItemAr: workout.nameAr || workout.name,
+      newItem: newSession.name,
+      newItemAr: newSession.nameAr || newSession.name,
+      originalId: workout.type,
+      originalName: workout.name,
+      substitutedId: newSession.type,
+      substitutedName: newSession.name,
+      reason: reason || 'Day split swap requested by user',
+      reasonAr: reason || 'تبديل تقسيم اليوم التدريبي حسب رغبة المتدرب',
+    });
+
+    if (soundEnabled) {
+      AudioService.playBeep(880, 0.15, 0.3);
+    }
+  };
+
+  const handleSwapExercise = (newExercise: Exercise) => {
+    handleSubstituteExercise(currentExercise.exerciseId, newExercise, 'Quick alternative select');
     setSwapExerciseOpen(false);
   };
 
-  // Finish Workout with audio cue
+  // Finish Workout with audio cue and robust storage completion
   const handleFinish = () => {
     let totalVolume = 0;
     workout.exercises.forEach(ex => {
@@ -519,6 +596,9 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
       totalVolumeKg: totalVolume,
       notes: workout.notes || 'Mission accomplished with progressive overload and fat loss focus.',
     };
+
+    // Save to robust storage layer
+    StorageService.completeWorkout(finishedWorkout);
 
     // Play victory finish fanfare audio cue
     if (soundEnabled) {
@@ -844,10 +924,11 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
 
                   <button
                     id="btn-swap-exercise-toggle"
-                    onClick={() => setSwapExerciseOpen(!swapExerciseOpen)}
-                    className="flex items-center gap-1.5 rounded-xl border border-border bg-secondary/60 px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
+                    onClick={() => setSubstitutionModalOpen(true)}
+                    className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-sm"
+                    title={isAr ? 'استبدال التمرين ببديل ذكي لنفس العضلة أو تبديل البرنامج اليومي' : 'Substitute exercise or swap workout split'}
                   >
-                    <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                    <RefreshCw className="h-3.5 w-3.5" />
                     <span>{t.workout.substitute}</span>
                   </button>
                 </div>
@@ -1619,6 +1700,8 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
       {/* RPE & Auto-Regulation Load Adjustment Modal */}
       <RPECalculatorModal
         isOpen={rpeCalculatorOpen}
+        profile={profile}
+        exercise={currentExercise}
         onClose={() => {
           setRpeCalculatorOpen(false);
           setRpeCalcInitialData(null);
@@ -1634,6 +1717,23 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
         }}
         onApplyWeightToAllRemaining={(weight, reps, rpe) => {
           handleApplyRPEWeightToAllRemaining(weight, reps, rpe);
+        }}
+      />
+
+      {/* Smart Workout & Exercise Substitution Modal */}
+      <WorkoutSubstitutionModal
+        isOpen={substitutionModalOpen}
+        currentExercise={currentExercise}
+        currentSession={workout}
+        profile={profile}
+        onClose={() => setSubstitutionModalOpen(false)}
+        onSubstituteExercise={(originalId, newEx, reason) => {
+          handleSubstituteExercise(originalId, newEx, reason);
+          setSubstitutionModalOpen(false);
+        }}
+        onSubstituteWorkout={(newSession, reason) => {
+          handleSubstituteWorkout(newSession, reason);
+          setSubstitutionModalOpen(false);
         }}
       />
 

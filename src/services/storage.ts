@@ -2,6 +2,7 @@ import {
   AppState, 
   UserProfile, 
   WorkoutSession, 
+  WorkoutSubstitutionRecord,
   CardioSession, 
   CoreSession, 
   RecoverySession, 
@@ -19,6 +20,7 @@ const STORAGE_KEYS = {
   PROFILE: 'eddieb_athlete_profile_v1',
   ACTIVE_WORKOUT: 'eddieb_active_workout_v1',
   WORKOUT_HISTORY: 'eddieb_workout_history_v1',
+  WORKOUT_SUBSTITUTIONS: 'eddieb_workout_substitutions_v1',
   CARDIO_HISTORY: 'eddieb_cardio_history_v1',
   CORE_HISTORY: 'eddieb_core_history_v1',
   RECOVERY_HISTORY: 'eddieb_recovery_history_v1',
@@ -881,10 +883,53 @@ export const StorageService = {
     const history = this.getWorkoutHistory();
     workout.completed = true;
     workout.completedAt = Date.now();
-    history.unshift(workout);
+
+    // Calculate total volume if not already accurately set
+    if (!workout.totalVolumeKg || workout.totalVolumeKg === 0) {
+      let vol = 0;
+      workout.exercises?.forEach(ex => {
+        ex.sets?.forEach(s => {
+          if (s.completed) {
+            const w = s.actualWeight !== undefined ? s.actualWeight : (s.targetWeight || 0);
+            const r = s.actualReps !== undefined ? s.actualReps : (typeof s.targetReps === 'number' ? s.targetReps : parseInt(String(s.targetReps || 0), 10));
+            vol += (w * r);
+          }
+        });
+      });
+      workout.totalVolumeKg = vol;
+    }
+
+    const existingIndex = history.findIndex(h => h.id === workout.id);
+    if (existingIndex >= 0) {
+      history[existingIndex] = workout;
+    } else {
+      history.unshift(workout);
+    }
+
     this.saveWorkoutHistory(history);
     this.saveActiveWorkout(null);
     this.checkAndUpdateAchievements();
+  },
+
+  getWorkoutSubstitutions(): WorkoutSubstitutionRecord[] {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.WORKOUT_SUBSTITUTIONS);
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error('Error loading substitutions history:', e);
+    }
+    return [];
+  },
+
+  addWorkoutSubstitution(record: WorkoutSubstitutionRecord): void {
+    try {
+      const list = this.getWorkoutSubstitutions();
+      list.unshift(record);
+      if (list.length > 50) list.pop();
+      localStorage.setItem(STORAGE_KEYS.WORKOUT_SUBSTITUTIONS, JSON.stringify(list));
+    } catch (e) {
+      console.error('Error saving workout substitution:', e);
+    }
   },
 
   getCardioHistory(): CardioSession[] {

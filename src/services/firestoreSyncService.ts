@@ -14,7 +14,94 @@ import {
 } from 'firebase/firestore';
 import { auth, googleProvider, db } from './firebase';
 import { StorageService } from './storage';
-import { UserProfile, WorkoutSession, NutritionEntry, BodyMeasurement, SyncStatus } from '../types';
+import { 
+  UserProfile, 
+  WorkoutSession, 
+  NutritionEntry, 
+  BodyMeasurement, 
+  CardioSession,
+  SleepLog,
+  RecoverySession,
+  WorkoutSubstitutionRecord,
+  SyncStatus 
+} from '../types';
+
+export enum FirestoreOperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: FirestoreOperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: FirestoreOperationType, path: string | null): FirestoreErrorInfo {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error:', JSON.stringify(errInfo));
+  return errInfo;
+}
+
+/**
+ * Deeply and recursively sanitizes an object or array before passing to Firestore.
+ * Removes any property whose value is `undefined` (which Firestore rejects with "Unsupported field value: undefined").
+ * Preserves nulls, dates, booleans, strings, numbers, and plain objects/arrays.
+ */
+export function sanitizeForFirestore<T>(data: T): T {
+  if (data === undefined) {
+    return null as unknown as T;
+  }
+  if (data === null || typeof data !== 'object') {
+    return data;
+  }
+  if (data instanceof Date) {
+    return data;
+  }
+  if (Array.isArray(data)) {
+    return data
+      .filter(item => item !== undefined)
+      .map(item => sanitizeForFirestore(item)) as unknown as T;
+  }
+
+  const cleanObj: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data as Record<string, any>)) {
+    if (value !== undefined) {
+      cleanObj[key] = sanitizeForFirestore(value);
+    }
+  }
+  return cleanObj as T;
+}
 
 type SyncSubscriber = (status: SyncStatus, isOnline: boolean, lastSync: number | null) => void;
 
@@ -215,13 +302,19 @@ class FirestoreSyncManager {
       return;
     }
 
+    const pathForWrite = `users/${uid}`;
     try {
       const userRef = doc(db, 'users', uid);
-      await setDoc(userRef, { profile, updatedAt: Date.now() }, { merge: true });
+      const payload = sanitizeForFirestore({ 
+        profile, 
+        updatedAt: Date.now() 
+      });
+      await setDoc(userRef, payload, { merge: true });
       this.lastSyncTimestamp = Date.now();
       this.updateStatus('synced');
     } catch (error: any) {
       console.error('Error saving profile to Firestore:', error);
+      handleFirestoreError(error, FirestoreOperationType.WRITE, pathForWrite);
       if (error?.message?.includes('offline') || !navigator.onLine) {
         this.isOnline = false;
         this.updateStatus('offline');
@@ -240,13 +333,19 @@ class FirestoreSyncManager {
       return;
     }
 
+    const pathForWrite = `users/${uid}/workouts/${workout.id}`;
     try {
       const workoutRef = doc(db, 'users', uid, 'workouts', workout.id);
-      await setDoc(workoutRef, { ...workout, updatedAt: Date.now() }, { merge: true });
+      const payload = sanitizeForFirestore({ 
+        ...workout, 
+        updatedAt: Date.now() 
+      });
+      await setDoc(workoutRef, payload, { merge: true });
       this.lastSyncTimestamp = Date.now();
       this.updateStatus('synced');
     } catch (error: any) {
       console.error('Error saving workout to Firestore:', error);
+      handleFirestoreError(error, FirestoreOperationType.WRITE, pathForWrite);
       if (error?.message?.includes('offline') || !navigator.onLine) {
         this.isOnline = false;
         this.updateStatus('offline');
@@ -265,13 +364,19 @@ class FirestoreSyncManager {
       return;
     }
 
+    const pathForWrite = `users/${uid}/nutrition/${entry.id}`;
     try {
       const entryRef = doc(db, 'users', uid, 'nutrition', entry.id);
-      await setDoc(entryRef, { ...entry, updatedAt: Date.now() }, { merge: true });
+      const payload = sanitizeForFirestore({ 
+        ...entry, 
+        updatedAt: Date.now() 
+      });
+      await setDoc(entryRef, payload, { merge: true });
       this.lastSyncTimestamp = Date.now();
       this.updateStatus('synced');
     } catch (error: any) {
       console.error('Error saving nutrition to Firestore:', error);
+      handleFirestoreError(error, FirestoreOperationType.WRITE, pathForWrite);
       if (error?.message?.includes('offline') || !navigator.onLine) {
         this.isOnline = false;
         this.updateStatus('offline');
@@ -290,17 +395,57 @@ class FirestoreSyncManager {
       return;
     }
 
+    const pathForWrite = `users/${uid}/measurements/${measurement.id}`;
     try {
       const mRef = doc(db, 'users', uid, 'measurements', measurement.id);
-      await setDoc(mRef, { ...measurement, updatedAt: Date.now() }, { merge: true });
+      const payload = sanitizeForFirestore({ 
+        ...measurement, 
+        updatedAt: Date.now() 
+      });
+      await setDoc(mRef, payload, { merge: true });
       this.lastSyncTimestamp = Date.now();
       this.updateStatus('synced');
     } catch (error: any) {
       console.error('Error saving measurement to Firestore:', error);
+      handleFirestoreError(error, FirestoreOperationType.WRITE, pathForWrite);
       if (error?.message?.includes('offline') || !navigator.onLine) {
         this.isOnline = false;
         this.updateStatus('offline');
       }
+    }
+  }
+
+  // Sync cardio session
+  async saveCardioSession(session: CardioSession, userId?: string): Promise<void> {
+    const uid = userId || auth.currentUser?.uid;
+    if (!uid) return;
+
+    if (!navigator.onLine) return;
+
+    const pathForWrite = `users/${uid}/cardio/${session.id}`;
+    try {
+      const cRef = doc(db, 'users', uid, 'cardio', session.id);
+      const payload = sanitizeForFirestore({ ...session, updatedAt: Date.now() });
+      await setDoc(cRef, payload, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, FirestoreOperationType.WRITE, pathForWrite);
+    }
+  }
+
+  // Sync sleep log
+  async saveSleepLog(log: SleepLog, userId?: string): Promise<void> {
+    const uid = userId || auth.currentUser?.uid;
+    if (!uid) return;
+
+    if (!navigator.onLine) return;
+
+    const pathForWrite = `users/${uid}/sleep/${log.id}`;
+    try {
+      const sRef = doc(db, 'users', uid, 'sleep', log.id);
+      const payload = sanitizeForFirestore({ ...log, updatedAt: Date.now() });
+      await setDoc(sRef, payload, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, FirestoreOperationType.WRITE, pathForWrite);
     }
   }
 
@@ -323,6 +468,16 @@ class FirestoreSyncManager {
       const measurements = StorageService.getMeasurements();
       for (const m of measurements) {
         await this.saveMeasurement(m, userId);
+      }
+
+      const cardio = StorageService.getCardioHistory();
+      for (const c of cardio) {
+        await this.saveCardioSession(c, userId);
+      }
+
+      const sleep = StorageService.getSleepHistory();
+      for (const s of sleep) {
+        await this.saveSleepLog(s, userId);
       }
     } catch (e) {
       console.error('Error syncing up local data:', e);
@@ -415,3 +570,4 @@ class FirestoreSyncManager {
 }
 
 export const FirestoreSyncService = new FirestoreSyncManager();
+

@@ -130,6 +130,31 @@ export interface WorkoutExercise {
   targetRpe: number;
   notes?: string;
   completed: boolean;
+  isSubstituted?: boolean;
+  originalExerciseId?: string;
+  originalExerciseName?: string;
+  originalExerciseNameAr?: string;
+  substitutionReason?: string;
+}
+
+export interface WorkoutSubstitutionRecord {
+  id: string;
+  timestamp: number;
+  date: string;
+  type: 'exercise_swap' | 'day_swap' | 'custom_split';
+  originalItem: string;
+  originalItemAr: string;
+  newItem: string;
+  newItemAr: string;
+  reason: string;
+  reasonAr: string;
+  targetMuscleGroup?: string;
+  fatigueLevelReported?: string;
+  sessionId?: string;
+  originalId?: string;
+  originalName?: string;
+  substitutedId?: string;
+  substitutedName?: string;
 }
 
 export interface WorkoutSession {
@@ -137,10 +162,11 @@ export interface WorkoutSession {
   date: string; // YYYY-MM-DD
   name: string;
   nameAr: string;
-  type: ExerciseCategory | 'push' | 'pull' | 'legs' | 'full_body' | 'rest_active';
+  type: ExerciseCategory | 'push' | 'pull' | 'legs' | 'full_body' | 'rest_active' | 'shoulders_arms' | 'upper' | 'lower';
   mode: TrainingMode;
   durationMinutes: number;
   exercises: WorkoutExercise[];
+  totalVolumeKg?: number;
   notes?: string;
   rating?: number; // 1-5
   energyLevel?: number; // 1-5
@@ -148,6 +174,19 @@ export interface WorkoutSession {
   startedAt?: number;
   completedAt?: number;
   timestamp?: number;
+  isSubstituted?: boolean;
+  originalType?: string;
+  originalName?: string;
+  originalNameAr?: string;
+  substitutionReason?: string;
+  telemetrySummary?: {
+    avgHeartRateBpm?: number;
+    maxHeartRateBpm?: number;
+    caloriesBurned?: number;
+    avgHrvRmssd?: number;
+    primaryZone?: HeartRateZone;
+    deviceName?: string;
+  };
 }
 
 export type CardioModality = 
@@ -465,9 +504,16 @@ export type BluetoothDeviceType =
   | 'apple_watch' 
   | 'garmin' 
   | 'polar' 
+  | 'fitbit'
+  | 'huawei_watch'
+  | 'xiaomi_amazfit'
+  | 'coros'
   | 'whoop' 
-  | 'wahoo' 
-  | 'generic_hrm';
+  | 'wahoo'
+  | 'suunto'
+  | 'smart_ring'
+  | 'generic_hrm'
+  | 'generic_smartwatch';
 
 export type BluetoothConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
@@ -478,19 +524,33 @@ export interface LiveTelemetryData {
   rrIntervalMs?: number;
   hrvRmssd?: number;
   caloriesBurnedRate?: number;
+  totalSessionCalories?: number;
+  stepsCount?: number;
+  cadenceRpm?: number;
+  bloodOxygenSpO2?: number;
+  skinTemperatureC?: number;
   sensorLocation?: string;
   batteryLevel?: number;
   isSimulated?: boolean;
+  deviceName?: string;
+  deviceType?: BluetoothDeviceType;
 }
 
 export interface BluetoothDeviceInfo {
   id: string;
   name: string;
   type: BluetoothDeviceType;
+  brandLabel?: string;
   batteryLevel?: number;
   sensorLocation?: string;
   connectedAt?: number;
   lastHeartRate?: number;
+  lastSpO2?: number;
+  lastSteps?: number;
+  lastHrv?: number;
+  supportedMetrics?: ('heart_rate' | 'hrv' | 'spo2' | 'steps' | 'calories' | 'battery' | 'temperature')[];
+  firmwareVersion?: string;
+  manufacturerName?: string;
 }
 
 export interface SamsungHealthDailySummary {

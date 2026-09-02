@@ -3,34 +3,105 @@
 
 export type RestSoundType = 'beep' | 'whistle' | 'chime' | 'buzzer' | 'bell';
 
+// Singleton AudioContext to bypass browser limit and handle suspended state
+let sharedAudioCtx: AudioContext | null = null;
+let audioUnlocked = false;
+
+function getAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return null;
+
+    if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
+      sharedAudioCtx = new AudioCtx();
+    }
+
+    if (sharedAudioCtx.state === 'suspended') {
+      sharedAudioCtx.resume().catch(() => {});
+    }
+
+    return sharedAudioCtx;
+  } catch (e) {
+    console.warn('Unable to get AudioContext:', e);
+    return null;
+  }
+}
+
+// Proactive user gesture unlocker
+if (typeof window !== 'undefined') {
+  const unlock = () => {
+    if (audioUnlocked) return;
+    try {
+      const ctx = getAudioContext();
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().then(() => {
+          audioUnlocked = true;
+        }).catch(() => {});
+      } else if (ctx) {
+        audioUnlocked = true;
+      }
+    } catch {}
+    ['touchstart', 'touchend', 'mousedown', 'keydown'].forEach(evt => {
+      window.removeEventListener(evt, unlock);
+    });
+  };
+
+  ['touchstart', 'touchend', 'mousedown', 'keydown'].forEach(evt => {
+    window.addEventListener(evt, unlock, { once: true, passive: true });
+  });
+}
+
 export const AudioService = {
+  // Explicitly unlock audio from user action
+  unlockAudio(): void {
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+  },
+
   // Play customized tone for rest timer completion
-  playSound(type: RestSoundType = 'beep', volume = 0.3): void {
-    if (typeof window === 'undefined') return;
+  playSound(type: RestSoundType = 'beep', volume = 0.35): void {
+    const ctx = getAudioContext();
+    if (!ctx) return;
 
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
 
       if (type === 'beep') {
-        // Standard high-clarity dual beep (880Hz -> 1174Hz)
+        // High-clarity dual crystal beep (880Hz -> 1174Hz)
         const osc1 = ctx.createOscillator();
         const osc2 = ctx.createOscillator();
         const gain = ctx.createGain();
 
         gain.gain.setValueAtTime(volume, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
 
         osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(880, ctx.currentTime); // A5
-        osc1.frequency.setValueAtTime(1174.66, ctx.currentTime + 0.18); // D6
+        osc2.type = 'triangle';
 
+        osc1.frequency.setValueAtTime(880, ctx.currentTime); // A5
+        osc1.frequency.setValueAtTime(1174.66, ctx.currentTime + 0.16); // D6
+
+        osc2.frequency.setValueAtTime(1760, ctx.currentTime); // A6 overtone
+        osc2.frequency.setValueAtTime(2349.32, ctx.currentTime + 0.16);
+
+        const subGain = ctx.createGain();
+        subGain.gain.setValueAtTime(0.2, ctx.currentTime);
+
+        osc2.connect(subGain);
+        subGain.connect(gain);
         osc1.connect(gain);
         gain.connect(ctx.destination);
 
         osc1.start(ctx.currentTime);
-        osc1.stop(ctx.currentTime + 0.5);
+        osc2.start(ctx.currentTime);
+        osc1.stop(ctx.currentTime + 0.45);
+        osc2.stop(ctx.currentTime + 0.45);
       } else if (type === 'whistle') {
         // Referee / Trainer Whistle with frequency modulation
         const osc = ctx.createOscillator();
@@ -59,8 +130,8 @@ export const AudioService = {
         modOsc.stop(ctx.currentTime + 0.65);
         osc.stop(ctx.currentTime + 0.65);
       } else if (type === 'chime') {
-        // Pleasant energetic triad chime (C6 - E6 - G6)
-        const notes = [1046.5, 1318.5, 1567.98];
+        // Pleasant energetic triad chime (C6 - E6 - G6 - C7)
+        const notes = [1046.5, 1318.5, 1567.98, 2093.0];
         notes.forEach((freq, idx) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -69,65 +140,92 @@ export const AudioService = {
           osc.type = 'sine';
           osc.frequency.setValueAtTime(freq, start);
 
-          gain.gain.setValueAtTime(volume * 0.5, start);
-          gain.gain.exponentialRampToValueAtTime(0.001, start + 0.6);
+          gain.gain.setValueAtTime(0.001, start);
+          gain.gain.linearRampToValueAtTime(volume * 0.5, start + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + 0.65);
 
           osc.connect(gain);
           gain.connect(ctx.destination);
 
           osc.start(start);
-          osc.stop(start + 0.6);
+          osc.stop(start + 0.65);
         });
       } else if (type === 'buzzer') {
         // Heavy gym buzzer / horn
         const osc = ctx.createOscillator();
+        const oscSub = ctx.createOscillator();
         const gain = ctx.createGain();
 
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(160, ctx.currentTime);
 
+        oscSub.type = 'square';
+        oscSub.frequency.setValueAtTime(240, ctx.currentTime);
+
         gain.gain.setValueAtTime(volume * 0.6, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
 
         osc.connect(gain);
+        oscSub.connect(gain);
         gain.connect(ctx.destination);
 
         osc.start(ctx.currentTime);
+        oscSub.start(ctx.currentTime);
         osc.stop(ctx.currentTime + 0.55);
+        oscSub.stop(ctx.currentTime + 0.55);
       } else if (type === 'bell') {
         // Boxing ring bell tone
         const osc = ctx.createOscillator();
+        const harmonic = ctx.createOscillator();
         const gain = ctx.createGain();
 
         osc.type = 'sine';
         osc.frequency.setValueAtTime(1200, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.8);
+        osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.85);
+
+        harmonic.type = 'sine';
+        harmonic.frequency.setValueAtTime(2400, ctx.currentTime);
+        harmonic.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.5);
 
         gain.gain.setValueAtTime(volume, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.85);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.9);
 
         osc.connect(gain);
+        harmonic.connect(gain);
         gain.connect(ctx.destination);
 
         osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.85);
+        harmonic.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.9);
+        harmonic.stop(ctx.currentTime + 0.9);
       }
     } catch (e) {
       console.warn('Audio play failed:', e);
     }
   },
 
+  // Specialized rest timer completion notification with sound + haptic vibration
+  playRestCompleteCue(type: RestSoundType = 'beep', volume = 0.45): void {
+    this.playSound(type, volume);
+
+    // Haptic vibration cue on supported mobile devices
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([180, 80, 220]);
+      } catch {}
+    }
+  },
+
   preview(type: RestSoundType): void {
-    this.playSound(type, 0.4);
+    this.playSound(type, 0.45);
   },
 
   // Short clean beep for incremental actions
   playBeep(freq = 880, duration = 0.15, volume = 0.25): void {
-    if (typeof window === 'undefined') return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') ctx.resume();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
@@ -149,11 +247,10 @@ export const AudioService = {
 
   // 1. Workout Session Start Cue (Ascending energizing chord C5 -> E5 -> G5 -> C6)
   playWorkoutStartCue(volume = 0.3): void {
-    if (typeof window === 'undefined') return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') ctx.resume();
       const chord = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
 
       chord.forEach((freq, idx) => {
@@ -179,11 +276,10 @@ export const AudioService = {
 
   // 2. Workout Session Finish & Victory Cue (Fanfare celebration sequence)
   playWorkoutEndCue(volume = 0.35): void {
-    if (typeof window === 'undefined') return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') ctx.resume();
       const fanfare = [
         { freq: 587.33, start: 0.0, dur: 0.15 }, // D5
         { freq: 587.33, start: 0.15, dur: 0.15 }, // D5
@@ -213,11 +309,10 @@ export const AudioService = {
 
   // 3. Rest Timer Countdown Warning (Tick tone on 3, 2, 1 seconds before rest ends)
   playCountdownWarning(secondsLeft: number, volume = 0.2): void {
-    if (typeof window === 'undefined') return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') ctx.resume();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
@@ -241,12 +336,10 @@ export const AudioService = {
 
   // 3b. Rest Timer 5-Second Warning Prepare Chime (Subtle, pleasant melodic chime signaling user to prepare for next set)
   playPrepareChime(volume = 0.22): void {
-    if (typeof window === 'undefined') return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-
+      if (ctx.state === 'suspended') ctx.resume();
       // Soft, crystal triad chime chord (A5: 880Hz -> C#6: 1108.73Hz -> E6: 1318.51Hz)
       const chimeTones = [
         { freq: 880.00, startOffset: 0.0, dur: 0.45 },
@@ -278,11 +371,10 @@ export const AudioService = {
 
   // 4. Rest Timer Start Cue (Smooth descending tone signaling recovery start)
   playRestStartCue(volume = 0.25): void {
-    if (typeof window === 'undefined') return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') ctx.resume();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
@@ -309,12 +401,10 @@ export const AudioService = {
   // 6. Personal Record (PR) Achievement Fanfare Cue
   // Vibrant, triumphant ascending arpeggio with rich harmonics (C5 -> E5 -> G5 -> C6 -> E6 victory climax)
   playPRAchievementCue(volume = 0.35): void {
-    if (typeof window === 'undefined') return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-
+      if (ctx.state === 'suspended') ctx.resume();
       // Arpeggio notes: C5, E5, G5, C6, high E6 with brilliance
       const notes = [
         { freq: 523.25, start: 0.0, dur: 0.22, vol: 0.3 },   // C5

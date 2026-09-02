@@ -107,7 +107,7 @@ export const ActiveCoreModal: React.FC<ActiveCoreModalProps> = ({
 
   const triggerCompletionSound = () => {
     if (!soundEnabled) return;
-    AudioService.playSound(selectedSound);
+    AudioService.playRestCompleteCue(selectedSound, 0.45);
   };
 
   // Rest countdown with 5-second prepare chime & transition cues

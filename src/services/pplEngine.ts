@@ -259,6 +259,298 @@ export const PPLEngine = {
     };
   },
 
+  // Get list of all available workout splits for substitution
+  getAvailableSplits() {
+    return [
+      {
+        id: 'push',
+        name: 'Push (Chest, Shoulders & Triceps)',
+        nameAr: 'دفع (الصدر، الأكتاف الأمامية والجانبية، الترايسبس)',
+        description: 'Focus on horizontal and vertical pressing power and upper body anterior chain.',
+        descriptionAr: 'تركيز على القوة الدافعة الأفقية والرأسية وعضلات الصدر والأكتاف والترايسبس.',
+        targetCategory: 'push',
+        icon: 'Flame',
+        color: 'from-amber-500/20 to-orange-500/10 border-amber-500/30 text-amber-400',
+      },
+      {
+        id: 'pull',
+        name: 'Pull (Back, Lats, Rear Delts & Biceps)',
+        nameAr: 'سحب (عضلات الظهر، اللاتس، الكتف الخلفي، البايسبس)',
+        description: 'Target back width, vertical pulldowns, heavy rows and arm flexion.',
+        descriptionAr: 'بناء كثافة وسعة عضلات الظهر، السحب العالي والتجديف وقوة الذراعين.',
+        targetCategory: 'pull',
+        icon: 'Zap',
+        color: 'from-blue-500/20 to-cyan-500/10 border-blue-500/30 text-blue-400',
+      },
+      {
+        id: 'legs',
+        name: 'Legs & Calves (Quads, Hamstrings, Calves)',
+        nameAr: 'أرجل وسمانة (الفخذ الأمامي، الفخذ الخلفي، السمانة)',
+        description: 'Lower body foundation, quadriceps loading, posterior chain hinges and calf drives.',
+        descriptionAr: 'قوة الجزء السفلي، تقوية أوتار الركبة والأفخاذ الأمامية والسمانة.',
+        targetCategory: 'legs',
+        icon: 'Target',
+        color: 'from-emerald-500/20 to-teal-500/10 border-emerald-500/30 text-emerald-400',
+      },
+      {
+        id: 'shoulders_arms',
+        name: 'Shoulders & Arms Hypertrophy Focus',
+        nameAr: 'تركيز الأكتاف والذراعين (بايسبس، ترايسبس، رفرفة)',
+        description: 'Dedicated shoulder capping and arm isolation when legs or back need recovery.',
+        descriptionAr: 'تركيز عالي على استهداف الأكتاف والباي والتراي عند الشعور بإجهاد في الأرجل أو الظهر.',
+        targetCategory: 'push',
+        icon: 'Sparkles',
+        color: 'from-purple-500/20 to-indigo-500/10 border-purple-500/30 text-purple-400',
+      },
+      {
+        id: 'upper',
+        name: 'Upper Body Power & Mass (Chest & Back Superset)',
+        nameAr: 'جزء علوي شامل (توازن الصدر والظهر والذراعين)',
+        description: 'Complete upper body stimulation combining antagonist chest and back movements.',
+        descriptionAr: 'تحفيز شامل لكامل الجزء العلوي بدمج تمارين الصدر والظهر المتقابلة.',
+        targetCategory: 'push',
+        icon: 'ShieldCheck',
+        color: 'from-sky-500/20 to-blue-500/10 border-sky-500/30 text-sky-400',
+      },
+      {
+        id: 'lower',
+        name: 'Lower Body & Glutes (Hinges & Posterior Focus)',
+        nameAr: 'جزء سفلي وتركيز السلسلة الخلفية والأفخاذ',
+        description: 'Glute bridges, leg curls, lunges, and calf work with lower spinal load.',
+        descriptionAr: 'ديدليفت روماني، طعنات، ومرجحة أرجل مع تقليل الضغط على أسفل الظهر.',
+        targetCategory: 'legs',
+        icon: 'Scale',
+        color: 'from-lime-500/20 to-emerald-500/10 border-lime-500/30 text-lime-400',
+      },
+      {
+        id: 'full_body',
+        name: 'Full Body Functional Calisthenics & Dumbbell',
+        nameAr: 'تدريب شامل للجسم بالدمبل ووزن الجسم (منزلي/سريع)',
+        description: 'Full kinetic chain activation with pushups, rows, squats, and core circuits.',
+        descriptionAr: 'تفعيل شامل لجميع المجموعات العضلية بتمارين مركبة بوزن الجسم والدمبل.',
+        targetCategory: 'full_body',
+        icon: 'Activity',
+        color: 'from-rose-500/20 to-orange-500/10 border-rose-500/30 text-rose-400',
+      },
+      {
+        id: 'rest_active',
+        name: 'Core Stability & Active Recovery Mobility',
+        nameAr: 'استشفاء نشط، كور ومرونة المفاصل',
+        description: 'Gentle core bracing, thoracic mobility, deep stretching, and blood flow enhancement.',
+        descriptionAr: 'تقوية عضلات البطن العميقة والكور، إطالات شاملة وتنشيط الدورة الدموية.',
+        targetCategory: 'core',
+        icon: 'Moon',
+        color: 'from-indigo-500/20 to-violet-500/10 border-indigo-500/30 text-indigo-400',
+      },
+    ];
+  },
+
+  // Build a specific workout for any chosen split or substitution
+  buildWorkoutForSplit(
+    splitId: string,
+    profile: UserProfile,
+    history: WorkoutSession[],
+    substitutionDetails?: {
+      originalType?: string;
+      originalName?: string;
+      originalNameAr?: string;
+      reason?: string;
+      reasonAr?: string;
+    }
+  ): WorkoutSession {
+    const today = new Date().toISOString().split('T')[0];
+    const isHome = profile.preferredLocation === 'home';
+    const selectedExercises: Exercise[] = [];
+
+    let sessionName = 'Push Session (Chest, Shoulders, Triceps)';
+    let sessionNameAr = 'تمرينة دفع (الصدر، الأكتاف، الترايسبس)';
+    let sessionType: any = 'push';
+
+    if (splitId === 'push') {
+      sessionName = 'Push Session (Chest, Shoulders, Triceps)';
+      sessionNameAr = 'تمرينة دفع (الصدر، الأكتاف، الترايسبس)';
+      sessionType = 'push';
+      const e1 = isHome ? this.getExerciseById('push_pushups') : this.getExerciseById('push_barbell_bench_press');
+      const e2 = this.getExerciseById('push_dumbbell_incline_press');
+      const e3 = isHome ? this.getExerciseById('push_seated_dumbbell_shoulder_press') : this.getExerciseById('push_overhead_barbell_press');
+      const e4 = this.getExerciseById('push_lateral_raises');
+      const e5 = isHome ? this.getExerciseById('push_skull_crushers') : this.getExerciseById('push_tricep_rope_pushdown');
+      [e1, e2, e3, e4, e5].forEach(e => { if (e && !selectedExercises.some(s => s.id === e.id)) selectedExercises.push(e); });
+    } else if (splitId === 'pull') {
+      sessionName = 'Pull Session (Back, Rear Delts, Biceps)';
+      sessionNameAr = 'تمرينة سحب (الظهر، الكتف الخلفي، البايسبس)';
+      sessionType = 'pull';
+      const e1 = this.getExerciseById('pull_barbell_bent_row') || this.getExerciseById('pull_lat_pulldown');
+      const e2 = this.getExerciseById('pull_lat_pulldown') || this.getExerciseById('pull_seated_cable_row');
+      const e3 = this.getExerciseById('pull_seated_cable_row') || this.getExerciseById('pull_single_arm_dumbbell_row');
+      const e4 = this.getExerciseById('pull_face_pulls') || this.getExerciseById('pull_reverse_pec_deck');
+      const e5 = this.getExerciseById('pull_incline_dumbbell_curl') || this.getExerciseById('pull_hammer_curls');
+      const e6 = this.getExerciseById('pull_hammer_curls');
+      [e1, e2, e3, e4, e5, e6].forEach(e => { if (e && !selectedExercises.some(s => s.id === e.id)) selectedExercises.push(e); });
+    } else if (splitId === 'legs') {
+      sessionName = 'Legs Session (Quads, Hamstrings, Calves)';
+      sessionNameAr = 'تمرينة أرجل (الفخذ الأمامي والخلفي والسمانة)';
+      sessionType = 'legs';
+      const e1 = isHome ? this.getExerciseById('legs_romanian_deadlift') : this.getExerciseById('legs_barbell_squat');
+      const e2 = this.getExerciseById('legs_romanian_deadlift') || this.getExerciseById('legs_dumbbell_goblet_squat');
+      const e3 = this.getExerciseById('legs_leg_press') || this.getExerciseById('legs_leg_extension') || this.getExerciseById('legs_bulgarian_split_squat');
+      const e4 = this.getExerciseById('legs_leg_curl') || this.getExerciseById('legs_dumbbell_lunges');
+      const e5 = this.getExerciseById('legs_standing_calf_raise');
+      [e1, e2, e3, e4, e5].forEach(e => { if (e && !selectedExercises.some(s => s.id === e.id)) selectedExercises.push(e); });
+    } else if (splitId === 'shoulders_arms') {
+      sessionName = 'Shoulders & Arms Specialization';
+      sessionNameAr = 'تمرين تركيز أكتاف وذراعين';
+      sessionType = 'shoulders_arms';
+      const e1 = this.getExerciseById('push_overhead_barbell_press') || this.getExerciseById('push_seated_dumbbell_shoulder_press');
+      const e2 = this.getExerciseById('push_lateral_raises');
+      const e3 = this.getExerciseById('pull_face_pulls') || this.getExerciseById('pull_reverse_pec_deck');
+      const e4 = this.getExerciseById('pull_incline_dumbbell_curl') || this.getExerciseById('pull_barbell_bicep_curl');
+      const e5 = this.getExerciseById('push_tricep_rope_pushdown') || this.getExerciseById('push_skull_crushers');
+      const e6 = this.getExerciseById('pull_hammer_curls');
+      [e1, e2, e3, e4, e5, e6].forEach(e => { if (e && !selectedExercises.some(s => s.id === e.id)) selectedExercises.push(e); });
+    } else if (splitId === 'upper') {
+      sessionName = 'Upper Body Hypertrophy & Power';
+      sessionNameAr = 'تمرين جزء علوي شامل وتضخيم';
+      sessionType = 'upper';
+      const e1 = this.getExerciseById('push_barbell_bench_press') || this.getExerciseById('push_dumbbell_incline_press');
+      const e2 = this.getExerciseById('pull_lat_pulldown') || this.getExerciseById('pull_barbell_bent_row');
+      const e3 = this.getExerciseById('push_seated_dumbbell_shoulder_press');
+      const e4 = this.getExerciseById('pull_seated_cable_row');
+      const e5 = this.getExerciseById('push_lateral_raises');
+      const e6 = this.getExerciseById('pull_incline_dumbbell_curl');
+      [e1, e2, e3, e4, e5, e6].forEach(e => { if (e && !selectedExercises.some(s => s.id === e.id)) selectedExercises.push(e); });
+    } else if (splitId === 'lower') {
+      sessionName = 'Lower Body & Posterior Chain';
+      sessionNameAr = 'تمرين جزء سفلي وسلسلة خلفية';
+      sessionType = 'lower';
+      const e1 = this.getExerciseById('legs_romanian_deadlift');
+      const e2 = this.getExerciseById('legs_dumbbell_goblet_squat') || this.getExerciseById('legs_leg_press');
+      const e3 = this.getExerciseById('legs_leg_curl') || this.getExerciseById('legs_bulgarian_split_squat');
+      const e4 = this.getExerciseById('legs_dumbbell_lunges') || this.getExerciseById('legs_leg_extension');
+      const e5 = this.getExerciseById('legs_standing_calf_raise');
+      [e1, e2, e3, e4, e5].forEach(e => { if (e && !selectedExercises.some(s => s.id === e.id)) selectedExercises.push(e); });
+    } else if (splitId === 'full_body') {
+      sessionName = 'Full Body Conditioning & Hypertrophy';
+      sessionNameAr = 'تمرين شامل لكامل الجسم وتنشيط عضلي';
+      sessionType = 'full_body';
+      const e1 = this.getExerciseById('push_pushups') || this.getExerciseById('push_barbell_bench_press');
+      const e2 = this.getExerciseById('pull_single_arm_dumbbell_row') || this.getExerciseById('pull_lat_pulldown');
+      const e3 = this.getExerciseById('legs_dumbbell_goblet_squat') || this.getExerciseById('legs_romanian_deadlift');
+      const e4 = this.getExerciseById('push_lateral_raises');
+      const e5 = this.getExerciseById('core_plank_hold');
+      [e1, e2, e3, e4, e5].forEach(e => { if (e && !selectedExercises.some(s => s.id === e.id)) selectedExercises.push(e); });
+    } else {
+      sessionName = 'Active Recovery & Core Session';
+      sessionNameAr = 'استشفاء نشط وتمارين كور ومرونة';
+      sessionType = 'rest_active';
+      const e1 = this.getExerciseById('core_plank_hold');
+      const e2 = this.getExerciseById('core_dead_bug');
+      const e3 = this.getExerciseById('core_bird_dog');
+      const e4 = this.getExerciseById('core_side_plank');
+      const e5 = this.getExerciseById('recovery_full_body_stretch');
+      [e1, e2, e3, e4, e5].forEach(e => { if (e && !selectedExercises.some(s => s.id === e.id)) selectedExercises.push(e); });
+    }
+
+    // Fallback if empty
+    if (selectedExercises.length === 0) {
+      selectedExercises.push(exerciseSeedData[0], exerciseSeedData[1], exerciseSeedData[2]);
+    }
+
+    const workoutExercises: WorkoutExercise[] = selectedExercises.map(ex => {
+      const advice = this.calculateProgression(ex.id, history);
+      const setsCount = ex.targetSets || 3;
+      const sets: SetLog[] = [];
+
+      for (let i = 1; i <= setsCount; i++) {
+        sets.push({
+          id: `set_${ex.id}_${i}`,
+          setNumber: i,
+          targetReps: ex.targetRepRange || '8-10',
+          actualReps: parseInt(ex.targetRepRange?.split('-')[0] || '8', 10),
+          targetWeight: advice.recommendedWeight,
+          actualWeight: advice.recommendedWeight,
+          rpe: ex.rpeTarget || 8,
+          completed: false,
+        });
+      }
+
+      return {
+        exerciseId: ex.id,
+        exerciseName: ex.name,
+        exerciseNameAr: ex.nameAr,
+        primaryMuscle: ex.primaryMuscle,
+        sets,
+        restSeconds: ex.restSeconds || 90,
+        targetRpe: ex.rpeTarget || 8,
+        completed: false,
+      };
+    });
+
+    return {
+      id: 'session_' + Date.now(),
+      date: today,
+      name: sessionName,
+      nameAr: sessionNameAr,
+      type: sessionType,
+      mode: profile.mode,
+      durationMinutes: sessionType === 'rest_active' ? 30 : 55,
+      exercises: workoutExercises,
+      completed: false,
+      startedAt: Date.now(),
+      isSubstituted: Boolean(substitutionDetails),
+      originalType: substitutionDetails?.originalType,
+      originalName: substitutionDetails?.originalName,
+      originalNameAr: substitutionDetails?.originalNameAr,
+      substitutionReason: substitutionDetails?.reason,
+    };
+  },
+
+  // Smart substitutes with muscle, equipment, and fatigue filters
+  getSmartSubstitutes(
+    exerciseId: string,
+    options?: {
+      filterCategory?: string;
+      filterMuscle?: string;
+      filterEquipment?: string;
+      lowFatigueOnly?: boolean;
+    }
+  ): Exercise[] {
+    const current = this.getExerciseById(exerciseId);
+    if (!current) return exerciseSeedData.slice(0, 8);
+
+    return exerciseSeedData.filter(e => {
+      if (e.id === exerciseId) return false;
+
+      if (options?.filterMuscle && options.filterMuscle !== 'all') {
+        const match = e.primaryMuscle.toLowerCase().includes(options.filterMuscle.toLowerCase()) ||
+                      (e.primaryMuscleAr && e.primaryMuscleAr.includes(options.filterMuscle));
+        if (!match) return false;
+      } else if (options?.filterCategory && options.filterCategory !== 'all') {
+        if (e.category !== options.filterCategory) return false;
+      } else {
+        // Default: same category or same primary muscle
+        const sameCat = e.category === current.category;
+        const sameMuscle = e.primaryMuscle.toLowerCase().split(' ')[0] === current.primaryMuscle.toLowerCase().split(' ')[0];
+        if (!sameCat && !sameMuscle) return false;
+      }
+
+      if (options?.filterEquipment && options.filterEquipment !== 'all') {
+        if (!e.equipment.toLowerCase().includes(options.filterEquipment.toLowerCase())) {
+          return false;
+        }
+      }
+
+      if (options?.lowFatigueOnly) {
+        // Prefer isolation or machine / cable exercises over heavy free-weight barbells
+        if (e.equipment.toLowerCase().includes('barbell') && e.exerciseType === 'compound') {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  },
+
   // Progressive Overload Intelligence Engine
   calculateProgression(exerciseId: string, history: WorkoutSession[]): ProgressionAdvice {
     const exercise = this.getExerciseById(exerciseId);

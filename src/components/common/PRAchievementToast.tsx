@@ -15,8 +15,9 @@ export const PRAchievementToast: React.FC<PRAchievementToastProps> = ({
   profile,
   onClose,
 }) => {
-  const t = translations[profile.language];
-  const isAr = profile.language === 'ar';
+  const lang = profile?.language || 'en';
+  const t = translations[lang] || translations.en;
+  const isAr = lang === 'ar';
 
   // Auto dismiss after 5 seconds
   useEffect(() => {

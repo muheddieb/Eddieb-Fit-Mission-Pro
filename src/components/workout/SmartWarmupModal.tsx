@@ -47,7 +47,7 @@ export const SmartWarmupModal: React.FC<SmartWarmupModalProps> = ({
   onClose,
   onStartWorkout
 }) => {
-  const isAr = profile.language === 'ar';
+  const isAr = profile?.language === 'ar';
 
   // Normalize initial workout type
   const getNormalizedType = (t?: string): 'push' | 'pull' | 'legs' | 'full_body' => {
