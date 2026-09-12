@@ -99,6 +99,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   const [soundPickerOpen, setSoundPickerOpen] = useState<boolean>(false);
   const [showRestPresets, setShowRestPresets] = useState<boolean>(false);
   const [smartWarmupOpen, setSmartWarmupOpen] = useState<boolean>(false);
+  const [warmupBannerDismissed, setWarmupBannerDismissed] = useState<boolean>(false);
   
   // RPE Calculator & Auto-Regulation State
   const [rpeCalculatorOpen, setRpeCalculatorOpen] = useState<boolean>(false);
@@ -747,6 +748,18 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Quick Adaptive Routine / Swap Trigger */}
+          <button
+            id="btn-adaptive-tune-top"
+            onClick={() => setSubstitutionModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-sm"
+            title={isAr ? 'نظام التبديل المرن وتكييف التمرين أو الوقت' : 'Flexible Workout Substitution & Adaptive Tuning'}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{isAr ? 'تبديل وتكييف' : 'Adaptive Swap'}</span>
+            <span className="sm:hidden">{isAr ? 'تكييف' : 'Adapt'}</span>
+          </button>
+
           {/* Sound & Tone Selector Dropdown Trigger */}
           <button
             id="btn-warmup-workout-top"
@@ -845,6 +858,49 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
       {/* Main Active Workout Grid */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
         <div className="mx-auto max-w-4xl space-y-5">
+          {/* Dynamic Warm-up Suggestion Banner (Prior to First Set) */}
+          {!workout.exercises.some(ex => ex.sets.some(s => s.completed)) && !warmupBannerDismissed && (
+            <div className="relative overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent p-3.5 sm:p-4 shadow-sm flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-inner">
+                  <Flame className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-black text-foreground">
+                      {isAr ? 'إحماء حركي ذكي مخصص لعضلات جلستك اليوم' : 'Dynamic Warm-up Available'}
+                    </span>
+                    <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-400 uppercase">
+                      5 MIN
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                    {isAr
+                      ? 'سلسلة تليين وإطالات ديناميكية مهيأة خصيصاً للمفاصل والعضلات المستهدفة في هذه الجلسة.'
+                      : 'Tailored mobility & stretching sequence calibrated for today’s target muscles.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  id="btn-launch-warmup-banner"
+                  onClick={() => setSmartWarmupOpen(true)}
+                  className="rounded-xl bg-amber-500 px-3 py-1.5 text-xs font-bold text-black hover:bg-amber-400 transition-transform active:scale-95 shadow-sm"
+                >
+                  {isAr ? 'بدء الإحماء' : 'Start Warm-up'}
+                </button>
+                <button
+                  onClick={() => setWarmupBannerDismissed(true)}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                  title={isAr ? 'تخطي' : 'Dismiss'}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Exercise Selector Horizontal Pills */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
             {workout.exercises.map((ex, idx) => (
@@ -1693,6 +1749,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
       <SmartWarmupModal
         isOpen={smartWarmupOpen}
         initialWorkoutType={workout.type}
+        currentWorkout={workout}
         profile={profile}
         onClose={() => setSmartWarmupOpen(false)}
       />

@@ -34,12 +34,15 @@ import { NavSection } from '../layout/Sidebar';
 import { SmartWarmupModal } from '../workout/SmartWarmupModal';
 import { HydrationTracker } from './HydrationTracker';
 import { LiveHeartRateBadge } from '../devices/LiveHeartRateBadge';
+import { DailyWorkoutHub } from './DailyWorkoutHub';
+import { MonthlyAdherenceCalendar } from './MonthlyAdherenceCalendar';
 
 interface DashboardViewProps {
   profile: UserProfile;
   history: WorkoutSession[];
   activeWorkout: WorkoutSession | null;
   onStartWorkout: () => void;
+  onStartSpecificWorkout?: (session: WorkoutSession) => void;
   onNavigate: (section: NavSection) => void;
   onUpdateProfile?: (profile: UserProfile) => void;
 }
@@ -49,6 +52,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   history,
   activeWorkout,
   onStartWorkout,
+  onStartSpecificWorkout,
   onNavigate,
   onUpdateProfile,
 }) => {
@@ -188,66 +192,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           ) : (
             <button
               id="btn-start-dashboard-hero"
-              onClick={() => {
-                if (interruptionAnalysis.isInterrupted) {
-                  onNavigate('returnToTraining');
-                } else {
-                  onStartWorkout();
-                }
-              }}
-              className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all"
+              onClick={onStartWorkout}
+              className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all active:scale-95"
             >
               <Play className="h-4 w-4 fill-current" />
               <span>
-                {interruptionAnalysis.isInterrupted 
-                  ? (isAr ? 'بدء مسار العودة الآمنة' : 'Start Safe Return')
-                  : `${t.dashboard.startWorkout} (${pplPhase.toUpperCase()})`}
+                {isAr ? 'بدء تمرين اليوم' : "Start Today's Workout"}
               </span>
             </button>
           )}
         </div>
       </div>
-
-      {/* Return to Training Smart Interruption Banner (If Interrupted >= 4 days) */}
-      {interruptionAnalysis.isInterrupted && (
-        <div className="relative overflow-hidden rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 via-neutral-900 to-neutral-900 p-5 shadow-xl">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-start gap-3.5">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-neutral-950 shadow-md shadow-amber-500/30">
-                <Sparkles className="h-6 w-6" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-500 text-neutral-950">
-                    {isAr ? interruptionAnalysis.levelLabelAr : interruptionAnalysis.levelLabel}
-                  </span>
-                  <span className="text-xs font-semibold text-amber-400">
-                    {isAr 
-                      ? `${interruptionAnalysis.daysSinceLastWorkout} يوماً منذ آخر تمرين`
-                      : `${interruptionAnalysis.daysSinceLastWorkout} days since last session`}
-                  </span>
-                </div>
-                <h3 className="text-base font-bold text-white">
-                  {t.returnToTraining.bannerAlert}
-                </h3>
-                <p className="text-xs text-neutral-300 max-w-2xl leading-relaxed">
-                  {isAr ? interruptionAnalysis.summaryGuidanceAr : interruptionAnalysis.summaryGuidance}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => onNavigate('returnToTraining')}
-                className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
-              >
-                <span>{t.returnToTraining.title}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Gemini AI Daily Athletic Briefing Card */}
       <div className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card p-5 shadow-lg relative overflow-hidden">
@@ -283,107 +238,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Primary Grid: PPL Split Target & Fat Loss Trend Engine */}
+      {/* Daily Workout Hub: Horizontal Week Days Strip & Dedicated Workout of the Day */}
+      <DailyWorkoutHub
+        profile={profile}
+        history={history}
+        activeWorkout={activeWorkout}
+        onStartWorkout={onStartWorkout}
+        onStartSpecificWorkout={(session) => {
+          if (onStartSpecificWorkout) {
+            onStartSpecificWorkout(session);
+          } else {
+            onStartWorkout();
+          }
+        }}
+        onOpenWarmupModal={() => setSmartWarmupOpen(true)}
+      />
+
+      {/* Secondary Metrics: Recomposition Engine & Daily Hydration */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left 7 cols: PPL Daily Session Card */}
+        {/* Left 7 cols: Fat-Loss & Body Composition Engine */}
         <div className="lg:col-span-7 rounded-2xl border border-border bg-card p-6 shadow-md flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between border-b border-border pb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-foreground">
-                  <Dumbbell className="h-5 w-5" />
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                    {t.dashboard.todayPPL}
-                  </span>
-                  <h3 className="text-lg font-black text-foreground capitalize">
-                    {pplPhase === 'push' && (isAr ? 'جلسة الدفع (الصدر، الأكتاف، الترايسبس)' : 'Push Session (Chest, Delts, Triceps)')}
-                    {pplPhase === 'pull' && (isAr ? 'جلسة السحب (الظهر، الترابيس، البايسبس)' : 'Pull Session (Back, Traps, Biceps)')}
-                    {pplPhase === 'legs' && (isAr ? 'جلسة الأرجل (الفخذ، الخلفيات، السمانة)' : 'Legs Session (Quads, Hamstrings, Calves)')}
-                    {pplPhase === 'rest_active' && (isAr ? 'استشفاء نشط وكور ومرونة' : 'Active Recovery & Core Session')}
-                  </h3>
-                </div>
-              </div>
-
-              <span className={`rounded-lg px-3 py-1 text-xs font-black uppercase border ${phaseBadgeColor}`}>
-                {pplPhase}
-              </span>
-            </div>
-
-            {/* Mesocycle Block Phase Context & Animated Progress Bar */}
-            <div className="mt-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                  <span className="text-primary">
-                    {isAr ? `دورة الميزوسايكل ${programProgress.cycleNumber}` : `Mesocycle ${programProgress.cycleNumber}`}
-                  </span>
-                  <span>•</span>
-                  <span>
-                    {isAr ? `أسبوع ${programProgress.weekInCycle} من 4` : `Block Week ${programProgress.weekInCycle} of 4`}
-                  </span>
-                </div>
-                <span className="text-xs font-semibold text-primary font-mono">
-                  {programProgress.weekInCycle} / 4 {isAr ? 'أسابيع' : 'Weeks'} ({blockProgressPercent}%)
-                </span>
-              </div>
-
-              {/* Framer Motion Entry Animated Progress Bar */}
-              <div className="h-2 w-full rounded-full bg-secondary/80 overflow-hidden">
-                <motion.div
-                  className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-400"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${blockProgressPercent}%` }}
-                  transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
-                />
-              </div>
-
-              <div className="text-xs font-semibold text-foreground">
-                {isAr ? transitionPhase.phaseTitleAr : transitionPhase.phaseTitle}
-              </div>
-
-              <ul className="space-y-1.5 text-xs text-muted-foreground list-disc list-inside">
-                {(isAr ? transitionPhase.focusDirectivesAr : transitionPhase.focusDirectives).map((dir, idx) => (
-                  <li key={idx} className="leading-relaxed">{dir}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-border pt-4">
-            <div className="text-xs text-muted-foreground">
-              <span>{t.dashboard.programStartDate}: </span>
-              <strong className="text-foreground">{programProgress.startDateString}</strong>
-              <span className="mx-2">•</span>
-              <span>{t.dashboard.totalDaysElapsed}: </span>
-              <strong className="text-foreground">{programProgress.totalElapsedDays}d ({isAr ? `اليوم ${programProgress.totalProgramDay}` : `Day ${programProgress.totalProgramDay}`})</strong>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                id="btn-launch-smart-warmup-dashboard"
-                onClick={() => setSmartWarmupOpen(true)}
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs font-bold text-amber-400 hover:bg-amber-500/20 transition-all shadow-sm"
-                title={isAr ? 'بدء إحماء 5 دقائق مخصص لجلستك اليوم' : '5-Minute dynamic warm-up sequence for today’s session'}
-              >
-                <Flame className="h-3.5 w-3.5 fill-current" />
-                <span>{t.dashboard.smartWarmup}</span>
-              </button>
-
-              <button
-                id="btn-launch-workout-ppl-card"
-                onClick={onStartWorkout}
-                className="flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-primary-foreground shadow hover:bg-primary/90 transition-colors"
-              >
-                <Play className="h-3.5 w-3.5 fill-current" />
-                <span>{activeWorkout ? t.dashboard.continueWorkout : t.dashboard.startWorkout}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Right 5 cols: Fat-Loss & Body Composition Engine */}
-        <div className="lg:col-span-5 rounded-2xl border border-border bg-card p-6 shadow-md flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between border-b border-border pb-4">
               <div className="flex items-center gap-2">
@@ -457,7 +331,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Right 5 cols: Daily Hydration Tracker */}
+        <div className="lg:col-span-5 flex flex-col">
+          <HydrationTracker
+            profile={profile}
+            todayWaterMl={todayWaterMl}
+            onUpdateWater={(newTotal) => setTodayWaterMl(newTotal)}
+            onUpdateProfile={onUpdateProfile}
+          />
+        </div>
       </div>
+
+      {/* Monthly Adherence & Long-Term Workout Calendar */}
+      <MonthlyAdherenceCalendar
+        profile={profile}
+        history={history}
+        onStartSpecificWorkout={onStartSpecificWorkout}
+        onNavigateToSection={onNavigate}
+      />
 
       {/* Weekly Volume & Progressive Overload Mission Tracker */}
       <div className="rounded-2xl border border-border bg-card p-6 shadow-md space-y-5">
@@ -702,14 +594,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Daily Hydration Tracker Component */}
-      <HydrationTracker
-        profile={profile}
-        todayWaterMl={todayWaterMl}
-        onUpdateWater={(newTotal) => setTodayWaterMl(newTotal)}
-        onUpdateProfile={onUpdateProfile}
-      />
 
       {/* Daily Habits & Nutrition Snapshot Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

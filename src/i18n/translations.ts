@@ -24,6 +24,7 @@ export const translations = {
       profile: 'Athlete Profile',
       settings: 'Settings',
       returnToTraining: 'Return to Training',
+      weeklySchedule: 'Weekly Schedule',
     },
 
     // Devices & Samsung Health
@@ -667,6 +668,7 @@ export const translations = {
       profile: 'الملف الرياضي',
       settings: 'الإعدادات',
       returnToTraining: 'العودة بعد الانقطاع',
+      weeklySchedule: 'جدول تمارين الأسبوع',
     },
 
     // Devices & Samsung Health

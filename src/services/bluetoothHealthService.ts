@@ -510,24 +510,39 @@ class BluetoothHealthManager {
         console.warn('Heart rate service not immediately available on device:', hrErr);
       }
 
-      // Try reading battery level
-      let battery = 90;
+      // Try reading Battery Level characteristic (0x2A19) on Battery Service (0x180F)
+      let battery: number | undefined = undefined;
       try {
         const batteryService = await this.server.getPrimaryService(GATT_SERVICES.BATTERY);
-        this.batteryCharacteristic = await batteryService.getCharacteristic(GATT_CHARACTERISTICS.BATTERY_LEVEL);
-        const batVal = await this.batteryCharacteristic.readValue();
-        battery = batVal.getUint8(0);
-        
-        await this.batteryCharacteristic.startNotifications();
-        this.batteryCharacteristic.addEventListener('characteristicvaluechanged', (event: any) => {
-          const newBat = event.target.value.getUint8(0);
-          if (this.currentDeviceInfo) {
-            this.currentDeviceInfo.batteryLevel = newBat;
-            this.notifyDeviceState();
+        if (batteryService) {
+          this.batteryCharacteristic = await batteryService.getCharacteristic(GATT_CHARACTERISTICS.BATTERY_LEVEL);
+          if (this.batteryCharacteristic) {
+            const batVal = await this.batteryCharacteristic.readValue();
+            if (batVal && batVal.byteLength > 0) {
+              const rawBat = batVal.getUint8(0);
+              battery = Math.max(0, Math.min(100, rawBat));
+            }
+            
+            try {
+              await this.batteryCharacteristic.startNotifications();
+              this.batteryCharacteristic.addEventListener('characteristicvaluechanged', (event: any) => {
+                const targetVal = event.target?.value;
+                if (targetVal && targetVal.byteLength > 0) {
+                  const newBat = Math.max(0, Math.min(100, targetVal.getUint8(0)));
+                  if (this.currentDeviceInfo) {
+                    this.currentDeviceInfo.batteryLevel = newBat;
+                    this.notifyDeviceState();
+                  }
+                }
+              });
+            } catch (notifErr) {
+              // Notification subscription is optional on battery characteristic for some GATT peripherals
+            }
           }
-        });
+        }
       } catch (e) {
-        // optional battery service
+        // Battery service 0x180F or characteristic 0x2A19 is optional and not advertised by all peripherals
+        console.log('Battery Service (0x180F / 0x2A19) not provided by device:', e);
       }
 
       // Determine detected device type from name and manufacturer

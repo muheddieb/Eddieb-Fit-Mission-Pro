@@ -466,6 +466,24 @@ export const HealthDevicesView: React.FC<HealthDevicesViewProps> = ({
                   <Wifi className="h-4 w-4" />
                   <span>{btDevice?.name || (isAr ? 'ساعة متصلة' : 'Connected')}</span>
                 </span>
+
+                {/* Battery Level (0x2A19) Header Badge */}
+                {btDevice?.batteryLevel !== undefined && (
+                  <span 
+                    className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-all ${
+                      btDevice.batteryLevel > 50
+                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                        : btDevice.batteryLevel > 20
+                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
+                        : 'border-rose-500/40 bg-rose-500/10 text-rose-400 animate-pulse'
+                    }`}
+                    title={isAr ? `مستوى البطارية (0x2A19): ${btDevice.batteryLevel}%` : `Battery Level (0x2A19): ${btDevice.batteryLevel}%`}
+                  >
+                    <Battery className="h-4 w-4" />
+                    <span className="font-mono">{btDevice.batteryLevel}%</span>
+                  </span>
+                )}
+
                 <button
                   type="button"
                   id="btn-disconnect-bt"
@@ -743,16 +761,54 @@ export const HealthDevicesView: React.FC<HealthDevicesViewProps> = ({
                   <div className="text-[10px] text-muted-foreground">{isAr ? 'حالة التعافي' : 'Readiness'}</div>
                 </div>
 
-                {/* Device Battery & Sensor */}
-                <div className="rounded-2xl border border-border/60 bg-background/60 p-3.5 text-center backdrop-blur">
+                {/* Device Battery & Characteristic 0x2A19 */}
+                <div className="rounded-2xl border border-border/60 bg-background/60 p-3.5 text-center backdrop-blur flex flex-col justify-between">
                   <div className="flex items-center justify-center gap-1 text-[11px] font-bold text-emerald-400">
                     <Battery className="h-3.5 w-3.5" />
-                    <span>{isAr ? 'البطارية' : 'Battery'}</span>
+                    <span>{isAr ? 'البطارية (0x2A19)' : 'Battery (0x2A19)'}</span>
                   </div>
-                  <div className="text-lg font-black text-foreground font-mono mt-1">
-                    {btDevice?.batteryLevel !== undefined ? `${btDevice.batteryLevel}%` : '88%'}
+
+                  {btDevice?.batteryLevel !== undefined ? (
+                    <div className="my-1 space-y-1">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className={`text-lg font-black font-mono tracking-tight ${
+                          btDevice.batteryLevel > 50
+                            ? 'text-emerald-400'
+                            : btDevice.batteryLevel > 20
+                            ? 'text-amber-400'
+                            : 'text-rose-400'
+                        }`}>
+                          {btDevice.batteryLevel}%
+                        </span>
+                      </div>
+
+                      {/* Visual Battery Bar */}
+                      <div className="h-1.5 w-full bg-secondary/80 rounded-full overflow-hidden p-0.5 border border-border/40">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            btDevice.batteryLevel > 50
+                              ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                              : btDevice.batteryLevel > 20
+                              ? 'bg-gradient-to-r from-amber-500 to-yellow-400'
+                              : 'bg-gradient-to-r from-rose-500 to-red-600'
+                          }`}
+                          style={{ width: `${Math.max(6, Math.min(100, btDevice.batteryLevel))}%` }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="my-1">
+                      <div className="text-base font-bold text-muted-foreground font-mono">
+                        {isAr ? 'غير متوفر' : 'N/A'}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="text-[10px] text-muted-foreground truncate">
+                    {btDevice?.batteryLevel !== undefined 
+                      ? (isAr ? `${btDevice.sensorLocation || 'Wrist'} • متصل` : `${btDevice.sensorLocation || 'Wrist'} • Live`) 
+                      : (isAr ? 'خاصية 0x2A19 غير ممررة' : '0x2A19 not provided')}
                   </div>
-                  <div className="text-[10px] text-muted-foreground">{btDevice?.sensorLocation || 'Wrist'}</div>
                 </div>
               </div>
 
@@ -960,9 +1016,17 @@ export const HealthDevicesView: React.FC<HealthDevicesViewProps> = ({
                           </div>
                         </div>
 
-                        <span className="rounded-full bg-secondary px-2 py-0.5 text-[9px] font-bold text-muted-foreground shrink-0 border border-border">
-                          {isAr ? brand.badgeAr : brand.badge}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {isCurrentlyConnected && btDevice?.batteryLevel !== undefined && (
+                            <span className="flex items-center gap-0.5 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[9px] font-bold text-emerald-400 border border-emerald-500/30">
+                              <Battery className="h-2.5 w-2.5" />
+                              <span>{btDevice.batteryLevel}%</span>
+                            </span>
+                          )}
+                          <span className="rounded-full bg-secondary px-2 py-0.5 text-[9px] font-bold text-muted-foreground border border-border">
+                            {isAr ? brand.badgeAr : brand.badge}
+                          </span>
+                        </div>
                       </div>
 
                       <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2 mt-1">

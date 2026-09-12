@@ -18,13 +18,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  Watch
+  Watch,
+  Calendar
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { translations } from '../../i18n/translations';
 
 export type NavSection = 
   | 'dashboard' 
+  | 'weeklySchedule'
   | 'aiCoach' 
   | 'workout' 
   | 'returnToTraining'
@@ -67,9 +69,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const menuItems: { id: NavSection; label: string; icon: React.FC<{ className?: string }>; badge?: string; highlight?: boolean }[] = [
     { id: 'dashboard', label: t.nav.dashboard, icon: LayoutDashboard },
-    { id: 'aiCoach', label: t.nav.aiCoach, icon: Bot, badge: 'AI' },
+    { id: 'weeklySchedule', label: isRTL ? 'جدول تمارين الأسبوع' : 'Weekly Schedule', icon: Calendar, badge: isRTL ? 'مرن' : 'Swap' },
     { id: 'workout', label: t.nav.workout, icon: Dumbbell },
-    { id: 'returnToTraining', label: t.nav.returnToTraining, icon: Sparkles, badge: isInterrupted ? '⚡' : undefined, highlight: isInterrupted },
+    { 
+      id: 'returnToTraining', 
+      label: isRTL ? 'برنامج العودة بعد الانقطاع' : 'Return to Training', 
+      icon: Sparkles, 
+      badge: isInterrupted ? (isRTL ? 'موصى به' : 'Recommended') : undefined, 
+      highlight: isInterrupted 
+    },
+    { id: 'aiCoach', label: t.nav.aiCoach, icon: Bot, badge: 'AI' },
     { id: 'devices', label: t.nav.devices, icon: Watch, badge: 'BLE' },
     { id: 'exerciseLibrary', label: t.nav.exerciseLibrary, icon: BookOpen },
     { id: 'home', label: t.nav.home, icon: HomeIcon },

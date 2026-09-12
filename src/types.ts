@@ -157,12 +157,16 @@ export interface WorkoutSubstitutionRecord {
   substitutedName?: string;
 }
 
+export type WorkoutDifficultyLevel = 'easy' | 'standard' | 'hard';
+export type WorkoutTimeConstraint = '10min' | '20min' | '30min' | 'full';
+export type WorkoutEquipmentFilter = 'all' | 'gym' | 'home' | 'dumbbells' | 'bodyweight' | 'cables' | 'machines';
+
 export interface WorkoutSession {
   id: string;
   date: string; // YYYY-MM-DD
   name: string;
   nameAr: string;
-  type: ExerciseCategory | 'push' | 'pull' | 'legs' | 'full_body' | 'rest_active' | 'shoulders_arms' | 'upper' | 'lower';
+  type: ExerciseCategory | 'push' | 'pull' | 'legs' | 'full_body' | 'rest_active' | 'shoulders_arms' | 'upper' | 'lower' | 'cardio_conditioning';
   mode: TrainingMode;
   durationMinutes: number;
   exercises: WorkoutExercise[];
@@ -174,6 +178,11 @@ export interface WorkoutSession {
   startedAt?: number;
   completedAt?: number;
   timestamp?: number;
+  difficultyLevel?: WorkoutDifficultyLevel;
+  timeConstraint?: WorkoutTimeConstraint;
+  equipmentFocus?: WorkoutEquipmentFilter;
+  primaryMusclesTrained?: string[];
+  isAdaptiveReturn?: boolean;
   isSubstituted?: boolean;
   originalType?: string;
   originalName?: string;

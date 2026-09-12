@@ -4,11 +4,14 @@
  * Single Source of Truth for Pre-Workout Dynamic Mobilization & Neuromuscular Priming
  */
 
+import { WorkoutSession, WorkoutExercise } from '../types';
+import { exerciseSeedData } from '../data/exerciseSeed';
+
 export interface WarmupMovement {
   id: string;
   name: string;
   nameAr: string;
-  durationSeconds: number; // typically 50 seconds (6 movements * 50s = 300s = 5 mins)
+  durationSeconds: number; // typically 45-50 seconds
   repsOrTempo: string;
   repsOrTempoAr: string;
   targetJoints: string[];
@@ -22,20 +25,43 @@ export interface WarmupMovement {
   breathing: string;
   breathingAr: string;
   iconName?: string;
+  category?: 'mobility' | 'activation' | 'stretch' | 'cns' | 'potentiation';
+  muscleTags?: string[];
+  jointTags?: string[];
 }
 
 export interface WarmupSequence {
-  workoutType: 'push' | 'pull' | 'legs' | 'full_body' | 'general';
+  workoutType: 'push' | 'pull' | 'legs' | 'full_body' | 'general' | 'custom';
   title: string;
   titleAr: string;
   subtitle: string;
   subtitleAr: string;
-  totalDurationSeconds: number; // 300 seconds = 5 minutes
+  totalDurationSeconds: number; // e.g. 180s (3m), 300s (5m), 480s (8m)
   focusMuscles: string[];
   focusMusclesAr: string[];
   primaryObjective: string;
   primaryObjectiveAr: string;
   movements: WarmupMovement[];
+  targetedSessionExercises?: string[];
+  detectedJointComplexes?: string[];
+  detectedJointComplexesAr?: string[];
+  muscleDistribution?: { muscle: string; muscleAr: string; count: number; percentage: number }[];
+}
+
+export interface SessionMuscleAnalysis {
+  primaryMuscles: { name: string; nameAr: string; count: number; percentage: number }[];
+  detectedJointComplexes: { name: string; nameAr: string }[];
+  movementPatterns: string[];
+  totalExercises: number;
+  dominantCategory: 'push' | 'pull' | 'legs' | 'full_body';
+  targetExerciseNames: { en: string; ar: string }[];
+}
+
+export interface WarmupGenerationOptions {
+  durationMinutes?: 3 | 5 | 8;
+  focusMode?: 'balanced' | 'mobility' | 'activation' | 'stretching';
+  stiffAreas?: string[]; // 'shoulders' | 'hips' | 'lower_back' | 'ankles' | 'wrists' | 'hamstrings'
+  isAr?: boolean;
 }
 
 export const PUSH_WARMUP_SEQUENCE: WarmupMovement[] = [
@@ -692,9 +718,490 @@ export const FULLBODY_WARMUP_SEQUENCE: WarmupMovement[] = [
   }
 ];
 
+// Additional targeted muscle and joint mobilization drills
+export const ADDITIONAL_TARGETED_MOVEMENTS: WarmupMovement[] = [
+  {
+    id: 'push_doorway_pec_stretch',
+    name: 'Doorway Dynamic Pectoral Stretch & Scapular Squeeze',
+    nameAr: 'إطالة ديناميكية لعضلات الصدر عند الباب مع ضم اللوحين',
+    durationSeconds: 50,
+    repsOrTempo: '10 pulses per side with 2-second hold',
+    repsOrTempoAr: '10 نبضات لكل جانب مع ثبات لثانيتين',
+    targetJoints: ['Glenohumeral (Shoulder)', 'Sternocostal (Chest wall)'],
+    targetJointsAr: ['مفصل الكتف', 'القفص الصدري وعظمة القص'],
+    targetMuscles: ['Chest (Pectoralis Major & Minor)', 'Anterior Deltoids'],
+    targetMusclesAr: ['عضلات الصدر (الكبرى والصغرى)', 'الكتف الأمامي'],
+    rationale: 'Releases pectoral tightness, opens anterior shoulder capsule, and ensures full horizontal abduction range for pressing.',
+    rationaleAr: 'يحرر الشد في عضلات الصدر، ويفتح كبسولة الكتف الأمامية، ويمنحك المدى الحركي الكامل لتمارين الدفع.',
+    cues: [
+      'Forearm on doorframe or upright at 90 degrees; step forward gently until a deep chest stretch is felt.',
+      'Do not rotate your torso aggressively; keep chest open and tall.',
+      'Squeeze shoulder blades together on every rep.'
+    ],
+    cuesAr: [
+      'ضع الساعد على حافة الباب أو القائم بزاوية 90 درجة، وتقدم بخطوة للأمام بلطف حتى تشعر بإطالة الصدر.',
+      'لا تلف جذعك بعنف، بل حافظ على صدرك مرفوعاً ومفتوحاً.',
+      'اضمم لوحي الكتف للخلف مع كل تكرار.'
+    ],
+    breathing: 'Inhale into the chest belly; exhale softly as you step into the stretch.',
+    breathingAr: 'شهيق عميق يملأ الصدر، وزفير هادئ مع التقدم في الإطالة.',
+    iconName: 'Maximize2',
+    category: 'stretch',
+    muscleTags: ['chest', 'shoulders']
+  },
+  {
+    id: 'push_overhead_triceps_reach',
+    name: 'Dynamic Overhead Triceps Reach & Lat Mobilization',
+    nameAr: 'إطالة ديناميكية للترايسبس والكتف مع سحب لوح الكتف',
+    durationSeconds: 50,
+    repsOrTempo: '8-10 fluid overhead reaches per arm',
+    repsOrTempoAr: '8-10 إطالات سلسة علوية لكل ذراع',
+    targetJoints: ['Humeroulnar (Elbow)', 'Glenohumeral (Shoulder)'],
+    targetJointsAr: ['مفصل الكوع', 'مفصل الكتف'],
+    targetMuscles: ['Triceps (Long Head)', 'Latissimus Dorsi', 'Teres Major'],
+    targetMusclesAr: ['عضلة الترايسبس (الرأس الطويل)', 'المجنص (Lats)', 'العضلة المدورة الكبيرة'],
+    rationale: 'Elongates the long head of the triceps across both shoulder and elbow joints, preventing elbow tendon irritation during presses and dips.',
+    rationaleAr: 'يطيل الرأس الطويل لعضلة الترايسبس عبر مفصلي الكتف والكوع، مما يقي أوتار الكوع من الالتهاب والإجهاد أثناء الدفع.',
+    cues: [
+      'Reach one hand behind neck toward shoulder blade; gently assist with opposite hand.',
+      'Keep core braced and ribs down; avoid arching lower back.',
+      'Perform gentle side-bend pulses to open up lats and triceps together.'
+    ],
+    cuesAr: [
+      'مد إحدى يديك خلف الرقبة باتجاه لوح الكتف، واستعن باليد الأخرى برفق.',
+      'ثبت عضلات بطنك ولا تدع أسفل ظهرك يتقوس.',
+      'قم بانحناء جانبي خفيف مع الإطالة لفتح المجنص والترايسبس معاً.'
+    ],
+    breathing: 'Deep continuous breathing into lateral ribcage.',
+    breathingAr: 'تنفس عميق ومستمر داخل القفص الصدري الجانبي.',
+    iconName: 'Sparkles',
+    category: 'mobility',
+    muscleTags: ['triceps', 'lats']
+  },
+  {
+    id: 'legs_half_kneeling_psoas',
+    name: 'Half-Kneeling Dynamic Hip Flexor & Psoas Drive',
+    nameAr: 'إطالة ديناميكية لنصف الجلوس للحوض وعضلة القطنية (Psoas)',
+    durationSeconds: 50,
+    repsOrTempo: '8 pulses + 3-second hold per side',
+    repsOrTempoAr: '8 نبضات مع ثبات 3 ثوانٍ لكل جانب',
+    targetJoints: ['Acetabulofemoral (Hip)', 'Sacroiliac (SI Joint)'],
+    targetJointsAr: ['مفصل الحوض', 'المفصل العجزي الحرقفي'],
+    targetMuscles: ['Psoas Major', 'Iliacus', 'Rectus Femoris (Quads)'],
+    targetMusclesAr: ['عضلة القطنية الكبيرة (Psoas)', 'عضلة الحرقفة', 'عضلة الفخذ الأمامية المستقيمة'],
+    rationale: 'Unlocks tight anterior hip flexors, restores neutral pelvic alignment, and activates glutes for deeper, safer squats.',
+    rationaleAr: 'يحرر انكماش عضلات الحوض الأمامية، ويعيد استقامة الحوض الطبيعية، مما يمهد لسكوات أعمق وأكثر أماناً.',
+    cues: [
+      'Tuck tailbone under (posterior pelvic tilt) and squeeze back glute tight before lunging.',
+      'Glide forward slightly from hips without arching lower back.',
+      'Raise same-side arm overhead for an expanded fascial stretch.'
+    ],
+    cuesAr: [
+      'شد عضلات المؤخرة الخلفية واثنِ الحوض قليلاً للداخل قبل التقدم.',
+      'انزلق للأمام برفق من مفصل الحوض دون تقويس أسفل الظهر.',
+      'ارفع الذراع لنفس الجانب للأعلى لتعزيز إطالة الغشاء العضلي.'
+    ],
+    breathing: 'Inhale tall; exhale as you slide hips forward into stretch.',
+    breathingAr: 'شهيق مع الاستقامة، وزفير مع دفع الحوض للأمام في الإطالة.',
+    iconName: 'Waves',
+    category: 'stretch',
+    muscleTags: ['hip_flexors', 'quads', 'glutes']
+  },
+  {
+    id: 'legs_fire_hydrant_glute',
+    name: 'Quadruped Fire Hydrants & Glute Medius Circles',
+    nameAr: 'تمرين الإطفائي الرباعي ودوائر المؤخرة لتفعيل العضلة الوسطى',
+    durationSeconds: 50,
+    repsOrTempo: '10 circles forward + 10 backward each leg',
+    repsOrTempoAr: '10 دوائر للأمام + 10 للخلف لكل ساق',
+    targetJoints: ['Hip Capsule', 'Pelvis'],
+    targetJointsAr: ['كبسولة الحوض', 'عظام الحوض'],
+    targetMuscles: ['Gluteus Medius', 'Gluteus Minimus', 'Tensor Fasciae Latae'],
+    targetMusclesAr: ['عضلة المؤخرة الوسطى', 'المؤخرة الصغرى', 'عضلة اللفافة العريضة'],
+    rationale: 'Fires up the lateral hip stabilizers to prevent knee valgus (knees caving in) during squats, lunges, and leg presses.',
+    rationaleAr: 'ينشط مثبتات الحوض الجانبية لمنع ميل الركبتين للداخل أثناء السكوات والطعنات وضغط الأرجل.',
+    cues: [
+      'Keep core rigid; do not let lower back or hips tilt excessively.',
+      'Lift knee out to side leading with outer thigh, not ankle.',
+      'Make smooth circular paths with the knee joint.'
+    ],
+    cuesAr: [
+      'ثبت عضلات بطنك ولا تدع ظهرك يميل أو يتقوس للجانب.',
+      'ارفع الركبة للجانب مع توجيه الفخذ الخارجي للأعلى.',
+      'ارسم دوائر ناعمة وكاملة بمفصل الركبة.'
+    ],
+    breathing: 'Rhythmic, steady breathing through nose and mouth.',
+    breathingAr: 'تنفس منتظم وهادئ من الأنف والفم.',
+    iconName: 'Activity',
+    category: 'activation',
+    muscleTags: ['glutes', 'hips']
+  },
+  {
+    id: 'core_birddog_anti_rotation',
+    name: 'Bird-Dog Core Bracing & Posterior Chain Priming',
+    nameAr: 'تمرين الكلب الطائر (Bird-Dog) لثبات الكور وأسفل الظهر',
+    durationSeconds: 50,
+    repsOrTempo: '6-8 deliberate reps per side with 3s hold',
+    repsOrTempoAr: '6-8 تكرارات محكمة لكل جانب مع ثبات 3 ثوانٍ',
+    targetJoints: ['Lumbar Spine', 'Glenohumeral', 'Acetabulofemoral'],
+    targetJointsAr: ['الفقرات القطنية', 'مفصل الكتف', 'مفصل الفخذ'],
+    targetMuscles: ['Erector Spinae', 'Gluteus Maximus', 'Transverse Abdominis', 'Multifidus'],
+    targetMusclesAr: ['عضلات استقامة الظهر', 'المؤخرة الكبرى', 'عضلة البطن المستعرضة', 'العضلات متعددة الفلوق'],
+    rationale: 'McGill Big 3 core exercise: locks lumbar stability, eliminates spine shear stress, and primes the nervous system for heavy compound lifts.',
+    rationaleAr: 'من أهم تمارين الدكتور ماكجيل لتثبيت الفقرات القطنية، وحماية أسفل الظهر من إجهاد القص وتجهيز الجهاز العصبي للأوزان الثقيلة.',
+    cues: [
+      'Maintain a neutral spine; balance a glass of water on your lower back.',
+      'Extend opposite arm and leg straight out without overarching lower back.',
+      'Squeeze working glute at full extension for 3 seconds.'
+    ],
+    cuesAr: [
+      'حافظ على استقامة العمود الفقري كأنك توازن كوب ماء على أسفل ظهرك.',
+      'مد الذراع والساق المعاكسة في خط مستقيم دون تقويس الظهر.',
+      'اعصر عضلة المؤخرة في أقصى امتداد لمدة 3 ثوانٍ كاملة.'
+    ],
+    breathing: 'Exhale and brace abs as limbs extend; inhale returning to center.',
+    breathingAr: 'زفير مع عصر البطن عند فرد الأطراف، وشهيق مع الرجوع للمنتصف.',
+    iconName: 'Shield',
+    category: 'activation',
+    muscleTags: ['core', 'glutes', 'spine']
+  },
+  {
+    id: 'legs_single_leg_rdl_reach',
+    name: 'Single-Leg Dynamic RDL Reach to High Knee Drive',
+    nameAr: 'إطالة رومانية ديناميكية على ساق واحدة مع رفع الركبة',
+    durationSeconds: 50,
+    repsOrTempo: '6-8 controlled fluid reps per leg',
+    repsOrTempoAr: '6-8 تكرارات انسيابية ومحكومة لكل ساق',
+    targetJoints: ['Hip Hinge Complex', 'Talocrural (Ankle)'],
+    targetJointsAr: ['مفصل مفصلة الحوض', 'مفصل الكاحل'],
+    targetMuscles: ['Hamstrings', 'Gluteus Maximus', 'Calves & Foot Stabilizers'],
+    targetMusclesAr: ['عضلات الفخذ الخلفية', 'المؤخرة الكبرى', 'السمانة ومثبتات القدم'],
+    rationale: 'Primes the hip hinge motor pattern, dynamically stretches hamstrings under eccentric tension, and activates ankle stabilizers.',
+    rationaleAr: 'يهيئ النمط الحركي لمفصلة الحوض (Hinge)، ويوفر إطالة ديناميكية للخلفيات تحت الشد، وينشط ثبات الكاحل.',
+    cues: [
+      'Soft bend in standing knee; hinge back at the hip while keeping spine flat.',
+      'Reach fingertips toward mid-shin or floor as back leg floats straight behind you.',
+      'Drive hips through to standing and power knee up into a tall finish.'
+    ],
+    cuesAr: [
+      'انثناء بسيط في ركبة الارتكاز، ثم ادفع الحوض للخلف مع الحفاظ على استقامة الظهر.',
+      'المس بمنتصف أصابعك الساق بينما ترتفع الساق الأخرى للخلف باستقامة.',
+      'ادفع الحوض للأمام بقوة واختم برفع الركبة للأعلى باستقامة تامة.'
+    ],
+    breathing: 'Inhale on the hinge reach; exhale powerfully as you drive up to standing.',
+    breathingAr: 'شهيق مع النزول والمفصلة، وزفير قوي مع الصعود والاستقامة.',
+    iconName: 'Target',
+    category: 'potentiation',
+    muscleTags: ['hamstrings', 'glutes', 'ankles']
+  }
+];
+
 export const WarmupEngine = {
   /**
-   * Generates the tailored 5-minute (300s) sequence based on workout type
+   * Analyzes targeted muscles, joint complexes, and movement patterns from current session exercises
+   */
+  analyzeSessionMuscles(workout: WorkoutSession): SessionMuscleAnalysis {
+    if (!workout || !workout.exercises || workout.exercises.length === 0) {
+      return {
+        primaryMuscles: [
+          { name: 'Full Body Mobility', nameAr: 'مرونة الجسم الشاملة', count: 4, percentage: 100 }
+        ],
+        detectedJointComplexes: [
+          { name: 'Hips & Pelvis', nameAr: 'الحوض والمفصل الفخذي' },
+          { name: 'Shoulders & T-Spine', nameAr: 'الكتفان والعمود الفقري الصدري' }
+        ],
+        movementPatterns: ['multi_planar'],
+        totalExercises: 0,
+        dominantCategory: 'full_body',
+        targetExerciseNames: []
+      };
+    }
+
+    const muscleTally: Record<string, { count: number; nameEn: string; nameAr: string }> = {};
+    const movementPatternsSet = new Set<string>();
+    const targetExerciseNames: { en: string; ar: string }[] = [];
+
+    // Tally muscles and patterns
+    workout.exercises.forEach(ex => {
+      const exNameEn = ex.exerciseName || '';
+      const exNameAr = ex.exerciseNameAr || exNameEn;
+      targetExerciseNames.push({ en: exNameEn, ar: exNameAr });
+
+      // Match against seed data for rich anatomical info
+      const matchedSeed = exerciseSeedData.find(s => 
+        s.id === ex.exerciseId || 
+        s.name.toLowerCase() === exNameEn.toLowerCase() ||
+        exNameEn.toLowerCase().includes(s.name.toLowerCase())
+      );
+
+      if (matchedSeed) {
+        if (matchedSeed.movementPattern) {
+          movementPatternsSet.add(matchedSeed.movementPattern);
+        }
+
+        // Primary muscle gets weighted 2
+        const pMuscle = matchedSeed.primaryMuscle || 'Full Body';
+        const pMuscleAr = matchedSeed.primaryMuscleAr || pMuscle;
+        const pGroup = this.normalizeMuscleGroup(pMuscle);
+        if (!muscleTally[pGroup.key]) {
+          muscleTally[pGroup.key] = { count: 0, nameEn: pGroup.nameEn, nameAr: pGroup.nameAr };
+        }
+        muscleTally[pGroup.key].count += 2;
+
+        // Secondary muscles get weighted 1
+        if (matchedSeed.secondaryMuscles && matchedSeed.secondaryMuscles.length > 0) {
+          matchedSeed.secondaryMuscles.forEach((sm, i) => {
+            const smAr = matchedSeed.secondaryMusclesAr?.[i] || sm;
+            const smGroup = this.normalizeMuscleGroup(sm);
+            if (!muscleTally[smGroup.key]) {
+              muscleTally[smGroup.key] = { count: 0, nameEn: smGroup.nameEn, nameAr: smGroup.nameAr };
+            }
+            muscleTally[smGroup.key].count += 1;
+          });
+        }
+      } else {
+        // Fallback to exercise.primaryMuscle or workout.type
+        const rawMuscle = ex.primaryMuscle || workout.type || 'Full Body';
+        const norm = this.normalizeMuscleGroup(rawMuscle);
+        if (!muscleTally[norm.key]) {
+          muscleTally[norm.key] = { count: 0, nameEn: norm.nameEn, nameAr: norm.nameAr };
+        }
+        muscleTally[norm.key].count += 2;
+      }
+    });
+
+    const totalWeight = Object.values(muscleTally).reduce((sum, item) => sum + item.count, 0) || 1;
+    const sortedMuscles = Object.values(muscleTally)
+      .sort((a, b) => b.count - a.count)
+      .map(item => ({
+        name: item.nameEn,
+        nameAr: item.nameAr,
+        count: item.count,
+        percentage: Math.round((item.count / totalWeight) * 100)
+      }));
+
+    // Determine dominant category
+    let dominantCategory: 'push' | 'pull' | 'legs' | 'full_body' = 'full_body';
+    const rawType = (workout.type || '').toLowerCase();
+    if (rawType.includes('push') || sortedMuscles.some(m => m.name.includes('Chest') && m.percentage >= 25)) {
+      dominantCategory = 'push';
+    } else if (rawType.includes('pull') || sortedMuscles.some(m => m.name.includes('Back') && m.percentage >= 25)) {
+      dominantCategory = 'pull';
+    } else if (rawType.includes('leg') || sortedMuscles.some(m => (m.name.includes('Quad') || m.name.includes('Hamstring') || m.name.includes('Glute')) && m.percentage >= 30)) {
+      dominantCategory = 'legs';
+    }
+
+    // Determine detected joint complexes
+    const detectedJointComplexes: { name: string; nameAr: string }[] = [];
+    const hasUpperPress = sortedMuscles.some(m => ['Chest', 'Shoulders', 'Triceps'].some(k => m.name.includes(k)));
+    const hasUpperPull = sortedMuscles.some(m => ['Back & Lats', 'Biceps & Forearms', 'Traps'].some(k => m.name.includes(k)));
+    const hasLowerSquat = sortedMuscles.some(m => ['Quadriceps', 'Glutes', 'Calves'].some(k => m.name.includes(k)));
+    const hasLowerHinge = sortedMuscles.some(m => ['Hamstrings', 'Glutes', 'Erectors'].some(k => m.name.includes(k)));
+
+    if (hasUpperPress) {
+      detectedJointComplexes.push({ name: 'Glenohumeral & Rotator Cuff', nameAr: 'مفصل الكتف الكروي والكفة المدورة' });
+      detectedJointComplexes.push({ name: 'Scapulothoracic Complex', nameAr: 'لوح الكتف والقفص الصدري' });
+    }
+    if (hasUpperPull) {
+      detectedJointComplexes.push({ name: 'Thoracic Spine Rotation', nameAr: 'العمود الفقري الصدري' });
+      detectedJointComplexes.push({ name: 'Humeroulnar (Elbow) & Wrists', nameAr: 'مفاصل الكوع والمعصمين' });
+    }
+    if (hasLowerSquat || hasLowerHinge) {
+      detectedJointComplexes.push({ name: 'Hip Capsule (90/90 Rotation)', nameAr: 'كبسولة الحوض (دوران داخلي وخارجي)' });
+      detectedJointComplexes.push({ name: 'Talocrural (Ankle Dorsiflexion)', nameAr: 'الكاحل وانثناء مشط القدم' });
+    }
+    if (detectedJointComplexes.length === 0) {
+      detectedJointComplexes.push({ name: 'Multi-Planar Joints & Core', nameAr: 'المفاصل الحركية الشاملة والجذع' });
+    }
+
+    return {
+      primaryMuscles: sortedMuscles.slice(0, 5),
+      detectedJointComplexes,
+      movementPatterns: Array.from(movementPatternsSet),
+      totalExercises: workout.exercises.length,
+      dominantCategory,
+      targetExerciseNames: targetExerciseNames.slice(0, 4)
+    };
+  },
+
+  /**
+   * Helper to normalize raw muscle strings into standardized categories
+   */
+  normalizeMuscleGroup(raw: string): { key: string; nameEn: string; nameAr: string } {
+    const s = raw.toLowerCase();
+    if (s.includes('chest') || s.includes('pectoral') || s.includes('بنش') || s.includes('صدر')) {
+      return { key: 'chest', nameEn: 'Chest (Pectorals)', nameAr: 'الصدر (البكتورال)' };
+    }
+    if (s.includes('delt') || s.includes('shoulder') || s.includes('كتف')) {
+      return { key: 'shoulders', nameEn: 'Deltoids & Rotators', nameAr: 'الأكتاف والكفة المدورة' };
+    }
+    if (s.includes('tricep') || s.includes('تراي')) {
+      return { key: 'triceps', nameEn: 'Triceps', nameAr: 'الترايسبس' };
+    }
+    if (s.includes('lat') || s.includes('back') || s.includes('ظهر') || s.includes('مجنص') || s.includes('rhomboid')) {
+      return { key: 'back', nameEn: 'Back & Lats', nameAr: 'الظهر والمجنص' };
+    }
+    if (s.includes('bicep') || s.includes('forearm') || s.includes('باي') || s.includes('ساعد')) {
+      return { key: 'arms', nameEn: 'Biceps & Forearms', nameAr: 'البايسبس والساعدين' };
+    }
+    if (s.includes('quad') || s.includes('فخذ أمامي')) {
+      return { key: 'quads', nameEn: 'Quadriceps', nameAr: 'الفخذ الأمامي (الكوادس)' };
+    }
+    if (s.includes('hamstring') || s.includes('خلفيات') || s.includes('فخذ خلفي')) {
+      return { key: 'hamstrings', nameEn: 'Hamstrings', nameAr: 'الفخذ الخلفي (الهامسترنغ)' };
+    }
+    if (s.includes('glute') || s.includes('مؤخرة') || s.includes('حوض')) {
+      return { key: 'glutes', nameEn: 'Glutes & Hips', nameAr: 'المؤخرة ومحيط الحوض' };
+    }
+    if (s.includes('calf') || s.includes('calves') || s.includes('سمانة') || s.includes('كاحل')) {
+      return { key: 'calves', nameEn: 'Calves & Ankles', nameAr: 'السمانة والكواحل' };
+    }
+    if (s.includes('core') || s.includes('ab') || s.includes('بطن') || s.includes('جذع')) {
+      return { key: 'core', nameEn: 'Core & Stabilizers', nameAr: 'الكور والمثبتات' };
+    }
+    return { key: 'general', nameEn: 'General Musculature', nameAr: 'عضلات حركية عامة' };
+  },
+
+  /**
+   * Generates a fully dynamic, personalized warm-up sequence tailored directly to the specific
+   * muscles and exercises in the active workout session.
+   */
+  generateDynamicWarmup(workout: WorkoutSession, options?: WarmupGenerationOptions): WarmupSequence {
+    const isAr = options?.isAr ?? false;
+    const durationMinutes = options?.durationMinutes ?? 5;
+    const focusMode = options?.focusMode ?? 'balanced';
+    const stiffAreas = options?.stiffAreas ?? [];
+
+    const analysis = this.analyzeSessionMuscles(workout);
+    const exercisesListEn = analysis.targetExerciseNames.map(e => e.en).join(', ') || workout.name;
+    const exercisesListAr = analysis.targetExerciseNames.map(e => e.ar).join('، ') || (workout.nameAr || workout.name);
+
+    // Combine standard sequence pool and new targeted drills
+    const allCandidateMovements: WarmupMovement[] = [
+      ...PUSH_WARMUP_SEQUENCE,
+      ...PULL_WARMUP_SEQUENCE,
+      ...LEGS_WARMUP_SEQUENCE,
+      ...FULLBODY_WARMUP_SEQUENCE,
+      ...ADDITIONAL_TARGETED_MOVEMENTS
+    ];
+
+    // Determine target movement count based on duration
+    // 3 min = 4 movements (~45s each = 180s)
+    // 5 min = 6 movements (~50s each = 300s)
+    // 8 min = 8 movements (~60s each = 480s)
+    const targetCount = durationMinutes === 3 ? 4 : durationMinutes === 8 ? 8 : 6;
+    const movementDuration = durationMinutes === 3 ? 45 : durationMinutes === 8 ? 60 : 50;
+
+    // Movement selection scoring
+    const scoredMovements: { movement: WarmupMovement; score: number }[] = [];
+    const usedIds = new Set<string>();
+
+    allCandidateMovements.forEach(m => {
+      // Deduplicate by normalized name
+      const normName = m.name.toLowerCase();
+      if (usedIds.has(normName)) return;
+      usedIds.add(normName);
+
+      let score = 10; // base score
+
+      // Match against session's primary muscles
+      analysis.primaryMuscles.forEach(pm => {
+        const pmKey = pm.name.toLowerCase();
+        const matchesMuscle = m.targetMuscles.some(tm => tm.toLowerCase().includes(pmKey)) ||
+          m.targetMusclesAr.some(tma => pm.nameAr && tma.includes(pm.nameAr));
+
+        if (matchesMuscle) {
+          score += pm.percentage * 2; // high priority if heavy in workout
+        }
+      });
+
+      // Match category preference
+      if (focusMode === 'mobility' && (m.category === 'mobility' || m.targetJoints.length > 0)) {
+        score += 25;
+      } else if (focusMode === 'activation' && (m.category === 'activation' || m.id.includes('bridge') || m.id.includes('band') || m.id.includes('hydrant'))) {
+        score += 25;
+      } else if (focusMode === 'stretching' && (m.category === 'stretch' || m.id.includes('stretch'))) {
+        score += 25;
+      }
+
+      // Stiff area booster overrides
+      if (stiffAreas.includes('shoulders') && (m.targetJoints.some(j => j.toLowerCase().includes('shoulder')) || m.targetMuscles.some(tm => tm.toLowerCase().includes('delt')))) {
+        score += 40;
+      }
+      if (stiffAreas.includes('hips') && (m.targetJoints.some(j => j.toLowerCase().includes('hip')) || m.targetMuscles.some(tm => tm.toLowerCase().includes('glute')))) {
+        score += 40;
+      }
+      if (stiffAreas.includes('lower_back') && (m.targetJoints.some(j => j.toLowerCase().includes('spine')) || m.targetMuscles.some(tm => tm.toLowerCase().includes('erector') || tm.toLowerCase().includes('spine')))) {
+        score += 40;
+      }
+      if (stiffAreas.includes('ankles') && m.targetJoints.some(j => j.toLowerCase().includes('ankle'))) {
+        score += 40;
+      }
+      if (stiffAreas.includes('wrists') && (m.targetJoints.some(j => j.toLowerCase().includes('wrist')) || m.id.includes('wrist'))) {
+        score += 40;
+      }
+
+      // Check dominant category affinity
+      if (analysis.dominantCategory === 'push' && PUSH_WARMUP_SEQUENCE.some(p => p.id === m.id)) {
+        score += 20;
+      } else if (analysis.dominantCategory === 'pull' && PULL_WARMUP_SEQUENCE.some(p => p.id === m.id)) {
+        score += 20;
+      } else if (analysis.dominantCategory === 'legs' && LEGS_WARMUP_SEQUENCE.some(p => p.id === m.id)) {
+        score += 20;
+      }
+
+      scoredMovements.push({ movement: m, score });
+    });
+
+    // Sort by highest score
+    scoredMovements.sort((a, b) => b.score - a.score);
+
+    // Pick top unique movements and format duration
+    const selected = scoredMovements.slice(0, targetCount).map(({ movement }) => {
+      // Dynamic tailored rationale linking specifically to today's session exercises
+      const dynamicRationaleEn = `${movement.rationale} Directly prepares your joints for ${exercisesListEn || 'today’s key movements'}.`;
+      const dynamicRationaleAr = `${movement.rationaleAr} يجهز مفاصلك وعضلاتك مباشرة لأداء ${exercisesListAr || 'تمارين جلستك اليوم'} بكفاءة وأمان.`;
+
+      return {
+        ...movement,
+        durationSeconds: movementDuration,
+        rationale: dynamicRationaleEn,
+        rationaleAr: dynamicRationaleAr
+      };
+    });
+
+    // Build title and subtitle
+    const durationLabelEn = `${durationMinutes}-Minute`;
+    const durationLabelAr = `${durationMinutes} دقائق`;
+    const topMusclesEn = analysis.primaryMuscles.slice(0, 3).map(m => m.name.split(' ')[0]).join(' & ');
+    const topMusclesAr = analysis.primaryMuscles.slice(0, 3).map(m => m.nameAr.split(' ')[0]).join(' و');
+
+    return {
+      workoutType: (analysis.dominantCategory || 'custom') as any,
+      title: `${durationLabelEn} Dynamic ${topMusclesEn ? topMusclesEn + ' ' : ''}Warm-up`,
+      titleAr: `الإحماء الديناميكي الذكي (${durationLabelAr}) • ${topMusclesAr || 'مخصص للجلسة'}`,
+      subtitle: `Targeted mobility & activation sequence tailored to ${workout.exercises.length} exercises in ${workout.name}.`,
+      subtitleAr: `سلسلة حركية وإطالات ديناميكية مهيأة خصيصاً لـ ${workout.exercises.length} تمارين في ${workout.nameAr || workout.name}.`,
+      totalDurationSeconds: durationMinutes * 60,
+      focusMuscles: analysis.primaryMuscles.map(m => m.name),
+      focusMusclesAr: analysis.primaryMuscles.map(m => m.nameAr),
+      primaryObjective: `Maximize motor unit recruitment and synovial lubrication for ${exercisesListEn}.`,
+      primaryObjectiveAr: `تليين المفاصل بالمدى الحركي الكامل وتنشيط الجهاز العصبي لتمارين: ${exercisesListAr}.`,
+      movements: selected,
+      targetedSessionExercises: analysis.targetExerciseNames.map(e => isAr ? e.ar : e.en),
+      detectedJointComplexes: analysis.detectedJointComplexes.map(j => j.name),
+      detectedJointComplexesAr: analysis.detectedJointComplexes.map(j => j.nameAr),
+      muscleDistribution: analysis.primaryMuscles.map(m => ({
+        muscle: m.name,
+        muscleAr: m.nameAr,
+        count: m.count,
+        percentage: m.percentage
+      }))
+    };
+  },
+
+  /**
+   * Generates the tailored 5-minute (300s) sequence based on workout type (backward compatibility)
    */
   getWarmupSequence(typeInput?: string, isAr: boolean = false): WarmupSequence {
     const rawType = (typeInput || 'push').toLowerCase().trim();

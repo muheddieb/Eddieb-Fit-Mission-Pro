@@ -22,6 +22,7 @@ import { SettingsView } from './components/settings/SettingsView';
 import { HealthDevicesView } from './components/devices/HealthDevicesView';
 import { ReturnToTrainingView } from './components/return/ReturnToTrainingView';
 import { ReturnToTrainingEngine } from './services/returnToTrainingEngine';
+import { WeeklyScheduleView } from './components/schedule/WeeklyScheduleView';
 import { ActiveWorkoutModal } from './components/workout/ActiveWorkoutModal';
 import { ExerciseDetailsModal } from './components/exercise/ExerciseDetailsModal';
 import { ImageGeneratorModal } from './components/generator/ImageGeneratorModal';
@@ -211,8 +212,27 @@ export default function App() {
             history={workoutHistory}
             activeWorkout={activeWorkout}
             onStartWorkout={handleStartWorkout}
+            onStartSpecificWorkout={(session) => {
+              setActiveWorkout(session);
+              setActiveWorkoutOpen(true);
+            }}
             onNavigate={(sec) => setCurrentSection(sec)}
           />
+        );
+      case 'weeklySchedule':
+        return (
+          <div className="space-y-6">
+            <WeeklyScheduleView
+              profile={profile}
+              history={workoutHistory}
+              onStartSpecificWorkout={(session) => {
+                setActiveWorkout(session);
+                setActiveWorkoutOpen(true);
+              }}
+              onNavigateToSection={(sec) => setCurrentSection(sec)}
+              compact={false}
+            />
+          </div>
         );
       case 'returnToTraining':
         return (
@@ -413,6 +433,7 @@ export default function App() {
         onCloseDrawer={() => setMobileDrawerOpen(false)}
         onOpenDrawer={() => setMobileDrawerOpen(true)}
         onOpenPWAInstallModal={() => setPwaInstallModalOpen(true)}
+        isInterrupted={interruptionAnalysis.isInterrupted}
       />
 
       {/* Active Workout Session Modal (if active) */}
