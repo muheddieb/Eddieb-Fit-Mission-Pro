@@ -262,8 +262,86 @@ export type RecoveryType =
   | 'jacuzzi' 
   | 'stretching' 
   | 'mobility' 
+  | 'yoga'
   | 'sleep' 
   | 'rest_day';
+
+export type PrescribedRecoveryCategory = 'yoga' | 'mobility' | 'stretching';
+
+export interface RecoveryRoutinePose {
+  id: string;
+  name: string;
+  nameAr: string;
+  durationSeconds: number;
+  bilateral?: boolean;
+  sideSwitchSeconds?: number;
+  instructions: string;
+  instructionsAr: string;
+  cues: string[];
+  cuesAr: string[];
+  targetMuscles: string[];
+  targetMusclesAr: string[];
+  breathingPace?: 'slow_parasympathetic' | 'deep_belly' | 'rhythmic';
+  iconType?: 'yoga' | 'stretch' | 'mobility' | 'spine' | 'hips' | 'shoulders';
+}
+
+export interface PrescribedRecoverySession {
+  id: string;
+  title: string;
+  titleAr: string;
+  category: PrescribedRecoveryCategory;
+  categoryLabel: string;
+  categoryLabelAr: string;
+  durationMinutes: number;
+  intensityLevel: 'restorative' | 'moderate' | 'deep_release';
+  matchReason: string;
+  matchReasonAr: string;
+  targetMuscles: string[];
+  targetMusclesAr: string[];
+  description: string;
+  descriptionAr: string;
+  poses: RecoveryRoutinePose[];
+}
+
+export interface WorkoutIntensityAssessment {
+  session: WorkoutSession;
+  strainScore: number; // 0.0 - 10.0
+  volumeKg: number;
+  durationMinutes: number;
+  avgRpe: number;
+  setsCount: number;
+  primaryMuscles: string[];
+  primaryMusclesAr: string[];
+  timeAgoHours: number;
+  timeAgoLabel: string;
+  timeAgoLabelAr: string;
+  intensityTier: 'low' | 'moderate' | 'high' | 'extreme';
+}
+
+export interface RecoveryScoreAnalysis {
+  score: number; // 0 - 100
+  status: 'optimal' | 'moderate' | 'fatigued' | 'critical';
+  statusLabel: string;
+  statusLabelAr: string;
+  statusColor: string;
+  summaryText: string;
+  summaryTextAr: string;
+  cumulativeStrain: number;
+  maxPossibleStrain: number;
+  strainCategory: 'low' | 'moderate' | 'high' | 'extreme';
+  strainCategoryLabel: string;
+  strainCategoryLabelAr: string;
+  muscularFatigueScore: number; // 0 - 100
+  cnsFatigueScore: number; // 0 - 100
+  jointStressLevel: 'low' | 'moderate' | 'elevated';
+  jointStressLabel: string;
+  jointStressLabelAr: string;
+  lastWorkouts: WorkoutIntensityAssessment[];
+  targetedMusclesFatigued: string[];
+  targetedMusclesFatiguedAr: string[];
+  suggestedSessions: PrescribedRecoverySession[];
+  lastCalculatedAt: number;
+}
 
 export interface RecoverySession {
   id: string;
@@ -958,5 +1036,90 @@ export interface ReturnTrainingState {
   postFeedbackHistory: PostReturnFeedback[];
   userDismissed: boolean;
   resumedStandardAt?: number;
+}
+
+// ==========================================
+// Community Challenge & Athlete Leaderboard Types
+// ==========================================
+
+export type CommunityChallengeCategory = 
+  | 'squat_weight' 
+  | 'push_volume' 
+  | 'total_sessions' 
+  | 'cardio_distance';
+
+export interface CommunityMilestone {
+  percent: number;
+  label: string;
+  labelAr: string;
+  unlocked: boolean;
+  rewardBadge: string;
+  rewardBadgeAr: string;
+}
+
+export interface CommunityChallenge {
+  id: string;
+  title: string;
+  titleAr: string;
+  tagline: string;
+  taglineAr: string;
+  description: string;
+  descriptionAr: string;
+  month: string;
+  monthAr: string;
+  category: CommunityChallengeCategory;
+  targetGoal: number;
+  currentProgress: number;
+  unit: string;
+  unitAr: string;
+  daysRemaining: number;
+  totalParticipants: number;
+  milestones: CommunityMilestone[];
+  icon: string;
+  accentColor: string;
+}
+
+export interface CommunityAthleteRank {
+  id: string;
+  name: string;
+  nameAr?: string;
+  avatarInitials: string;
+  rank: number;
+  contribution: number;
+  contributionUnit: string;
+  contributionUnitAr: string;
+  percentageOfTotal: number;
+  tier: 'titan' | 'diamond' | 'gold' | 'silver' | 'bronze';
+  tierLabel: string;
+  tierLabelAr: string;
+  badge: string;
+  badgeAr: string;
+  streakDays: number;
+  cheersReceived: number;
+  isCurrentUser: boolean;
+  countryFlag: string;
+  countryName: string;
+  countryNameAr: string;
+  level: FitnessLevel;
+  lastActiveText: string;
+  lastActiveTextAr: string;
+}
+
+export interface UserChallengeStats {
+  challengeId: string;
+  contribution: number;
+  rank: number;
+  totalAthletes: number;
+  percentageOfTotal: number;
+  aheadByValue?: number;
+  behindByValue?: number;
+  nextRankAthleteName?: string;
+  contributingExercises: {
+    name: string;
+    nameAr?: string;
+    setsCount: number;
+    repsCount: number;
+    volumeKg: number;
+  }[];
 }
 

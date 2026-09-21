@@ -28,6 +28,9 @@ export interface WarmupMovement {
   category?: 'mobility' | 'activation' | 'stretch' | 'cns' | 'potentiation';
   muscleTags?: string[];
   jointTags?: string[];
+  imageUrl?: string;
+  youtubeVideoId?: string;
+  searchQuery?: string;
 }
 
 export interface WarmupSequence {
@@ -62,6 +65,194 @@ export interface WarmupGenerationOptions {
   focusMode?: 'balanced' | 'mobility' | 'activation' | 'stretching';
   stiffAreas?: string[]; // 'shoulders' | 'hips' | 'lower_back' | 'ankles' | 'wrists' | 'hamstrings'
   isAr?: boolean;
+}
+
+export interface WarmupMovementMedia {
+  imageUrl: string;
+  youtubeVideoId: string;
+  searchQuery: string;
+}
+
+export const WARMUP_MOVEMENT_MEDIA: Record<string, WarmupMovementMedia> = {
+  push_1_arm_circles_slides: {
+    imageUrl: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'w030iHqD33k',
+    searchQuery: 'Arm Circles Overhead Wall Slides shoulder mobility exercise form'
+  },
+  push_2_band_pass_throughs: {
+    imageUrl: 'https://images.unsplash.com/photo-1599058917212-d750089bc07e?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: '33P5AI27eiU',
+    searchQuery: 'Band Shoulder Dislocations Pass Throughs warm up exercise form'
+  },
+  push_3_tspine_windmills: {
+    imageUrl: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: '4BOTvaXSRvU',
+    searchQuery: 'Thoracic Spine Windmills quadruped opener mobility form'
+  },
+  push_4_scapular_pushups: {
+    imageUrl: 'https://images.unsplash.com/photo-1566241142559-40e1dab266c6?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'Z8GqQ0bE7iQ',
+    searchQuery: 'Scapular Push ups serratus anterior form cues'
+  },
+  push_5_pushup_to_downward_dog: {
+    imageUrl: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'Uge88v2B8kM',
+    searchQuery: 'Dynamic Push up to Downward Dog warm up exercise form'
+  },
+  push_6_band_pull_aparts_y: {
+    imageUrl: 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'X5B3uE_L4f0',
+    searchQuery: 'Band Pull Aparts and W to Y Raises warm up exercise'
+  },
+  pull_1_cat_cow_waves: {
+    imageUrl: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'vPkyvU4n88M',
+    searchQuery: 'Cat Cow spine waves pelvic tilts mobility exercise form'
+  },
+  pull_2_thread_the_needle: {
+    imageUrl: 'https://images.unsplash.com/photo-1552196563-5523a4365313?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'wI_bCkW-Ym8',
+    searchQuery: 'Thread the Needle stretch thoracic spine mobility exercise form'
+  },
+  pull_3_scapular_pullups_band: {
+    imageUrl: 'https://images.unsplash.com/photo-1598971639058-fab3c3109a00?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 's6Rj55q7v2U',
+    searchQuery: 'Scapular Pull ups lat depression activation exercise form'
+  },
+  pull_4_banded_face_pulls: {
+    imageUrl: 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'HSoHeSjvIdY',
+    searchQuery: 'Banded Face Pulls with external rotation rotator cuff form'
+  },
+  pull_5_hinge_hamstring_sweeps: {
+    imageUrl: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: '0Y-Z7bB0M7k',
+    searchQuery: 'Dynamic Good Mornings and Hamstring Sweeps warm up form'
+  },
+  pull_6_wrist_forearm_prep: {
+    imageUrl: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'mSZWSQSSEVU',
+    searchQuery: 'Wrist and forearm mobility routine dynamic flexor extensor'
+  },
+  legs_1_deep_squat_pry: {
+    imageUrl: 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'qE_hX499z3U',
+    searchQuery: 'Deep Squat Pry and Thoracic Sky Reach hip mobility form'
+  },
+  legs_2_90_90_hip_rotations: {
+    imageUrl: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'h4X3X1WjS2w',
+    searchQuery: '90 90 Dynamic Hip Switches capsule internal external rotation'
+  },
+  legs_3_glute_bridges: {
+    imageUrl: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'wPM8icPu6H8',
+    searchQuery: 'Glute Bridges with isometric hold glute activation form'
+  },
+  legs_4_quad_stretch_rdl_reach: {
+    imageUrl: 'https://images.unsplash.com/photo-1538805060514-97d9cc17730c?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'r-rV9X88vKM',
+    searchQuery: 'Walking Quad Stretch to Romanian Single Leg Reach dynamic warmup'
+  },
+  legs_5_lateral_lunges_cossack: {
+    imageUrl: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'tpqpJ6bZ5lA',
+    searchQuery: 'Alternating Lateral Lunges Cossack Squat Prep adductor mobility'
+  },
+  legs_6_ankle_wall_drives: {
+    imageUrl: 'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'uH_kZkXzU6U',
+    searchQuery: 'Ankle Dorsiflexion Wall Drives mobility drill squat depth'
+  },
+  full_1_worlds_greatest_stretch: {
+    imageUrl: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: '1e9j2x41d7M',
+    searchQuery: 'Worlds Greatest Stretch thoracic opener lunge mobility drill'
+  },
+  full_2_inchworm_pushup: {
+    imageUrl: 'https://images.unsplash.com/photo-1566241142559-40e1dab266c6?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'ZP2u1B8fQoM',
+    searchQuery: 'Inchworm Walkouts to Push up dynamic warm up posterior chain'
+  },
+  full_3_90_90_hips: {
+    imageUrl: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'h4X3X1WjS2w',
+    searchQuery: '90 90 Dynamic Hip Rotations mobility exercise form'
+  },
+  full_4_glute_bridges: {
+    imageUrl: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'wPM8icPu6H8',
+    searchQuery: 'Glute Bridges 3s squeeze activation exercise form'
+  },
+  full_5_band_pull_aparts: {
+    imageUrl: 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'X5B3uE_L4f0',
+    searchQuery: 'Band Pull Aparts and W Raises upper back rotator cuff'
+  },
+  full_6_pogo_hops_arm_swings: {
+    imageUrl: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'pYwK3k5tHqg',
+    searchQuery: 'Elastic Pogo Hops cross body arm swings CNS potentiation'
+  },
+  push_doorway_pec_stretch: {
+    imageUrl: 'https://images.unsplash.com/photo-1599058917212-d750089bc07e?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'B2p0x7-87y0',
+    searchQuery: 'Doorway Dynamic Pectoral Stretch scapular squeeze chest mobility'
+  },
+  push_overhead_triceps_reach: {
+    imageUrl: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'M2oxwN9U2qY',
+    searchQuery: 'Overhead Triceps Reach Lat Mobilization shoulder stretch'
+  },
+  legs_half_kneeling_psoas: {
+    imageUrl: 'https://images.unsplash.com/photo-1552196563-5523a4365313?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'YQmpO9VT28E',
+    searchQuery: 'Half Kneeling Dynamic Hip Flexor Psoas Drive mobility'
+  },
+  legs_fire_hydrant_glute: {
+    imageUrl: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'Z_gJ8qZ-c0c',
+    searchQuery: 'Quadruped Fire Hydrants Glute Medius Circles hip activation'
+  },
+  core_birddog_anti_rotation: {
+    imageUrl: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'wiFNA3sqjCA',
+    searchQuery: 'Bird Dog core bracing posterior chain Stuart McGill form'
+  },
+  legs_single_leg_rdl_reach: {
+    imageUrl: 'https://images.unsplash.com/photo-1538805060514-97d9cc17730c?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: 'r-rV9X88vKM',
+    searchQuery: 'Single Leg Dynamic RDL Reach to High Knee Drive warm up'
+  }
+};
+
+export function attachMediaToMovement(movement: WarmupMovement): WarmupMovement {
+  const media = WARMUP_MOVEMENT_MEDIA[movement.id] || {
+    imageUrl: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=800&auto=format&fit=crop&q=80',
+    youtubeVideoId: '1e9j2x41d7M',
+    searchQuery: `${movement.name} dynamic warmup mobility form cues`
+  };
+  return {
+    ...movement,
+    imageUrl: movement.imageUrl || media.imageUrl,
+    youtubeVideoId: movement.youtubeVideoId || media.youtubeVideoId,
+    searchQuery: movement.searchQuery || media.searchQuery
+  };
+}
+
+export function getMovementGoogleSearchUrl(movement: WarmupMovement): string {
+  const query = movement.searchQuery || `${movement.name} dynamic warmup mobility form cues`;
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
+export function getMovementGoogleImagesUrl(movement: WarmupMovement): string {
+  const query = movement.searchQuery || `${movement.name} exercise mobility form`;
+  return `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`;
+}
+
+export function getMovementYouTubeSearchUrl(movement: WarmupMovement): string {
+  const query = movement.searchQuery || `${movement.name} warm up exercise tutorial form`;
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
 
 export const PUSH_WARMUP_SEQUENCE: WarmupMovement[] = [
@@ -1162,12 +1353,12 @@ export const WarmupEngine = {
       const dynamicRationaleEn = `${movement.rationale} Directly prepares your joints for ${exercisesListEn || 'today’s key movements'}.`;
       const dynamicRationaleAr = `${movement.rationaleAr} يجهز مفاصلك وعضلاتك مباشرة لأداء ${exercisesListAr || 'تمارين جلستك اليوم'} بكفاءة وأمان.`;
 
-      return {
+      return attachMediaToMovement({
         ...movement,
         durationSeconds: movementDuration,
         rationale: dynamicRationaleEn,
         rationaleAr: dynamicRationaleAr
-      };
+      });
     });
 
     // Build title and subtitle
@@ -1218,7 +1409,7 @@ export const WarmupEngine = {
         focusMusclesAr: ['الصدر', 'الأكتاف', 'الترايسبس', 'الكفة المدورة', 'العضلة المنشارية'],
         primaryObjective: 'Maximize pressing power, eliminate anterior shoulder pinch, and stabilize the scapula under heavy loads.',
         primaryObjectiveAr: 'مضاعفة قوة الدفع، منع احتكاك وتر الكتف، وتثبيت لوح الكتف بأمان تحت الأوزان العالية.',
-        movements: PUSH_WARMUP_SEQUENCE
+        movements: PUSH_WARMUP_SEQUENCE.map(attachMediaToMovement)
       };
     }
 
@@ -1234,7 +1425,7 @@ export const WarmupEngine = {
         focusMusclesAr: ['المجنص (Lats)', 'المعينيات', 'الكتف الخلفي', 'عضلات استقامة الظهر', 'الساعدين'],
         primaryObjective: 'Unlock full lat engagement, protect elbow tendons, and stabilize the posterior chain for heavy rows.',
         primaryObjectiveAr: 'تفعيل أقصى انقباض للمجنص، حماية أوتار الكوع والمعصم، وتثبيت السلسلة الخلفية للتجديف الثقيل.',
-        movements: PULL_WARMUP_SEQUENCE
+        movements: PULL_WARMUP_SEQUENCE.map(attachMediaToMovement)
       };
     }
 
@@ -1250,7 +1441,7 @@ export const WarmupEngine = {
         focusMusclesAr: ['الفخذ الأمامي', 'الخلفيات', 'المؤخرة', 'العضلات الضامة', 'الكواحل والسمانة'],
         primaryObjective: 'Achieve rock-solid squat depth, protect knee joints, and fire up glute torque production.',
         primaryObjectiveAr: 'تحقيق أقصى عمق وثبات في السكوات، حماية مفصل الركبة، وتوليد أعلى عزم وقوة من المؤخرة والحوض.',
-        movements: LEGS_WARMUP_SEQUENCE
+        movements: LEGS_WARMUP_SEQUENCE.map(attachMediaToMovement)
       };
     }
 
@@ -1266,7 +1457,7 @@ export const WarmupEngine = {
       focusMusclesAr: ['الحوض بالكامل', 'العمود الفقري', 'الكتفان', 'الكور والبطن', 'الجهاز الدوري'],
       primaryObjective: 'Elevate core temperature and prepare all primary joints for high performance.',
       primaryObjectiveAr: 'رفع درجة حرارة الجسم وتجهيز جميع المفاصل الرئيسية للأداء الرياضي العالي.',
-      movements: FULLBODY_WARMUP_SEQUENCE
+      movements: FULLBODY_WARMUP_SEQUENCE.map(attachMediaToMovement)
     };
   }
 };

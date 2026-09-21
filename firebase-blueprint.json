@@ -73,6 +73,18 @@
         "updatedAt": { "type": "number" }
       },
       "required": ["id", "date", "weight"]
+    },
+    "UserChallengeParticipation": {
+      "title": "UserChallengeParticipation",
+      "description": "Athlete monthly community challenge participation and contribution log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "athleteName": { "type": "string" },
+        "contributionValue": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "contributionValue"]
     }
   },
   "firestore": {
@@ -91,6 +103,10 @@
     "/users/{userId}/measurements/{measurementId}": {
       "schema": "BodyMeasurement",
       "description": "Subcollection of physical body measurements"
+    },
+    "/users/{userId}/challenges/{challengeId}": {
+      "schema": "UserChallengeParticipation",
+      "description": "Subcollection of user contributions to monthly community challenges"
     }
   }
 }

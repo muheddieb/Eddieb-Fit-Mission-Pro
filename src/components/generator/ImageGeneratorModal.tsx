@@ -9,28 +9,44 @@ import {
   Check, 
   AlertCircle, 
   RectangleHorizontal,
-  Maximize2
+  Maximize2,
+  Zap,
+  Activity,
+  Utensils,
+  Flame,
 } from 'lucide-react';
 import { GeneratedImageRecord, UserProfile } from '../../types';
 import { translations } from '../../i18n/translations';
 import { GeminiService } from '../../services/geminiService';
 import { StorageService } from '../../services/storage';
+import { VISUALIZER_QUICK_ACTIONS, VisualizerQuickAction } from '../../data/visualizerPresets';
 
 interface ImageGeneratorModalProps {
   profile: UserProfile;
   onClose: () => void;
+  initialPreset?: VisualizerQuickAction;
+  autoTrigger?: boolean;
 }
 
 export const ImageGeneratorModal: React.FC<ImageGeneratorModalProps> = ({
   profile,
   onClose,
+  initialPreset,
+  autoTrigger = false,
 }) => {
   const t = translations[profile.language];
   const isAr = profile.language === 'ar';
 
-  const [prompt, setPrompt] = useState<string>('Cinematic aesthetic athletic male physique, lean muscle definition, six-pack abs, defined chest and shoulders, dramatic gym lighting, 8k hyper-detailed sports photography');
-  const [imageSize, setImageSize] = useState<'1K' | '2K' | '4K'>('2K');
-  const [aspectRatio, setAspectRatio] = useState<string>('1:1');
+  const [prompt, setPrompt] = useState<string>(
+    initialPreset?.prompt ||
+    'Cinematic aesthetic athletic male physique, lean muscle definition, six-pack abs, defined chest and shoulders, dramatic gym lighting, 8k hyper-detailed sports photography'
+  );
+  const [imageSize, setImageSize] = useState<'1K' | '2K' | '4K'>(
+    initialPreset?.imageSize || '2K'
+  );
+  const [aspectRatio, setAspectRatio] = useState<string>(
+    initialPreset?.aspectRatio || '1:1'
+  );
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
@@ -38,6 +54,13 @@ export const ImageGeneratorModal: React.FC<ImageGeneratorModalProps> = ({
 
   useEffect(() => {
     setSavedGallery(StorageService.getSavedImages());
+  }, []);
+
+  // Auto trigger if requested
+  useEffect(() => {
+    if (autoTrigger && initialPreset) {
+      handleTriggerQuickAction(initialPreset);
+    }
   }, []);
 
   const samplePrompts = isAr
@@ -70,13 +93,13 @@ export const ImageGeneratorModal: React.FC<ImageGeneratorModalProps> = ({
         },
       ];
 
-  const handleGenerate = async () => {
-    if (!prompt.trim() || loading) return;
+  const executeGeneration = async (targetPrompt: string, targetSize: '1K' | '2K' | '4K', targetRatio: string) => {
+    if (!targetPrompt.trim() || loading) return;
 
     setLoading(true);
     setError(null);
 
-    const res = await GeminiService.generateHighQualityImage(prompt, imageSize, aspectRatio);
+    const res = await GeminiService.generateHighQualityImage(targetPrompt, targetSize, targetRatio);
 
     if (res.success && res.imageUrl) {
       setGeneratedImage(res.imageUrl);
@@ -84,9 +107,9 @@ export const ImageGeneratorModal: React.FC<ImageGeneratorModalProps> = ({
       const record: GeneratedImageRecord = {
         id: 'img_' + Date.now(),
         imageUrl: res.imageUrl,
-        prompt,
-        imageSize: res.imageSize || imageSize,
-        aspectRatio,
+        prompt: targetPrompt,
+        imageSize: (res.imageSize as any) || targetSize,
+        aspectRatio: targetRatio,
         createdAt: Date.now(),
       };
 
@@ -97,6 +120,18 @@ export const ImageGeneratorModal: React.FC<ImageGeneratorModalProps> = ({
     }
 
     setLoading(false);
+  };
+
+  const handleGenerate = async () => {
+    await executeGeneration(prompt, imageSize, aspectRatio);
+  };
+
+  // 1-Click Quick Action Trigger inside Modal
+  const handleTriggerQuickAction = async (action: VisualizerQuickAction) => {
+    setPrompt(action.prompt);
+    setImageSize(action.imageSize);
+    setAspectRatio(action.aspectRatio);
+    await executeGeneration(action.prompt, action.imageSize, action.aspectRatio);
   };
 
   const handleDownloadImage = (url: string, filename: string = 'eddieb-fit-visualizer.jpg') => {
@@ -141,6 +176,56 @@ export const ImageGeneratorModal: React.FC<ImageGeneratorModalProps> = ({
 
         {/* Modal Scrollable Body */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 custom-scrollbar">
+          {/* QUICK ACTIONS ROW: 1-Click Trigger */}
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-black text-foreground">
+                <Zap className="h-4 w-4 text-amber-500 fill-amber-500" />
+                <span>{isAr ? 'إجراءات سريعة (توليد النمط بنقرة واحدة):' : 'Quick Actions (1-Click Style Trigger):'}</span>
+              </div>
+              <span className="text-[10px] text-muted-foreground font-mono">
+                {isAr ? 'انقر على أي نمط لبدء التوليد فوراً' : 'Click to generate preset instantly'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {VISUALIZER_QUICK_ACTIONS.map((action) => {
+                const isActive = prompt === action.prompt;
+                return (
+                  <button
+                    key={action.id}
+                    id={`btn-modal-quick-action-${action.id}`}
+                    type="button"
+                    onClick={() => handleTriggerQuickAction(action)}
+                    disabled={loading}
+                    className={`flex items-center gap-2.5 rounded-xl border p-2.5 text-left transition-all ${
+                      isActive
+                        ? 'border-primary bg-primary/10 shadow-xs'
+                        : 'border-border bg-card hover:border-primary/40 hover:bg-secondary/60'
+                    }`}
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary border border-border text-foreground">
+                      {action.iconName === 'Activity' && <Activity className="h-4 w-4 text-cyan-500" />}
+                      {action.iconName === 'Utensils' && <Utensils className="h-4 w-4 text-emerald-500" />}
+                      {action.iconName === 'Flame' && <Flame className="h-4 w-4 text-amber-500" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-foreground truncate">
+                        {isAr ? action.nameAr : action.name}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground flex items-center justify-between mt-0.5">
+                        <span className="font-mono">{isAr ? action.badgeAr : action.badge}</span>
+                        <span className="text-primary font-bold text-[10px]">
+                          {isAr ? 'توليد ⚡' : 'Run ⚡'}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Generation Controls */}
           <div className="rounded-2xl border border-border bg-secondary/30 p-4 space-y-4">
             {/* Prompt Input */}
@@ -279,6 +364,7 @@ export const ImageGeneratorModal: React.FC<ImageGeneratorModalProps> = ({
                 <img
                   src={generatedImage}
                   alt="Generated Athletic Visual"
+                  referrerPolicy="no-referrer"
                   className="max-h-[480px] w-auto object-contain"
                 />
               </div>
@@ -299,6 +385,7 @@ export const ImageGeneratorModal: React.FC<ImageGeneratorModalProps> = ({
                     <img
                       src={img.imageUrl}
                       alt={img.prompt}
+                      referrerPolicy="no-referrer"
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                       loading="lazy"
                     />

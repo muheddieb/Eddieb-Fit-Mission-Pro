@@ -125,67 +125,64 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-border bg-card/95 px-3 sm:px-4 md:px-6 backdrop-blur">
+    <header className="sticky top-0 z-30 flex h-16 w-full max-w-full items-center justify-between border-b border-border bg-card/95 px-2.5 sm:px-4 md:px-6 backdrop-blur overflow-x-hidden">
       {/* Left: Brand / Mobile menu trigger */}
-      <div className="flex items-center gap-2.5 sm:gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
         <button
           id="btn-mobile-menu"
           onClick={onToggleMobileDrawer}
-          className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-secondary/50 text-foreground transition-colors hover:bg-secondary md:hidden"
+          className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl border border-border bg-secondary/50 text-foreground transition-colors hover:bg-secondary md:hidden shrink-0"
           aria-label="Open Navigation Menu"
         >
           <Menu className="h-5 w-5" />
         </button>
 
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/20">
-            <Dumbbell className="h-5 w-5" />
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+          <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/20 shrink-0">
+            <Dumbbell className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-black tracking-wider text-foreground text-base">EDDIEB FIT</span>
-              <span className="rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold text-primary tracking-widest uppercase">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1 sm:gap-1.5">
+              <span className="font-black tracking-wider text-foreground text-sm sm:text-base truncate">EDDIEB FIT</span>
+              <span className="rounded bg-primary/20 px-1 sm:px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold text-primary tracking-widest uppercase shrink-0">
                 MISSION
               </span>
             </div>
-            <p className="hidden text-[11px] text-muted-foreground sm:block">
+            <p className="hidden text-[11px] text-muted-foreground md:block truncate">
               {profile.mode === 'muscle_recomp' ? t.modes.muscle_recomp : t.modes.controlled_fat_loss}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Right: Quick actions, Firebase Status & controls */}
-      <div className="flex items-center gap-1.5 sm:gap-2">
+      {/* Right: Quick actions, Firebase Status & controls (strictly responsive, never overflows) */}
+      <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 shrink-0">
         {/* SPECIFIC VISUAL STATUS INDICATOR WHEN FIREBASE SYNC IS UNAVAILABLE */}
         {isSyncUnavailable ? (
           <div className="relative" ref={popoverRef}>
             <button
               id="btn-sync-offline-indicator"
               onClick={() => setSyncPopoverOpen(!syncPopoverOpen)}
-              className="flex items-center gap-1.5 rounded-full border border-amber-500/50 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-400 hover:bg-amber-500/20 transition-all shadow-sm shadow-amber-500/10 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+              className="flex items-center gap-1 sm:gap-1.5 rounded-xl border border-amber-500/50 bg-amber-500/10 h-8 sm:h-9 px-2 sm:px-2.5 text-xs font-semibold text-amber-400 hover:bg-amber-500/20 transition-all shadow-sm shadow-amber-500/10 focus:outline-none focus:ring-2 focus:ring-amber-500/30 shrink-0"
               title={t.sync.offlineDesc}
               aria-label="Firebase Sync Unavailable Status"
             >
               {/* Animated Pulse Icon */}
-              <div className="relative flex h-2.5 w-2.5 items-center justify-center">
+              <div className="relative flex h-2 w-2 sm:h-2.5 sm:w-2.5 items-center justify-center shrink-0">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
               </div>
-              <CloudOff className="h-3.5 w-3.5 animate-pulse text-amber-400" />
-              <span className="hidden md:inline font-bold text-[11px] text-amber-300">
+              <CloudOff className="h-3.5 w-3.5 animate-pulse text-amber-400 shrink-0" />
+              <span className="hidden lg:inline font-bold text-[11px] text-amber-300">
                 {profile.language === 'ar' ? 'المزامنة معطلة' : 'Sync Unavailable'}
-              </span>
-              <span className="md:hidden font-bold text-[10px] text-amber-300">
-                {profile.language === 'ar' ? 'غير متصل' : 'Offline'}
               </span>
             </button>
 
             {/* Offline Sync Details Popover */}
             {syncPopoverOpen && (
               <div 
-                className={`absolute top-full mt-2 w-80 sm:w-96 rounded-2xl border border-amber-500/30 p-4 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 ${
-                  isRTL ? 'left-0' : 'right-0'
+                className={`absolute top-full mt-2 w-72 sm:w-88 max-w-[calc(100vw-1.5rem)] rounded-2xl border border-amber-500/30 p-4 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 ${
+                  isRTL ? 'left-0 sm:left-auto sm:right-0' : 'right-0'
                 }`}
                 style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
               >
@@ -281,42 +278,42 @@ export const Navbar: React.FC<NavbarProps> = ({
         ) : isSyncing || syncStatus === 'syncing' ? (
           /* SYNCING IN PROGRESS BADGE */
           <div 
-            className="flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary"
+            className="flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/10 h-8 sm:h-9 px-2 sm:px-2.5 text-xs font-semibold text-primary shrink-0"
             title={t.sync.syncing}
           >
-            <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />
-            <span className="hidden sm:inline text-[11px] font-bold">
+            <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
+            <span className="hidden md:inline text-[11px] font-bold">
               {t.sync.syncing}
             </span>
           </div>
         ) : currentUser ? (
           /* FIREBASE CLOUD SYNCED USER BADGE */
-          <div className="flex items-center gap-1 sm:gap-1.5">
+          <div className="flex items-center gap-1 shrink-0">
             <div 
-              className="flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-400 shadow-sm shadow-emerald-500/10"
+              className="flex items-center gap-1 sm:gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 h-8 sm:h-9 px-2 sm:px-2.5 text-xs font-semibold text-emerald-400 shadow-sm shadow-emerald-500/10"
               title={`Logged in as ${currentUser.displayName || currentUser.email} (${t.sync.synced})`}
             >
               {currentUser.photoURL ? (
                 <img 
                   src={currentUser.photoURL} 
                   alt="avatar" 
-                  className="h-4 w-4 rounded-full" 
+                  className="h-4 w-4 rounded-full shrink-0" 
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
               )}
-              <span className="hidden md:inline max-w-[85px] truncate text-[11px] font-bold">
+              <span className="hidden lg:inline max-w-[75px] truncate text-[11px] font-bold">
                 {currentUser.displayName?.split(' ')[0] || t.sync.synced}
               </span>
-              <span className="relative flex h-1.5 w-1.5">
+              <span className="relative flex h-1.5 w-1.5 shrink-0">
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
               </span>
             </div>
             <button
               id="btn-firebase-signout"
               onClick={onSignOut}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-secondary/50 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border border-border bg-secondary/50 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shrink-0"
               title="Sign Out of Firebase"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -327,11 +324,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             id="btn-firebase-signin"
             onClick={onSignInWithGoogle}
-            className="flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-sm"
+            className="flex items-center gap-1 sm:gap-1.5 rounded-xl border border-primary/40 bg-primary/10 h-8 sm:h-9 px-2 sm:px-2.5 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-sm shrink-0"
             title="Sign in with Google to sync workouts across devices"
           >
-            <LogIn className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Google Sync</span>
+            <LogIn className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden md:inline">Sync</span>
           </button>
         )}
 
@@ -340,7 +337,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           compact={true}
           isArabic={profile.language === 'ar'}
           onOpenDevicesModal={onOpenDevicesModal}
-          className="hidden sm:flex"
+          className="hidden md:flex shrink-0"
         />
 
         {/* Active Workout Resume Pill (if in progress) */}
@@ -348,11 +345,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             id="btn-resume-nav-workout"
             onClick={onOpenActiveWorkout}
-            className="flex animate-pulse items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 sm:px-3 py-1 text-xs font-semibold text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition-all"
+            className="flex animate-pulse items-center gap-1 sm:gap-1.5 rounded-xl bg-emerald-500/20 h-8 sm:h-9 px-2 sm:px-3 text-xs font-semibold text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition-all shrink-0"
+            title={t.dashboard.continueWorkout}
           >
-            <Play className="h-3.5 w-3.5 fill-current" />
-            <span className="hidden sm:inline">{t.dashboard.continueWorkout}</span>
-            <span className="sm:hidden">{t.common.active}</span>
+            <Play className="h-3.5 w-3.5 fill-current shrink-0" />
+            <span className="hidden sm:inline">{t.common.active}</span>
           </button>
         )}
 
@@ -360,11 +357,11 @@ export const Navbar: React.FC<NavbarProps> = ({
         <button
           id="btn-open-visualizer-nav"
           onClick={onOpenVisualizer}
-          className="hidden md:flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
+          className="hidden xl:flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors shrink-0"
           title="AI Visualizer 1K-4K"
         >
           <Sparkles className="h-4 w-4" />
-          <span>Visualizer 1K-4K</span>
+          <span>Visualizer</span>
         </button>
 
         {/* PWA Download / Install App Action Button */}
@@ -372,32 +369,33 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             id="btn-navbar-download-pwa"
             onClick={onOpenPWAInstallModal}
-            className="flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/10 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 hover:border-primary/60 transition-all shadow-sm shadow-primary/10"
+            className="flex items-center gap-1 sm:gap-1.5 rounded-xl border border-primary/40 bg-primary/10 h-8 sm:h-9 px-2 sm:px-2.5 text-xs font-bold text-primary hover:bg-primary/20 hover:border-primary/60 transition-all shadow-sm shadow-primary/10 shrink-0"
             title={t.pwa.downloadApp}
             aria-label="Download App"
           >
-            <Download className="h-4 w-4 shrink-0 text-primary animate-pulse" />
-            <span className="hidden sm:inline font-black tracking-tight">{t.pwa.downloadApp}</span>
+            <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 text-primary animate-pulse" />
+            <span className="hidden lg:inline font-black tracking-tight">{t.pwa.downloadApp}</span>
           </button>
         )}
 
-        {/* Language Switcher Button */}
+        {/* Language Switcher Button (Always easily reachable and never pushed off) */}
         <button
           id="btn-language-toggle"
           onClick={toggleLanguage}
-          className="flex h-9 items-center gap-1 rounded-lg border border-border bg-secondary/50 px-2 sm:px-2.5 text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
+          className="flex h-8 sm:h-9 items-center gap-1 rounded-xl border border-border bg-secondary/50 px-2 sm:px-2.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors shrink-0"
           title="Switch Language (AR/EN)"
+          aria-label="Toggle Language"
         >
-          <Globe className="h-4 w-4 text-muted-foreground" />
-          <span>{profile.language === 'en' ? 'العربية' : 'EN'}</span>
+          <Globe className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+          <span className="text-[11px] sm:text-xs font-black">{profile.language === 'en' ? 'عربي' : 'EN'}</span>
         </button>
 
-        {/* Theme Switcher Button & Quick Popover */}
-        <div className="relative" ref={themePopoverRef}>
+        {/* Theme Switcher Button & Quick Popover (Always firmly within screen boundaries) */}
+        <div className="relative shrink-0" ref={themePopoverRef}>
           <button
             id="btn-theme-toggle"
             onClick={() => setThemePopoverOpen(!themePopoverOpen)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-secondary/50 text-foreground hover:bg-secondary transition-colors relative"
+            className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border border-border bg-secondary/50 text-foreground hover:bg-secondary transition-colors relative shrink-0"
             title={`Active Theme: ${profile.theme}. Click to choose theme.`}
             aria-label="Change Theme"
           >
@@ -407,7 +405,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Palette className="h-4 w-4 text-primary" />
             )}
             <span 
-              className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full border border-card shadow-sm"
+              className="absolute -top-0.5 -right-0.5 h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full border border-card shadow-sm"
               style={{
                 backgroundColor: THEME_OPTIONS.find(th => th.id === profile.theme)?.primaryColor || 'var(--primary)'
               }}
@@ -417,8 +415,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Theme Picker Dropdown Popover */}
           {themePopoverOpen && (
             <div 
-              className={`absolute top-full mt-2 z-50 w-72 sm:w-80 rounded-2xl border p-3.5 shadow-2xl animate-in fade-in zoom-in-95 duration-150 ${
-                isRTL ? 'left-0' : 'right-0'
+              className={`absolute top-full mt-2 z-50 w-72 sm:w-80 max-w-[calc(100vw-1rem)] rounded-2xl border p-3.5 shadow-2xl animate-in fade-in zoom-in-95 duration-150 ${
+                isRTL ? 'left-0 sm:left-auto sm:right-0' : 'right-0'
               }`}
               style={{ 
                 backgroundColor: 'var(--card)', 

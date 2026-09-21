@@ -195,6 +195,13 @@ export const translations = {
       prevMovement: 'Previous Movement',
       restart: 'Restart',
       prepareCue: 'Prepare for next movement',
+      searchGoogle: 'Search on Google',
+      googleImages: 'Google Images',
+      watchVideo: 'Video Demonstration',
+      openYoutube: 'Watch on YouTube',
+      viewFormPhoto: 'Form Illustration',
+      viewFormVideo: 'Video Form Guide',
+      bilingualName: 'English & Arabic Name',
     },
 
     // Active Workout
@@ -839,6 +846,13 @@ export const translations = {
       prevMovement: 'الحركة السابقة',
       restart: 'إعادة البدء',
       prepareCue: 'استعد للحركة التالية',
+      searchGoogle: 'ابحث في Google',
+      googleImages: 'صور Google',
+      watchVideo: 'فيديو الشرح والتطبيق',
+      openYoutube: 'شاهد على YouTube',
+      viewFormPhoto: 'صورة التمرين والشكل',
+      viewFormVideo: 'فيديو شرح الحركة',
+      bilingualName: 'اسم التمرين عربي وإنجليزي',
     },
 
     // Active Workout

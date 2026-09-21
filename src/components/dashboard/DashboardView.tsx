@@ -36,6 +36,7 @@ import { HydrationTracker } from './HydrationTracker';
 import { LiveHeartRateBadge } from '../devices/LiveHeartRateBadge';
 import { DailyWorkoutHub } from './DailyWorkoutHub';
 import { MonthlyAdherenceCalendar } from './MonthlyAdherenceCalendar';
+import { RecoveryScoreCard } from './RecoveryScoreCard';
 
 interface DashboardViewProps {
   profile: UserProfile;
@@ -43,6 +44,7 @@ interface DashboardViewProps {
   activeWorkout: WorkoutSession | null;
   onStartWorkout: () => void;
   onStartSpecificWorkout?: (session: WorkoutSession) => void;
+  onFinishActiveWorkout?: () => void;
   onNavigate: (section: NavSection) => void;
   onUpdateProfile?: (profile: UserProfile) => void;
 }
@@ -53,6 +55,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   activeWorkout,
   onStartWorkout,
   onStartSpecificWorkout,
+  onFinishActiveWorkout,
   onNavigate,
   onUpdateProfile,
 }) => {
@@ -251,7 +254,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onStartWorkout();
           }
         }}
+        onFinishActiveWorkout={onFinishActiveWorkout}
         onOpenWarmupModal={() => setSmartWarmupOpen(true)}
+      />
+
+      {/* Recovery Score & Suggested Yoga/Mobility/Stretching Protocols */}
+      <RecoveryScoreCard
+        profile={profile}
+        history={history}
+        isAr={isAr}
       />
 
       {/* Secondary Metrics: Recomposition Engine & Daily Hydration */}

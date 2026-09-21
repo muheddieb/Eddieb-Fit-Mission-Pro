@@ -27,7 +27,12 @@ import {
   Sliders,
   RefreshCw,
   Layers,
-  ChevronDown
+  ChevronDown,
+  Search,
+  Video,
+  Image,
+  Globe,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -38,7 +43,10 @@ import {
   WarmupSequence, 
   WarmupMovement, 
   SessionMuscleAnalysis,
-  WarmupGenerationOptions 
+  WarmupGenerationOptions,
+  getMovementGoogleSearchUrl,
+  getMovementGoogleImagesUrl,
+  getMovementYouTubeSearchUrl
 } from '../../services/warmupEngine';
 import { AudioService } from '../../services/audioService';
 
@@ -111,6 +119,11 @@ export const SmartWarmupModal: React.FC<SmartWarmupModalProps> = ({
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [completedIndices, setCompletedIndices] = useState<number[]>([]);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
+
+  // Visual Form Guide & Video Demonstration State
+  const [mediaTab, setMediaTab] = useState<'image' | 'video'>('image');
+  const [videoModalMovement, setVideoModalMovement] = useState<WarmupMovement | null>(null);
+  const [expandedImageMovement, setExpandedImageMovement] = useState<WarmupMovement | null>(null);
 
   const timerRef = useRef<any>(null);
 
@@ -632,38 +645,123 @@ export const SmartWarmupModal: React.FC<SmartWarmupModalProps> = ({
                     </h3>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     {sequence.movements.map((mov, idx) => (
                       <div 
                         key={mov.id + idx}
-                        className="rounded-xl border border-border bg-card p-3.5 space-y-2 hover:border-primary/40 transition-colors"
+                        className="rounded-2xl border border-border bg-card p-3.5 space-y-3 hover:border-primary/50 transition-all shadow-sm flex flex-col justify-between"
                       >
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-primary flex items-center gap-1.5">
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[10px]">
-                              {idx + 1}
+                        <div className="space-y-2.5">
+                          {/* Card Header: Index & Tempo */}
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-primary flex items-center gap-1.5">
+                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-primary text-[11px] font-black">
+                                {idx + 1}
+                              </span>
+                              <span className="font-mono">{mov.durationSeconds}s</span>
                             </span>
-                            <span>{mov.durationSeconds}s</span>
-                          </span>
-                          <span className="text-[10px] text-muted-foreground font-semibold">
-                            {isAr ? mov.repsOrTempoAr : mov.repsOrTempo}
-                          </span>
+                            <span className="text-[10px] text-muted-foreground font-semibold px-2 py-0.5 rounded bg-secondary/50">
+                              {isAr ? mov.repsOrTempoAr : mov.repsOrTempo}
+                            </span>
+                          </div>
+
+                          {/* Image Thumbnail with Media Quick Actions */}
+                          {mov.imageUrl && (
+                            <div className="relative h-32 w-full rounded-xl overflow-hidden bg-secondary/40 group">
+                              <img
+                                src={mov.imageUrl}
+                                alt={mov.name}
+                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                referrerPolicy="no-referrer"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/30 flex items-end justify-between p-2">
+                                <span className="text-[10px] text-white/90 font-bold bg-black/50 px-2 py-0.5 rounded backdrop-blur-xs">
+                                  {mov.category ? (isAr ? (mov.category === 'mobility' ? 'مرونة' : mov.category === 'activation' ? 'تفعيل' : 'إطالة') : mov.category) : (isAr ? 'حركي' : 'Drill')}
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  {mov.youtubeVideoId && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setVideoModalMovement(mov)}
+                                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-600/90 hover:bg-rose-600 text-white text-[11px] font-bold shadow transition-all"
+                                      title={isAr ? 'مشاهدة فيديو الحركة' : 'Watch video'}
+                                    >
+                                      <Play className="h-3 w-3 fill-current" />
+                                      <span>{isAr ? 'فيديو' : 'Video'}</span>
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedImageMovement(mov)}
+                                    className="p-1 rounded-lg bg-black/60 hover:bg-black/80 text-white text-[10px] transition-colors"
+                                    title={isAr ? 'تكبير الصورة' : 'Zoom photo'}
+                                  >
+                                    <Maximize2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Bilingual Exercise Name */}
+                          <div className="space-y-0.5">
+                            <div className="font-black text-sm text-foreground tracking-tight leading-snug">
+                              {isAr ? mov.nameAr : mov.name}
+                            </div>
+                            <div className="text-[11px] font-semibold text-primary/90 font-mono flex items-center gap-1">
+                              <Globe className="h-3 w-3 text-primary shrink-0" />
+                              <span className="line-clamp-1">{isAr ? mov.name : mov.nameAr}</span>
+                            </div>
+                          </div>
+
+                          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                            {isAr ? mov.rationaleAr : mov.rationale}
+                          </p>
+
+                          {/* Muscles Tag Pills */}
+                          <div className="flex flex-wrap gap-1">
+                            {(isAr ? mov.targetMusclesAr : mov.targetMuscles).slice(0, 3).map((m, i) => (
+                              <span key={i} className="text-[10px] bg-secondary/80 px-2 py-0.5 rounded text-foreground font-medium">
+                                {m}
+                              </span>
+                            ))}
+                          </div>
                         </div>
 
-                        <div className="font-bold text-sm text-foreground">
-                          {isAr ? mov.nameAr : mov.name}
-                        </div>
+                        {/* Action Buttons: Google Search & Video */}
+                        <div className="pt-2 border-t border-border/70 flex items-center justify-between gap-1.5 flex-wrap">
+                          <a
+                            href={getMovementGoogleSearchUrl(mov)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                            title={isAr ? 'البحث عن هذا التمرين في Google' : 'Search on Google'}
+                          >
+                            <Search className="h-3 w-3" />
+                            <span>Google</span>
+                            <ExternalLink className="h-2.5 w-2.5 opacity-60" />
+                          </a>
 
-                        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                          {isAr ? mov.rationaleAr : mov.rationale}
-                        </p>
+                          <a
+                            href={getMovementGoogleImagesUrl(mov)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-colors"
+                            title={isAr ? 'عرض صور التمرين في Google' : 'Google Images'}
+                          >
+                            <Image className="h-3 w-3" />
+                            <span>{isAr ? 'صور' : 'Images'}</span>
+                          </a>
 
-                        <div className="flex flex-wrap gap-1 pt-1">
-                          {(isAr ? mov.targetMusclesAr : mov.targetMuscles).slice(0, 2).map((m, i) => (
-                            <span key={i} className="text-[10px] bg-secondary px-2 py-0.5 rounded text-foreground font-medium">
-                              {m}
-                            </span>
-                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setVideoModalMovement(mov)}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition-colors"
+                            title={isAr ? 'عرض فيديو الشرح العملي' : 'Watch video tutorial'}
+                          >
+                            <Video className="h-3 w-3" />
+                            <span>{isAr ? 'شرح فيديو' : 'Tutorial'}</span>
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -717,32 +815,175 @@ export const SmartWarmupModal: React.FC<SmartWarmupModalProps> = ({
                 ) : currentMovement ? (
                   /* Active Movement Card */
                   <div className="space-y-5">
-                    {/* Movement Title & Step Header */}
+                    {/* Movement Title & Step Header with Bilingual Names */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
                       <div className="flex items-center gap-3">
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shrink-0">
                           {getMovementIcon(currentMovement.iconName)}
                         </div>
-                        <div>
+                        <div className="space-y-0.5">
                           <div className="flex items-center gap-2 text-xs font-bold text-primary uppercase">
                             <span>{isAr ? `الحركة ${currentIdx + 1} من ${sequence.movements.length}` : `Movement ${currentIdx + 1} of ${sequence.movements.length}`}</span>
                             <span>•</span>
-                            <span className="text-muted-foreground">{currentMovement.durationSeconds}s</span>
+                            <span className="text-muted-foreground font-mono">{currentMovement.durationSeconds}s</span>
                           </div>
-                          <h3 className="text-lg sm:text-xl font-black text-foreground">
+                          <h3 className="text-lg sm:text-2xl font-black text-foreground tracking-tight">
                             {isAr ? currentMovement.nameAr : currentMovement.name}
                           </h3>
+                          <div className="flex items-center gap-1.5 pt-0.5">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-secondary/80 border border-border text-xs font-semibold text-primary">
+                              <Globe className="h-3 w-3 text-primary shrink-0" />
+                              <span className="font-mono">{isAr ? currentMovement.name : currentMovement.nameAr}</span>
+                            </span>
+                          </div>
                         </div>
                       </div>
 
                       {/* Target Reps / Tempo Badge */}
-                      <div className="rounded-xl border border-border bg-secondary/50 px-3 py-1.5 text-right sm:text-left">
+                      <div className="rounded-xl border border-border bg-secondary/50 px-3.5 py-2 text-right sm:text-left self-start sm:self-auto">
                         <div className="text-[10px] uppercase font-bold text-muted-foreground">
-                          {isAr ? 'الإيقاع المقترح' : 'Target Tempo / Reps'}
+                          {isAr ? 'الإيقاع والتكرار المقترح' : 'Target Tempo / Reps'}
                         </div>
-                        <div className="text-xs font-bold text-foreground">
+                        <div className="text-xs font-bold text-foreground mt-0.5">
                           {isAr ? currentMovement.repsOrTempoAr : currentMovement.repsOrTempo}
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Dedicated Visual Form Photo & Video Explanation Hub */}
+                    <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm space-y-0">
+                      {/* Top Bar: Media Mode Switcher + 1-Click Search Buttons */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 sm:p-3 border-b border-border bg-secondary/30">
+                        {/* Image vs Video Toggle */}
+                        <div className="flex items-center gap-1 bg-background/80 p-1 rounded-xl border border-border">
+                          <button
+                            type="button"
+                            onClick={() => setMediaTab('image')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                              mediaTab === 'image'
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            <Image className="h-3.5 w-3.5" />
+                            <span>{isAr ? 'صورة الحركة والشكل' : 'Visual Form Photo'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setMediaTab('video')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                              mediaTab === 'video'
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            <Video className="h-3.5 w-3.5" />
+                            <span>{isAr ? 'فيديو الشرح العملي' : 'Video Tutorial'}</span>
+                          </button>
+                        </div>
+
+                        {/* Direct External Search & Form Links */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* Google Search Button - Explicitly requested by user */}
+                          <a
+                            href={getMovementGoogleSearchUrl(currentMovement)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            id="btn-warmup-google-search"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 text-xs font-bold transition-colors shadow-xs"
+                            title={isAr ? 'البحث عن الحركة والشرح في Google' : 'Search exercise on Google'}
+                          >
+                            <Search className="h-3.5 w-3.5" />
+                            <span>{isAr ? 'بحث في Google' : 'Search Google'}</span>
+                            <ExternalLink className="h-3 w-3 opacity-70" />
+                          </a>
+
+                          {/* Google Images Button */}
+                          <a
+                            href={getMovementGoogleImagesUrl(currentMovement)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 text-xs font-bold transition-colors"
+                            title={isAr ? 'عرض صور توضيحية إضافية في Google' : 'Search Google Images'}
+                          >
+                            <Image className="h-3.5 w-3.5" />
+                            <span>{isAr ? 'صور' : 'Images'}</span>
+                            <ExternalLink className="h-3 w-3 opacity-70" />
+                          </a>
+
+                          {/* YouTube Search Button */}
+                          <a
+                            href={getMovementYouTubeSearchUrl(currentMovement)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-bold transition-colors"
+                            title={isAr ? 'البحث عن فيديوهات إضافية على YouTube' : 'Search YouTube'}
+                          >
+                            <Video className="h-3.5 w-3.5" />
+                            <span>YouTube</span>
+                            <ExternalLink className="h-3 w-3 opacity-70" />
+                          </a>
+                        </div>
+                      </div>
+
+                      {/* Media Display Container */}
+                      <div className="relative bg-black/90 w-full min-h-[220px] sm:min-h-[280px] max-h-[360px] flex items-center justify-center overflow-hidden">
+                        {mediaTab === 'video' && currentMovement.youtubeVideoId ? (
+                          <div className="w-full h-full min-h-[240px] sm:min-h-[300px] flex flex-col items-center justify-center">
+                            <iframe
+                              src={`https://www.youtube-nocookie.com/embed/${currentMovement.youtubeVideoId}?rel=0&modestbranding=1`}
+                              title={currentMovement.name}
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              className="w-full aspect-video h-[260px] sm:h-[320px] border-0"
+                            />
+                          </div>
+                        ) : (
+                          <div className="relative w-full h-[220px] sm:h-[280px] group">
+                            <img
+                              src={currentMovement.imageUrl}
+                              alt={currentMovement.name}
+                              className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent flex flex-col justify-end p-4">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="space-y-0.5 text-white">
+                                  <div className="text-sm sm:text-base font-black flex items-center gap-2">
+                                    <span>{isAr ? currentMovement.nameAr : currentMovement.name}</span>
+                                    <span className="text-white/70 font-mono text-xs">({isAr ? currentMovement.name : currentMovement.nameAr})</span>
+                                  </div>
+                                  <div className="text-xs text-white/80 font-medium">
+                                    {isAr ? currentMovement.repsOrTempoAr : currentMovement.repsOrTempo}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {currentMovement.youtubeVideoId && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setMediaTab('video')}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-lg transition-all"
+                                    >
+                                      <Play className="h-3.5 w-3.5 fill-current" />
+                                      <span>{isAr ? 'شاهد فيديو الحركة' : 'Play Video'}</span>
+                                    </button>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedImageMovement(currentMovement)}
+                                    className="p-2 rounded-xl bg-black/60 hover:bg-black/80 text-white transition-colors"
+                                    title={isAr ? 'تكبير الصورة' : 'Expand Image'}
+                                  >
+                                    <Maximize2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -980,6 +1221,229 @@ export const SmartWarmupModal: React.FC<SmartWarmupModalProps> = ({
           </div>
         </motion.div>
       </div>
+
+      {/* Video Demonstration Modal Popup */}
+      <AnimatePresence>
+        {videoModalMovement && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative w-full max-w-2xl bg-card border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              {/* Video Modal Header */}
+              <div className="flex items-center justify-between p-4 border-b border-border bg-secondary/30">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/15 text-rose-500 border border-rose-500/20">
+                    <Video className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="text-sm sm:text-base font-black text-foreground flex items-center gap-2 flex-wrap">
+                      <span>{isAr ? videoModalMovement.nameAr : videoModalMovement.name}</span>
+                      <span className="text-xs font-semibold text-primary/80 font-mono">
+                        ({isAr ? videoModalMovement.name : videoModalMovement.nameAr})
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {isAr ? 'فيديو الشرح والتطبيق العملي للتكنيك' : 'Video Tutorial & Movement Technique'}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setVideoModalMovement(null)}
+                  className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                  title={isAr ? 'إغلاق' : 'Close'}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Video Modal Body */}
+              <div className="p-4 space-y-4 overflow-y-auto">
+                {/* YouTube Embedded Player */}
+                <div className="w-full aspect-video rounded-xl overflow-hidden bg-black shadow-lg border border-border">
+                  {videoModalMovement.youtubeVideoId ? (
+                    <iframe
+                      src={`https://www.youtube-nocookie.com/embed/${videoModalMovement.youtubeVideoId}?autoplay=1&rel=0`}
+                      title={videoModalMovement.name}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      className="w-full h-full border-0"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground p-6 text-center space-y-3">
+                      <p className="text-sm">{isAr ? 'يمكنك مشاهدة مقاطع فيديو إضافية على YouTube مباشرة:' : 'Watch additional video clips directly on YouTube:'}</p>
+                      <a
+                        href={getMovementYouTubeSearchUrl(videoModalMovement)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold flex items-center gap-2"
+                      >
+                        <Video className="h-4 w-4" />
+                        <span>{isAr ? 'البحث على YouTube' : 'Open in YouTube'}</span>
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                {/* Quick Form Cues & Rationale */}
+                <div className="rounded-xl border border-border bg-secondary/30 p-3.5 space-y-2">
+                  <div className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Info className="h-4 w-4 text-primary" />
+                    <span>{isAr ? 'خطوات الأداء والتكنيك السليم:' : 'Form & Execution Cues:'}</span>
+                  </div>
+                  <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                    {(isAr ? videoModalMovement.cuesAr : videoModalMovement.cues).map((c, i) => (
+                      <li key={i}>{c}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Action Search Buttons Footer inside Modal */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border">
+                  <span className="text-xs text-muted-foreground font-medium">
+                    {isAr ? 'المزيد من التفاصيل والصور:' : 'More details & imagery:'}
+                  </span>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <a
+                      href={getMovementGoogleSearchUrl(videoModalMovement)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 text-xs font-bold transition-colors"
+                    >
+                      <Search className="h-3.5 w-3.5" />
+                      <span>{isAr ? 'بحث في Google' : 'Search Google'}</span>
+                      <ExternalLink className="h-3 w-3 opacity-60" />
+                    </a>
+
+                    <a
+                      href={getMovementGoogleImagesUrl(videoModalMovement)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 text-xs font-bold transition-colors"
+                    >
+                      <Image className="h-3.5 w-3.5" />
+                      <span>{isAr ? 'صور Google' : 'Google Images'}</span>
+                    </a>
+
+                    <a
+                      href={getMovementYouTubeSearchUrl(videoModalMovement)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-bold transition-colors"
+                    >
+                      <Video className="h-3.5 w-3.5" />
+                      <span>YouTube</span>
+                      <ExternalLink className="h-3 w-3 opacity-60" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Expanded Image Modal Popup */}
+      <AnimatePresence>
+        {expandedImageMovement && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-3xl bg-card border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b border-border bg-secondary/30">
+                <div className="space-y-0.5">
+                  <h3 className="text-base sm:text-lg font-black text-foreground">
+                    {isAr ? expandedImageMovement.nameAr : expandedImageMovement.name}
+                  </h3>
+                  <div className="text-xs text-primary font-mono font-bold flex items-center gap-1">
+                    <Globe className="h-3 w-3" />
+                    <span>{isAr ? expandedImageMovement.name : expandedImageMovement.nameAr}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setExpandedImageMovement(null)}
+                  className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Full Image */}
+              <div className="relative w-full bg-black max-h-[60vh] flex items-center justify-center overflow-hidden">
+                <img
+                  src={expandedImageMovement.imageUrl}
+                  alt={expandedImageMovement.name}
+                  className="w-full h-full object-contain max-h-[58vh]"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+
+              {/* Details and Quick Search */}
+              <div className="p-4 border-t border-border bg-card space-y-3">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {isAr ? expandedImageMovement.rationaleAr : expandedImageMovement.rationale}
+                </p>
+
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {(isAr ? expandedImageMovement.targetMusclesAr : expandedImageMovement.targetMuscles).map((m, i) => (
+                      <span key={i} className="text-[10px] bg-secondary px-2 py-0.5 rounded text-foreground font-semibold">
+                        {m}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={getMovementGoogleSearchUrl(expandedImageMovement)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 text-xs font-bold transition-colors"
+                    >
+                      <Search className="h-3.5 w-3.5" />
+                      <span>Google</span>
+                      <ExternalLink className="h-3 w-3 opacity-60" />
+                    </a>
+
+                    <a
+                      href={getMovementGoogleImagesUrl(expandedImageMovement)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 text-xs font-bold transition-colors"
+                    >
+                      <Image className="h-3.5 w-3.5" />
+                      <span>{isAr ? 'صور' : 'Images'}</span>
+                    </a>
+
+                    {expandedImageMovement.youtubeVideoId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const mov = expandedImageMovement;
+                          setExpandedImageMovement(null);
+                          setVideoModalMovement(mov);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors shadow"
+                      >
+                        <Video className="h-3.5 w-3.5" />
+                        <span>{isAr ? 'مشاهدة الفيديو' : 'Watch Video'}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </AnimatePresence>
   );
 };

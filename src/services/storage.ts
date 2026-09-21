@@ -1221,6 +1221,11 @@ export const StorageService = {
     localStorage.setItem(STORAGE_KEYS.SAVED_IMAGES, JSON.stringify(list));
   },
 
+  deleteGeneratedImage(id: string): void {
+    const list = this.getSavedImages().filter(img => img.id !== id);
+    localStorage.setItem(STORAGE_KEYS.SAVED_IMAGES, JSON.stringify(list));
+  },
+
   exportAllDataAsJSON(): string {
     const data = {
       profile: this.getProfile(),

@@ -25,8 +25,10 @@ import { ReturnToTrainingEngine } from './services/returnToTrainingEngine';
 import { WeeklyScheduleView } from './components/schedule/WeeklyScheduleView';
 import { ActiveWorkoutModal } from './components/workout/ActiveWorkoutModal';
 import { ExerciseDetailsModal } from './components/exercise/ExerciseDetailsModal';
+import { VisualizerView } from './components/visualizer/VisualizerView';
 import { ImageGeneratorModal } from './components/generator/ImageGeneratorModal';
 import { PWAInstallModal } from './components/pwa/PWAInstallModal';
+import { WorkoutSummaryModal } from './components/workout/WorkoutSummaryModal';
 import { PWAService } from './services/pwaService';
 
 export default function App() {
@@ -36,6 +38,7 @@ export default function App() {
   const [activeWorkout, setActiveWorkout] = useState<WorkoutSession | null>(null);
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
   const [measurements, setMeasurements] = useState<BodyMeasurement[]>([]);
+  const [completedWorkoutForSummary, setCompletedWorkoutForSummary] = useState<WorkoutSession | null>(null);
 
   // Firebase Auth & Sync State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -147,7 +150,7 @@ export default function App() {
     StorageService.saveActiveWorkout(w);
   };
 
-  // Handler: Finish workout
+  // Handler: Finish workout (Complete or Partial)
   const handleFinishWorkout = (w: WorkoutSession) => {
     StorageService.completeWorkout(w);
     if (currentUser) {
@@ -156,6 +159,30 @@ export default function App() {
     setActiveWorkout(null);
     setActiveWorkoutOpen(false);
     setWorkoutHistory(StorageService.getWorkoutHistory());
+    setCompletedWorkoutForSummary(w);
+  };
+
+  // Handler: Finish active workout directly from Dashboard Hub
+  const handleFinishActiveWorkoutFromDashboard = () => {
+    if (!activeWorkout) return;
+    let totalVolume = 0;
+    activeWorkout.exercises.forEach(ex => {
+      ex.sets.forEach(s => {
+        if (s.completed) {
+          const w = s.actualWeight || s.targetWeight || 0;
+          const r = s.actualReps || (typeof s.targetReps === 'number' ? s.targetReps : parseInt(String(s.targetReps || 0), 10));
+          totalVolume += w * r;
+        }
+      });
+    });
+    const finishedWorkout: WorkoutSession = {
+      ...activeWorkout,
+      completed: true,
+      completedAt: Date.now(),
+      durationMinutes: Math.max(12, Math.round((Date.now() - (activeWorkout.startedAt || activeWorkout.timestamp || Date.now())) / 60000)),
+      totalVolumeKg: totalVolume,
+    };
+    handleFinishWorkout(finishedWorkout);
   };
 
   // Handler: Reset App
@@ -216,6 +243,7 @@ export default function App() {
               setActiveWorkout(session);
               setActiveWorkoutOpen(true);
             }}
+            onFinishActiveWorkout={handleFinishActiveWorkoutFromDashboard}
             onNavigate={(sec) => setCurrentSection(sec)}
           />
         );
@@ -260,6 +288,7 @@ export default function App() {
             history={workoutHistory}
             activeWorkout={activeWorkout}
             onStartWorkout={handleStartWorkout}
+            onFinishActiveWorkout={handleFinishActiveWorkoutFromDashboard}
             onNavigate={(sec) => setCurrentSection(sec)}
             onUpdateProfile={handleUpdateProfile}
           />
@@ -302,37 +331,19 @@ export default function App() {
           />
         );
       case 'achievements':
-        return <AchievementsView profile={profile} />;
+        return (
+          <AchievementsView
+            profile={profile}
+            history={workoutHistory}
+            onStartWorkout={handleStartWorkout}
+          />
+        );
       case 'visualizer':
         return (
-          <div className="space-y-4 animate-fade-slide-up transition-all duration-300 ease-out transform">
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-black text-foreground">AI Physique Visualizer (1K-4K)</h1>
-              <button
-                id="btn-open-full-generator"
-                onClick={() => setVisualizerModalOpen(true)}
-                className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow hover:bg-primary/90 transition-colors"
-              >
-                Open Studio Generator
-              </button>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Powered by gemini-3-pro-image-preview with 1K, 2K, and 4K ultra-high resolution synthesis.
-            </p>
-            {/* Embedded direct open */}
-            <div className="rounded-2xl border border-border bg-card p-8 text-center space-y-3 shadow-md hover:border-primary/40 transition-colors">
-              <div className="text-base font-bold text-foreground">Launch Ultra-High Definition Synthesis</div>
-              <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                Generate photo-realistic athletic physiques, Egyptian high-protein fuel plates, and biomechanical exercise anatomy diagrams in 1K, 2K, or 4K.
-              </p>
-              <button
-                onClick={() => setVisualizerModalOpen(true)}
-                className="rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-lg hover:bg-primary/90 transition-all active:scale-95"
-              >
-                Generate 1K/2K/4K Athletic Visuals
-              </button>
-            </div>
-          </div>
+          <VisualizerView
+            profile={profile}
+            onOpenCustomStudio={() => setVisualizerModalOpen(true)}
+          />
         );
       case 'devices':
         return (
@@ -394,7 +405,7 @@ export default function App() {
       />
 
       {/* Main Workspace Layout */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 w-full max-w-full overflow-hidden">
         {/* Desktop Collapsible Sidebar */}
         <Sidebar
           currentSection={currentSection}
@@ -412,8 +423,8 @@ export default function App() {
         />
 
         {/* Scrollable Main Content View */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar mb-16 md:mb-0">
-          <div className="mx-auto max-w-7xl">
+        <main className="flex-1 w-full max-w-full min-w-0 overflow-y-auto overflow-x-hidden p-3 sm:p-5 lg:p-7 custom-scrollbar mb-16 md:mb-0">
+          <div className="mx-auto max-w-7xl w-full min-w-0">
             {renderCurrentView()}
           </div>
         </main>
@@ -475,6 +486,22 @@ export default function App() {
         onClose={() => setPwaInstallModalOpen(false)}
         profile={profile}
       />
+
+      {/* Post-Workout Completion Summary with Charts, Calories & Next Workout Advice Modal */}
+      {completedWorkoutForSummary && (
+        <WorkoutSummaryModal
+          workout={completedWorkoutForSummary}
+          profile={profile}
+          history={workoutHistory}
+          isOpen={!!completedWorkoutForSummary}
+          onClose={() => setCompletedWorkoutForSummary(null)}
+          onResumeWorkout={() => {
+            setActiveWorkout(completedWorkoutForSummary);
+            setActiveWorkoutOpen(true);
+            setCompletedWorkoutForSummary(null);
+          }}
+        />
+      )}
     </div>
   );
 }

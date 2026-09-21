@@ -264,6 +264,8 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
               <option value="sauna">{isAr ? 'ساونا جافة (Sauna)' : 'Dry Sauna'}</option>
               <option value="steam">{isAr ? 'غرفة بخار (Steam Room)' : 'Steam Room'}</option>
               <option value="jacuzzi">{isAr ? 'جاكوزي مائي (Jacuzzi)' : 'Jacuzzi'}</option>
+              <option value="yoga">{isAr ? 'يوغا استرخائية (Yoga)' : 'Restorative Yoga'}</option>
+              <option value="mobility">{isAr ? 'مرونة مفاصل وحركة (Mobility)' : 'Joint Mobility'}</option>
               <option value="stretching">{isAr ? 'جلسة إطالات كاملة (Stretching)' : 'Full Body Stretching'}</option>
               <option value="sleep">{isAr ? 'تسجيل جودة النوم والاستشفاء (Sleep)' : 'Sleep & Biometrics'}</option>
             </select>
@@ -361,10 +363,11 @@ export const RecoveryView: React.FC<RecoveryViewProps> = ({
               >
                 <div>
                   <span className="text-xs font-bold text-foreground capitalize">
-                    {log.type} Session
+                    {(isAr ? log.typeNameAr : log.typeName) || `${log.type} Session`}
                   </span>
                   <div className="text-[11px] text-muted-foreground">
                     {log.date} • {log.durationMinutes} min
+                    {log.recoveryRating && ` • ⭐ ${log.recoveryRating}/5`}
                   </div>
                 </div>
                 <span className="rounded bg-primary/20 px-2 py-0.5 text-xs font-bold text-primary">

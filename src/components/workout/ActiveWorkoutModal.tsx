@@ -579,13 +579,32 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     setSwapExerciseOpen(false);
   };
 
-  // Finish Workout with audio cue and robust storage completion
+  // Compute live completed sets counts
+  const { completedSetsCount, totalSetsCount, isAllSetsCompleted } = useMemo(() => {
+    let completed = 0;
+    let total = 0;
+    workout.exercises.forEach(ex => {
+      ex.sets.forEach(s => {
+        total += 1;
+        if (s.completed) completed += 1;
+      });
+    });
+    return {
+      completedSetsCount: completed,
+      totalSetsCount: total,
+      isAllSetsCompleted: total > 0 && completed === total,
+    };
+  }, [workout]);
+
+  // Finish Workout with audio cue and robust storage completion (Complete or Partial)
   const handleFinish = () => {
     let totalVolume = 0;
     workout.exercises.forEach(ex => {
       ex.sets.forEach(s => {
         if (s.completed) {
-          totalVolume += (s.actualWeight || 0) * (s.actualReps || 0);
+          const w = s.actualWeight || s.targetWeight || 0;
+          const r = s.actualReps || (typeof s.targetReps === 'number' ? s.targetReps : parseInt(String(s.targetReps || 0), 10));
+          totalVolume += w * r;
         }
       });
     });
@@ -593,9 +612,10 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     const finishedWorkout: WorkoutSession = {
       ...workout,
       completed: true,
-      durationMinutes: Math.max(15, Math.round((Date.now() - (workout.startedAt || workout.timestamp || Date.now())) / 60000)),
+      completedAt: Date.now(),
+      durationMinutes: Math.max(12, Math.round((Date.now() - (workout.startedAt || workout.timestamp || Date.now())) / 60000)),
       totalVolumeKg: totalVolume,
-      notes: workout.notes || 'Mission accomplished with progressive overload and fat loss focus.',
+      notes: workout.notes || (isAllSetsCompleted ? 'Full workout completed with progressive overload.' : `Partial workout finished: ${completedSetsCount} sets completed.`),
     };
 
     // Save to robust storage layer
@@ -837,11 +857,12 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
           <button
             id="btn-finish-workout-top"
             onClick={handleFinish}
-            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-emerald-500 transition-colors"
+            className="flex items-center gap-1 sm:gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs font-black text-white shadow-md shadow-emerald-600/20 transition-all shrink-0"
+            title={isAr ? 'إنهاء تمرين اليوم الآن (كامل أو جزئي)' : "Finish Today's Workout Now (Full or Partial)"}
           >
-            <Trophy className="h-4 w-4" />
-            <span className="hidden sm:inline">{t.workout.finishWorkout}</span>
-            <span className="sm:hidden">{isAr ? 'إنهاء' : 'Finish'}</span>
+            <Trophy className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{isAr ? 'إنهاء تمرين اليوم الآن' : "Finish Today's Workout"}</span>
+            <span className="sm:hidden">{isAr ? 'إنهاء التمرين' : 'Finish'}</span>
           </button>
 
           <button
@@ -1479,6 +1500,39 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
               <span>{t.workout.nextExercise}</span>
               {isAr ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             </button>
+          </div>
+
+          {/* Prominent Finish Today's Workout Button Card (Complete or Partial) */}
+          <div className="rounded-2xl border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-transparent p-4 sm:p-5 shadow-lg space-y-3 mt-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-emerald-400" />
+                  <h3 className="text-sm sm:text-base font-black text-foreground">
+                    {isAr ? 'إنهاء تمرين اليوم الآن' : "Finish Today's Workout Now"}
+                  </h3>
+                  <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-extrabold text-emerald-300 border border-emerald-500/30">
+                    {isAllSetsCompleted
+                      ? (isAr ? 'مكتمل 100%' : '100% Done')
+                      : (isAr ? `إنجاز جزئي (${completedSetsCount}/${totalSetsCount} مجموعة)` : `Partial (${completedSetsCount}/${totalSetsCount} sets)`)}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {isAr
+                    ? `أنجزت ${completedSetsCount} من أصل ${totalSetsCount} مجموعة. اضغط هنا لإنهاء الجلسة وحفظ النتائج فوراً، وعرض رسم بياني للسعرات المحروقة والحجم التدريبي ونصائح الاستشفاء والتمرين القادم.`
+                    : `You completed ${completedSetsCount} of ${totalSetsCount} sets. Finish now to save your results, view your calorie burn chart, and see recovery advice for your next workout.`}
+                </p>
+              </div>
+
+              <button
+                id="btn-finish-workout-bottom-prominent"
+                onClick={handleFinish}
+                className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white px-5 py-3 text-xs sm:text-sm font-black shadow-lg shadow-emerald-600/30 transition-all shrink-0"
+              >
+                <Trophy className="h-4 w-4" />
+                <span>{isAr ? 'إنهاء تمرين اليوم الآن' : "Finish Today's Workout Now"}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

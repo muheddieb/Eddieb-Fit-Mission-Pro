@@ -19,7 +19,8 @@ import {
   SlidersHorizontal,
   Zap,
   Feather,
-  Dumbbell
+  Dumbbell,
+  Trophy
 } from 'lucide-react';
 import { UserProfile, WorkoutSession, WorkoutExercise, WorkoutDifficultyLevel } from '../../types';
 import { WeeklyScheduleService, WeeklyDayPlan } from '../../services/weeklyScheduleService';
@@ -119,6 +120,7 @@ interface DailyWorkoutHubProps {
   onStartWorkout: () => void;
   onStartSpecificWorkout: (session: WorkoutSession) => void;
   onOpenWarmupModal: () => void;
+  onFinishActiveWorkout?: () => void;
   onSelectExercise?: (exerciseId: string) => void;
 }
 
@@ -129,6 +131,7 @@ export const DailyWorkoutHub: React.FC<DailyWorkoutHubProps> = ({
   onStartWorkout,
   onStartSpecificWorkout,
   onOpenWarmupModal,
+  onFinishActiveWorkout,
   onSelectExercise,
 }) => {
   const isAr = profile.language === 'ar';
@@ -514,6 +517,19 @@ export const DailyWorkoutHub: React.FC<DailyWorkoutHubProps> = ({
               >
                 <Flame className="h-4 w-4 text-amber-400 fill-current" />
                 <span className="hidden sm:inline">{isAr ? 'إحماء 5 دقائق' : 'Warm-up'}</span>
+              </button>
+            )}
+
+            {/* Prominent Finish Active Workout Button (if an active workout is in progress today) */}
+            {activeWorkout && isViewingToday && onFinishActiveWorkout && (
+              <button
+                id="btn-finish-active-workout-hub"
+                onClick={onFinishActiveWorkout}
+                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 text-xs sm:text-sm font-black shadow-lg shadow-emerald-600/25 transition-all active:scale-95"
+                title={isAr ? 'إنهاء تمرين اليوم الآن وعرض النتائج والسعرات' : "Finish Today's Workout Now and view results"}
+              >
+                <Trophy className="h-4 w-4 shrink-0" />
+                <span>{isAr ? 'إنهاء تمرين اليوم الآن' : "Finish Workout Now"}</span>
               </button>
             )}
 
