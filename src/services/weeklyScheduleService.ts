@@ -1,4 +1,4 @@
-import { UserProfile, WorkoutSession, WorkoutDifficultyLevel } from '../types';
+import { UserProfile, WorkoutSession, WorkoutDifficultyLevel, DailyReadinessAssessment } from '../types';
 import { PPLEngine } from './pplEngine';
 import { StorageService } from './storage';
 
@@ -359,13 +359,15 @@ export const WeeklyScheduleService = {
     day: WeeklyDayPlan,
     profile: UserProfile,
     history: WorkoutSession[],
-    difficultyLevel: WorkoutDifficultyLevel = 'standard'
+    difficultyLevel: WorkoutDifficultyLevel = 'standard',
+    readiness?: DailyReadinessAssessment | null
   ): WorkoutSession {
     return PPLEngine.buildAdaptiveWorkout({
       profile,
       history,
       splitId: day.splitId,
       difficultyLevel,
+      readiness,
       customName: `${day.dayName}: ${day.title}`,
       customNameAr: `${day.dayNameAr}: ${day.titleAr}`,
     });

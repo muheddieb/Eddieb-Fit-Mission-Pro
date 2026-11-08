@@ -20,10 +20,12 @@ import {
   Zap,
   Feather,
   Dumbbell,
-  Trophy
+  Trophy,
+  HeartPulse
 } from 'lucide-react';
-import { UserProfile, WorkoutSession, WorkoutExercise, WorkoutDifficultyLevel } from '../../types';
+import { UserProfile, WorkoutSession, WorkoutExercise, WorkoutDifficultyLevel, DailyReadinessAssessment } from '../../types';
 import { WeeklyScheduleService, WeeklyDayPlan } from '../../services/weeklyScheduleService';
+import { StorageService } from '../../services/storage';
 
 export interface DifficultyOption {
   id: WorkoutDifficultyLevel;
@@ -50,12 +52,12 @@ export interface DifficultyOption {
 export const DIFFICULTY_LEVELS: DifficultyOption[] = [
   {
     id: 'easy',
-    nameEn: 'Easy',
-    nameAr: 'سهل (خفيف)',
-    badgeEn: 'Level 1 • Low Fatigue',
-    badgeAr: 'المستوى 1 • إجهاد منخفض',
-    descEn: 'Reduced volume (2 sets/move), 10-12 reps, 60s rest. 10% deload for comfortable execution.',
-    descAr: 'مجموعات أقل (مجموعتان/تمرين)، 10-12 تكرار، راحة 60 ثانية. تخفيف 10% للأوزان لتقليل الإجهاد.',
+    nameEn: 'Easy (Joint-Friendly)',
+    nameAr: 'سهل (حماية المفاصل)',
+    badgeEn: 'Level 1 • Low Fatigue • Cable & DB Safe',
+    badgeAr: 'المستوى 1 • إجهاد خفيف • كابلات ودامبل آمن',
+    descEn: 'Focus on cables & dumbbells, chest-supported movements, 2 sets/exercise. Protects weak shoulders and relieves lower back pressure.',
+    descAr: 'تركيز على الكابلات والدامبل المدعوم، مجموعتان/تمرين، راحة 60ث. يحمي الكتف الضعيف ويزيل الضغط عن أسفل الظهر.',
     durationMins: 35,
     rpeEn: 'RPE 6.5',
     rpeAr: 'مجهود 6.5',
@@ -71,12 +73,12 @@ export const DIFFICULTY_LEVELS: DifficultyOption[] = [
   },
   {
     id: 'standard',
-    nameEn: 'Standard',
-    nameAr: 'قياسي (الأساسي)',
-    badgeEn: 'Level 2 • Recommended',
-    badgeAr: 'المستوى 2 • موصى به',
-    descEn: 'Balanced hypertrophy (3-4 sets/move), 8-12 reps, 90s rest. Optimal progressive overload.',
-    descAr: 'الحجم البنائي المعتمد (3-4 مجموعات)، 8-12 تكرار، راحة 90 ثانية. التوازن المثالي للنمو والقوة.',
+    nameEn: 'Standard (Hypertrophy)',
+    nameAr: 'قياسي (الأساسي المتوازن)',
+    badgeEn: 'Level 2 • Recommended • Balanced Overload',
+    badgeAr: 'المستوى 2 • موصى به • تدرج متوازن',
+    descEn: 'Balanced free weights & machines (3-4 sets/exercise), 8-12 reps, 90s rest. Optimal progressive overload for muscle growth with strict form.',
+    descAr: 'مزيج متوازن من الأجهزة الحرة والكابلات (3-4 مجموعات)، 8-12 تكرار، راحة 90ث. التحميل التدريجي الأمثل للبناء العضلي.',
     durationMins: 50,
     rpeEn: 'RPE 8.0',
     rpeAr: 'مجهود 8.0',
@@ -92,12 +94,12 @@ export const DIFFICULTY_LEVELS: DifficultyOption[] = [
   },
   {
     id: 'hard',
-    nameEn: 'Advanced',
-    nameAr: 'متقدم (مكثف)',
-    badgeEn: 'Level 3 • High Intensity',
-    badgeAr: 'المستوى 3 • أقصى كثافة',
-    descEn: 'Peak volume (4-5 sets on compounds), 6-8 reps, 120s rest. Maximum progressive overload.',
-    descAr: 'أقصى حجم تدريبي (4-5 مجموعات)، أوزان ثقيلة، 6-8 تكرار، راحة 120 ثانية. لكسر أرقامك التدريبية.',
+    nameEn: 'Advanced (High Intensity)',
+    nameAr: 'متقدم (مكثف وأوزان ثقيلة)',
+    badgeEn: 'Level 3 • High Intensity • Peak Volume',
+    badgeAr: 'المستوى 3 • أقصى كثافة • حجم تدريبي كامل',
+    descEn: 'High mechanical tension (4-5 sets on main compounds), heavy weights, 6-8 reps, 120s rest. For days when energy and strength are at 100%.',
+    descAr: 'أقصى حجم تدريبي (4-5 مجموعات للمركبات)، أوزان ثقيلة، 6-8 تكرار، راحة 120ث. للأيام التي تكون فيها بكامل طاقتك واستشفائك.',
     durationMins: 65,
     rpeEn: 'RPE 9.0',
     rpeAr: 'مجهود 9.0',
@@ -122,6 +124,8 @@ interface DailyWorkoutHubProps {
   onOpenWarmupModal: () => void;
   onFinishActiveWorkout?: () => void;
   onSelectExercise?: (exerciseId: string) => void;
+  readinessTrigger?: number;
+  onOpenReadiness?: () => void;
 }
 
 export const DailyWorkoutHub: React.FC<DailyWorkoutHubProps> = ({
@@ -133,6 +137,8 @@ export const DailyWorkoutHub: React.FC<DailyWorkoutHubProps> = ({
   onOpenWarmupModal,
   onFinishActiveWorkout,
   onSelectExercise,
+  readinessTrigger,
+  onOpenReadiness,
 }) => {
   const isAr = profile.language === 'ar';
   const todayIndex = WeeklyScheduleService.getTodayDayIndex();
@@ -140,6 +146,15 @@ export const DailyWorkoutHub: React.FC<DailyWorkoutHubProps> = ({
   const [schedule, setSchedule] = useState<WeeklyDayPlan[]>(() => 
     WeeklyScheduleService.getWeeklySchedule(profile)
   );
+
+  // Today's readiness assessment
+  const [todayReadiness, setTodayReadiness] = useState<DailyReadinessAssessment | null>(() =>
+    StorageService.getTodayDailyReadiness()
+  );
+
+  useEffect(() => {
+    setTodayReadiness(StorageService.getTodayDailyReadiness());
+  }, [readinessTrigger]);
 
   // The day currently being viewed (defaults to today)
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(todayIndex);
@@ -160,16 +175,16 @@ export const DailyWorkoutHub: React.FC<DailyWorkoutHubProps> = ({
   const activeDay = schedule[selectedDayIndex] || schedule[0];
   const isViewingToday = selectedDayIndex === todayIndex;
 
-  // Build concrete session for the active day with difficulty scaling
+  // Build concrete session for the active day with difficulty scaling & readiness calibration
   const [currentSession, setCurrentSession] = useState<WorkoutSession>(() => 
-    WeeklyScheduleService.buildWorkoutForDay(activeDay, profile, history, difficultyLevel)
+    WeeklyScheduleService.buildWorkoutForDay(activeDay, profile, history, difficultyLevel, todayReadiness)
   );
 
-  // Update session when activeDay changes, schedule updates, or difficulty level changes
+  // Update session when activeDay changes, schedule updates, difficulty level changes, or readiness updates
   useEffect(() => {
-    const session = WeeklyScheduleService.buildWorkoutForDay(activeDay, profile, history, difficultyLevel);
+    const session = WeeklyScheduleService.buildWorkoutForDay(activeDay, profile, history, difficultyLevel, todayReadiness);
     setCurrentSession(session);
-  }, [activeDay, profile, history, difficultyLevel]);
+  }, [activeDay, profile, history, difficultyLevel, todayReadiness]);
 
   // One-click difficulty toggling handler
   const handleSelectDifficulty = (newLevel: WorkoutDifficultyLevel) => {
@@ -177,12 +192,18 @@ export const DailyWorkoutHub: React.FC<DailyWorkoutHubProps> = ({
     setDifficultyLevel(newLevel);
 
     const targetOpt = DIFFICULTY_LEVELS.find((d) => d.id === newLevel);
+    const nextSession = WeeklyScheduleService.buildWorkoutForDay(activeDay, profile, history, newLevel, todayReadiness);
+    const previewNames = nextSession.exercises
+      .slice(0, 3)
+      .map((e) => (isAr && e.exerciseNameAr ? e.exerciseNameAr : e.exerciseName))
+      .join(' • ');
+
     const msg = isAr
-      ? `تم تحويل الجلسة إلى: ${targetOpt?.nameAr} • تم تحديث المجموعات والتكرارات والأوزان`
-      : `Session calibrated to: ${targetOpt?.nameEn} • Sets, reps, and target weights updated`;
+      ? `تم استبدال تمارين اليوم إلى (${targetOpt?.nameAr}): ${previewNames}... مع معايرة الأوزان والمجموعات`
+      : `Replaced today's exercises for (${targetOpt?.nameEn}): ${previewNames}... with scaled weights & sets`;
 
     setDifficultyFeedback(msg);
-    setTimeout(() => setDifficultyFeedback(null), 3500);
+    setTimeout(() => setDifficultyFeedback(null), 5000);
   };
 
   // Handle Day Selection / Swap
@@ -565,9 +586,9 @@ export const DailyWorkoutHub: React.FC<DailyWorkoutHubProps> = ({
               </div>
 
               <span className="text-[11px] font-mono text-muted-foreground font-semibold">
-                {difficultyLevel === 'easy' && (isAr ? 'نسخة خفيفة • استشفاء مرن وحجم أقل' : 'Light Version • Lower Volume & Less Fatigue')}
-                {difficultyLevel === 'standard' && (isAr ? 'النسخة القياسية • البناء العضلي والتحميل التدريجي' : 'Standard Version • Optimal Hypertrophy')}
-                {difficultyLevel === 'hard' && (isAr ? 'نسخة متقدمة مكثفة • أقصى تحفيز وأوزان ثقيلة' : 'Advanced Version • Peak Load & High Intensity')}
+                {difficultyLevel === 'easy' && (isAr ? 'مستوى 1 • كابلات ودامبل • صديق للكتف وأسفل الظهر وحجم خفيف' : 'Level 1 • Cables & DBs • Shoulder & Lower-Back Friendly')}
+                {difficultyLevel === 'standard' && (isAr ? 'مستوى 2 • تدرج متوازن • المزيج المعتمد للبناء العضلي' : 'Level 2 • Recommended • Balanced Progressive Overload')}
+                {difficultyLevel === 'hard' && (isAr ? 'مستوى 3 • أقصى كثافة • أوزان ثقيلة وحجم تدريبي كامل' : 'Level 3 • Peak Volume & Maximum Mechanical Tension')}
               </span>
             </div>
 
@@ -638,6 +659,95 @@ export const DailyWorkoutHub: React.FC<DailyWorkoutHubProps> = ({
           </div>
         )}
 
+        {/* Daily Readiness Auto-Regulation Status Banner */}
+        {isViewingToday && !activeDay.isRestDay && (
+          <div className="pt-1">
+            {todayReadiness ? (
+              <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                todayReadiness.readinessTier === 'optimal'
+                  ? 'border-emerald-500/30 bg-emerald-500/10'
+                  : todayReadiness.readinessTier === 'low'
+                  ? 'border-rose-500/30 bg-rose-500/10'
+                  : 'border-cyan-500/30 bg-cyan-500/10'
+              }`}>
+                <div className="flex items-start sm:items-center gap-3">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
+                    todayReadiness.readinessTier === 'optimal'
+                      ? 'border-emerald-500/40 bg-emerald-500/20 text-emerald-400'
+                      : todayReadiness.readinessTier === 'low'
+                      ? 'border-rose-500/40 bg-rose-500/20 text-rose-400'
+                      : 'border-cyan-500/40 bg-cyan-500/20 text-cyan-400'
+                  }`}>
+                    <HeartPulse className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs sm:text-sm font-black text-foreground">
+                        {isAr ? 'المعايرة الذكية للجاهزية اليومية نشطة' : 'Daily Readiness Auto-Regulation Active'}
+                      </span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase border ${
+                        todayReadiness.readinessTier === 'optimal'
+                          ? 'border-emerald-500/40 text-emerald-400 bg-card/60'
+                          : todayReadiness.readinessTier === 'low'
+                          ? 'border-rose-500/40 text-rose-400 bg-card/60'
+                          : 'border-cyan-500/40 text-cyan-400 bg-card/60'
+                      }`}>
+                        {todayReadiness.readinessScore}% • {todayReadiness.readinessTier}
+                      </span>
+                    </div>
+                    <p className="text-[11px] font-bold text-foreground/90 mt-0.5">
+                      {isAr ? todayReadiness.pplActionDirectiveAr : todayReadiness.pplActionDirectiveEn}
+                    </p>
+                  </div>
+                </div>
+
+                {onOpenReadiness && (
+                  <button
+                    type="button"
+                    onClick={onOpenReadiness}
+                    className="self-end sm:self-auto shrink-0 rounded-xl border border-border/80 bg-card/80 px-3 py-1.5 text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-card transition-all"
+                  >
+                    {isAr ? 'تحديث الاستبيان' : 'Update Check-In'}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="p-4 rounded-2xl border border-primary/30 bg-primary/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start sm:items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary">
+                    <HeartPulse className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs sm:text-sm font-black text-foreground">
+                        {isAr ? 'استبيان الجاهزية اليومية بانتظارك' : 'Daily Readiness Check-In Pending'}
+                      </span>
+                      <span className="flex h-2 w-2 rounded-full bg-primary animate-ping" />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {isAr 
+                        ? 'أجب عن 3 أسئلة سريعة (نوم، توتر، إجهاد عضلي) لمعايرة أوزان ومجموعات جلسة اليوم تلقائياً عبر PPLEngine.'
+                        : "Rate your sleep, stress, and muscle soreness in 30s to auto-calibrate today's volume & weights."}
+                    </p>
+                  </div>
+                </div>
+
+                {onOpenReadiness && (
+                  <button
+                    id="btn-take-readiness-hub"
+                    type="button"
+                    onClick={onOpenReadiness}
+                    className="self-end sm:self-auto shrink-0 flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-black text-primary-foreground shadow-sm hover:bg-primary/90 transition-all cursor-pointer"
+                  >
+                    <HeartPulse className="h-3.5 w-3.5" />
+                    <span>{isAr ? 'بدء التقييم (30 ثانية)' : 'Take 30s Check-In'}</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 5. Detailed Exercises Section */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -680,7 +790,7 @@ export const DailyWorkoutHub: React.FC<DailyWorkoutHubProps> = ({
                         </h5>
                       </div>
 
-                      {/* Muscle & Equipment Badge */}
+                      {/* Muscle, Sets, Suggested Weight & Rest Badge */}
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="rounded-md bg-card px-2 py-0.5 text-[10px] font-bold text-muted-foreground border border-border">
                           {ex.primaryMuscle}
@@ -688,6 +798,11 @@ export const DailyWorkoutHub: React.FC<DailyWorkoutHubProps> = ({
                         <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-black text-primary">
                           {totalSets} {isAr ? 'مجموعات' : 'Sets'} × {sampleReps} {isAr ? 'تكرار' : 'Reps'}
                         </span>
+                        {targetWeight > 0 && (
+                          <span className="rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-black text-emerald-400 font-mono">
+                            {targetWeight} kg {isAr ? 'مقترح' : 'suggested'}
+                          </span>
+                        )}
                         <span className="rounded-md bg-secondary px-2 py-0.5 text-[10px] font-bold text-muted-foreground font-mono">
                           RPE {rpe} • {ex.restSeconds || 90}s {isAr ? 'راحة' : 'rest'}
                         </span>

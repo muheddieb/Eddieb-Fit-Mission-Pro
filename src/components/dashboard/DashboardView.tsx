@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { 
   Flame, 
@@ -35,6 +35,7 @@ import { SmartWarmupModal } from '../workout/SmartWarmupModal';
 import { HydrationTracker } from './HydrationTracker';
 import { LiveHeartRateBadge } from '../devices/LiveHeartRateBadge';
 import { DailyWorkoutHub } from './DailyWorkoutHub';
+import { DailyReadinessCard } from './DailyReadinessCard';
 import { MonthlyAdherenceCalendar } from './MonthlyAdherenceCalendar';
 import { RecoveryScoreCard } from './RecoveryScoreCard';
 
@@ -68,6 +69,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [briefingLoading, setBriefingLoading] = useState<boolean>(false);
   const [smartWarmupOpen, setSmartWarmupOpen] = useState<boolean>(false);
   const [samsungSummary, setSamsungSummary] = useState(SamsungHealthService.getLatestSummary());
+  const [readinessTrigger, setReadinessTrigger] = useState<number>(0);
+  const readinessCardRef = useRef<HTMLDivElement>(null);
 
   // Load data
   useEffect(() => {
@@ -241,6 +244,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
+      {/* Daily Readiness & Auto-Regulation Questionnaire */}
+      <div ref={readinessCardRef} id="section-daily-readiness">
+        <DailyReadinessCard
+          profile={profile}
+          isAr={isAr}
+          onReadinessUpdated={() => {
+            setReadinessTrigger((prev) => prev + 1);
+          }}
+        />
+      </div>
+
       {/* Daily Workout Hub: Horizontal Week Days Strip & Dedicated Workout of the Day */}
       <DailyWorkoutHub
         profile={profile}
@@ -256,6 +270,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         }}
         onFinishActiveWorkout={onFinishActiveWorkout}
         onOpenWarmupModal={() => setSmartWarmupOpen(true)}
+        readinessTrigger={readinessTrigger}
+        onOpenReadiness={() => {
+          readinessCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }}
       />
 
       {/* Recovery Score & Suggested Yoga/Mobility/Stretching Protocols */}

@@ -106,6 +106,26 @@ export const ExerciseHistoryComparison: React.FC<ExerciseHistoryComparisonProps>
     onApplyPreset(newSets);
   };
 
+  // Action: Apply RPE-Calibrated Suggested Weights from Last Session
+  const handleApplyRpeSuggested = () => {
+    const newSets = currentExercise.sets.map((set, idx) => {
+      const setSuggestion = progressionAdvice.setBySetSuggestions?.[idx] ||
+        (progressionAdvice.setBySetSuggestions && progressionAdvice.setBySetSuggestions.length > 0
+          ? progressionAdvice.setBySetSuggestions[progressionAdvice.setBySetSuggestions.length - 1]
+          : undefined);
+      const targetW = setSuggestion?.suggestedWeight ?? progressionAdvice.recommendedWeight;
+      const targetR = setSuggestion?.lastReps ?? (typeof set.actualReps === 'number' ? set.actualReps : 10);
+      return {
+        targetWeight: targetW,
+        actualWeight: targetW,
+        targetReps: targetR,
+        actualReps: targetR,
+        rpe: 8,
+      };
+    });
+    onApplyPreset(newSets);
+  };
+
   // Action: Challenge +2.5 kg Overload
   const handleChallengeWeight = () => {
     const baseSets = lastSession?.sets?.length ? lastSession.sets : currentExercise.sets.map(s => ({
@@ -266,6 +286,11 @@ export const ExerciseHistoryComparison: React.FC<ExerciseHistoryComparisonProps>
                       <span className="font-mono font-bold text-foreground">
                         {lastSet ? `${lastSet.weight} kg × ${lastSet.reps}` : '—'}
                       </span>
+                      {lastSet && (
+                        <span className="block text-[9px] font-mono text-muted-foreground">
+                          @ RPE {lastSet.rpe ?? 8}
+                        </span>
+                      )}
                     </div>
 
                     <div className="text-right">
@@ -274,6 +299,9 @@ export const ExerciseHistoryComparison: React.FC<ExerciseHistoryComparisonProps>
                         comp?.status === 'heavier' || comp?.status === 'more_reps' ? 'text-emerald-400' : 'text-primary'
                       }`}>
                         {set.actualWeight ?? set.targetWeight} kg × {set.actualReps ?? set.targetReps}
+                      </span>
+                      <span className="block text-[9px] font-mono text-muted-foreground">
+                        @ RPE {set.rpe ?? 8}
                       </span>
                     </div>
                   </div>
@@ -303,6 +331,19 @@ export const ExerciseHistoryComparison: React.FC<ExerciseHistoryComparisonProps>
           <Zap className="h-3 w-3 text-amber-400" />
           {isAr ? 'إجراءات التطور السريعة' : 'Overload Controls'}:
         </span>
+
+        {lastSession && (
+          <button
+            id="btn-apply-rpe-suggested-sets"
+            type="button"
+            onClick={handleApplyRpeSuggested}
+            className="flex items-center gap-1 rounded-xl border border-primary/40 bg-primary/15 px-2.5 py-1.5 text-xs font-bold text-primary hover:bg-primary/25 transition-all shadow-xs"
+            title={isAr ? 'تطبيق الأوزان المقترحة ديناميكياً حسب RPE الجلسة السابقة' : 'Apply dynamic weights suggested from last session RPE'}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span>{isAr ? `تطبيق أوزان RPE (${progressionAdvice.recommendedWeight} kg)` : `Apply RPE Weight (${progressionAdvice.recommendedWeight} kg)`}</span>
+          </button>
+        )}
 
         {lastSession && (
           <button

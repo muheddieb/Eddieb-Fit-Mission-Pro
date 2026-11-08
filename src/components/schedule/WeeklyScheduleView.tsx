@@ -14,9 +14,12 @@ import {
   ShieldCheck, 
   ChevronRight,
   Info,
-  CheckCircle2
+  CheckCircle2,
+  Feather,
+  Zap,
+  SlidersHorizontal
 } from 'lucide-react';
-import { UserProfile, WorkoutSession } from '../../types';
+import { UserProfile, WorkoutSession, WorkoutDifficultyLevel } from '../../types';
 import { WeeklyScheduleService, WeeklyDayPlan, SPLIT_DEFINITIONS } from '../../services/weeklyScheduleService';
 
 interface WeeklyScheduleViewProps {
@@ -37,6 +40,7 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
   const [schedule, setSchedule] = useState<WeeklyDayPlan[]>(() => 
     WeeklyScheduleService.getWeeklySchedule(profile)
   );
+  const [difficultyLevel, setDifficultyLevel] = useState<WorkoutDifficultyLevel>('standard');
   const [swapMode, setSwapMode] = useState<boolean>(false);
   const [selectedDayIndexForSwap, setSelectedDayIndexForSwap] = useState<number | null>(null);
   const [swapFeedback, setSwapFeedback] = useState<string | null>(null);
@@ -87,10 +91,10 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
     setSelectedDayIndexForSwap(dayIndex);
   };
 
-  // Handler: Start a day's workout
-  const handleStartDay = (e: React.MouseEvent, day: WeeklyDayPlan) => {
+  // Handler: Start a day's workout with the selected difficulty level
+  const handleStartDay = (e: React.MouseEvent, day: WeeklyDayPlan, levelOverride?: WorkoutDifficultyLevel) => {
     e.stopPropagation();
-    const session = WeeklyScheduleService.buildWorkoutForDay(day, profile, history);
+    const session = WeeklyScheduleService.buildWorkoutForDay(day, profile, history, levelOverride || difficultyLevel);
     onStartSpecificWorkout(session);
   };
 
@@ -170,6 +174,49 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
             <RotateCcw className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{isAr ? 'إعادة ضبط' : 'Reset'}</span>
           </button>
+        </div>
+      </div>
+
+      {/* 3-Tier Difficulty Selector Bar for Weekly Schedule */}
+      <div className="rounded-2xl border border-border bg-card/85 p-3.5 sm:p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary border border-primary/25">
+            <SlidersHorizontal className="h-4 w-4" />
+          </div>
+          <div>
+            <h3 className="text-xs sm:text-sm font-black text-foreground">
+              {isAr ? 'مستوى صعوبة تمارين الأسبوع (يغيّر التمارين والأجهزة لكل يوم)' : 'Weekly Difficulty Tier (Swaps Exercises & Loads)'}
+            </h3>
+            <p className="text-[11px] text-muted-foreground">
+              {isAr
+                ? 'اختر (سهل: كابلات آمنة للكتف والظهر • قياسي: دامبل وكابلات • متقدم: بار ومركبات ثقيلة)'
+                : 'Select Easy (Joint-safe cables), Standard (DB + Cables), or Advanced (Heavy compounds)'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 rounded-xl bg-secondary/60 p-1 border border-border">
+          {([
+            { id: 'easy' as WorkoutDifficultyLevel, labelAr: 'سهل (كابلات آمنة)', labelEn: 'Easy', icon: Feather, activeClass: 'bg-emerald-500 text-neutral-950 shadow-sm' },
+            { id: 'standard' as WorkoutDifficultyLevel, labelAr: 'قياسي (متوازن)', labelEn: 'Standard', icon: Dumbbell, activeClass: 'bg-primary text-primary-foreground shadow-sm' },
+            { id: 'hard' as WorkoutDifficultyLevel, labelAr: 'متقدم (مكثف)', labelEn: 'Advanced', icon: Zap, activeClass: 'bg-purple-600 text-white shadow-sm' },
+          ]).map((tier) => {
+            const Icon = tier.icon;
+            const isSelected = difficultyLevel === tier.id;
+            return (
+              <button
+                key={tier.id}
+                type="button"
+                onClick={() => setDifficultyLevel(tier.id)}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-black transition-all cursor-pointer ${
+                  isSelected ? tier.activeClass : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                <span>{isAr ? tier.labelAr : tier.labelEn}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -291,24 +338,38 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                   )}
                 </div>
 
-                {/* Exercise Preview snippet */}
-                <div className="border-t border-border/60 pt-2 space-y-1">
-                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                    <span className="flex items-center gap-1 font-semibold">
-                      <Clock className="h-3 w-3" />
-                      ~{day.estimatedMinutes} {isAr ? 'دقيقة' : 'min'}
-                    </span>
-                    <span className="font-semibold">
-                      {day.exercisesCount} {isAr ? 'تمارين أساسية' : 'exercises'}
-                    </span>
-                  </div>
+                {/* Exercise Preview snippet dynamically generated for selected difficulty */}
+                {(() => {
+                  const previewSession = !day.isRestDay
+                    ? WeeklyScheduleService.buildWorkoutForDay(day, profile, history, difficultyLevel)
+                    : null;
+                  const dynamicExNames = previewSession
+                    ? previewSession.exercises.map((e) => (isAr && e.exerciseNameAr ? e.exerciseNameAr : e.exerciseName))
+                    : isAr
+                    ? day.exerciseNamesAr
+                    : day.exerciseNames;
+                  const dynamicMinutes = previewSession ? previewSession.durationMinutes : day.estimatedMinutes;
 
-                  <ul className="text-[10px] text-muted-foreground space-y-0.5 line-clamp-2 list-inside list-disc">
-                    {(isAr ? day.exerciseNamesAr : day.exerciseNames).slice(0, 2).map((ex, exIdx) => (
-                      <li key={exIdx} className="truncate">{ex}</li>
-                    ))}
-                  </ul>
-                </div>
+                  return (
+                    <div className="border-t border-border/60 pt-2 space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                        <span className="flex items-center gap-1 font-semibold">
+                          <Clock className="h-3 w-3" />
+                          ~{dynamicMinutes} {isAr ? 'دقيقة' : 'min'}
+                        </span>
+                        <span className="font-semibold">
+                          {dynamicExNames.length} {isAr ? 'تمارين' : 'exercises'}
+                        </span>
+                      </div>
+
+                      <ul className="text-[10px] text-muted-foreground space-y-0.5 line-clamp-2 list-inside list-disc">
+                        {dynamicExNames.slice(0, 3).map((ex, exIdx) => (
+                          <li key={exIdx} className="truncate">{ex}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Bottom Card Action Buttons */}
@@ -377,20 +438,71 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
               {isAr ? activeDayDetailModal.subtitleAr : activeDayDetailModal.subtitle}
             </p>
 
-            {/* Exercises list in detail */}
-            <div className="space-y-2">
-              <span className="text-xs font-bold text-foreground block">
-                {isAr ? 'تمارين الجلسة المجدولة:' : 'Scheduled Exercises:'}
-              </span>
-              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                {(isAr ? activeDayDetailModal.exerciseNamesAr : activeDayDetailModal.exerciseNames).map((ex, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-xl border border-border bg-secondary/30 p-2.5 text-xs">
-                    <span className="font-bold text-foreground">{ex}</span>
-                    <span className="text-[10px] text-primary font-mono font-semibold">3-4 sets</span>
+            {/* Difficulty Toggle & Exercises list in detail modal */}
+            {(() => {
+              const modalSession = WeeklyScheduleService.buildWorkoutForDay(activeDayDetailModal, profile, history, difficultyLevel);
+              return (
+                <div className="space-y-2.5">
+                  {!activeDayDetailModal.isRestDay && (
+                    <div className="flex items-center justify-between gap-2 rounded-xl bg-secondary/40 p-2 border border-border">
+                      <span className="text-[11px] font-bold text-foreground">
+                        {isAr ? 'مستوى صعوبة التمرين:' : 'Session Difficulty:'}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {(['easy', 'standard', 'hard'] as WorkoutDifficultyLevel[]).map((lvl) => (
+                          <button
+                            key={lvl}
+                            type="button"
+                            onClick={() => setDifficultyLevel(lvl)}
+                            className={`rounded-lg px-2.5 py-1 text-[10px] font-black transition-all ${
+                              difficultyLevel === lvl
+                                ? lvl === 'easy'
+                                  ? 'bg-emerald-500 text-neutral-950'
+                                  : lvl === 'hard'
+                                  ? 'bg-purple-600 text-white'
+                                  : 'bg-primary text-primary-foreground'
+                                : 'bg-card text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            {lvl === 'easy'
+                              ? isAr ? 'سهل' : 'Easy'
+                              : lvl === 'standard'
+                              ? isAr ? 'قياسي' : 'Standard'
+                              : isAr ? 'متقدم' : 'Advanced'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <span className="text-xs font-bold text-foreground block">
+                    {isAr ? 'تمارين الجلسة حسب المستوى المختار:' : 'Exercises for Selected Difficulty:'}
+                  </span>
+                  <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                    {modalSession.exercises.map((ex, i) => (
+                      <div key={ex.exerciseId || i} className="flex items-center justify-between rounded-xl border border-border bg-secondary/30 p-2.5 text-xs">
+                        <div>
+                          <div className="font-bold text-foreground">
+                            {i + 1}. {isAr && ex.exerciseNameAr ? ex.exerciseNameAr : ex.exerciseName}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">{ex.primaryMuscle}</div>
+                        </div>
+                        <div className="text-end font-mono">
+                          <div className="text-[10px] text-primary font-bold">
+                            {ex.sets.length} {isAr ? 'مجموعات' : 'sets'} × {ex.sets[0]?.targetReps || '8-12'}
+                          </div>
+                          {ex.sets[0]?.targetWeight > 0 && (
+                            <div className="text-[10px] text-emerald-400 font-bold">
+                              {ex.sets[0]?.targetWeight} kg
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
+              );
+            })()}
 
             {/* Modal Actions */}
             <div className="flex items-center justify-between pt-3 border-t border-border">

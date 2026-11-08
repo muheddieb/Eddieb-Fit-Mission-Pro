@@ -15,10 +15,17 @@ import {
   ExerciseOverloadRecord,
   WorkoutDifficultyLevel,
   WorkoutTimeConstraint,
-  WorkoutEquipmentFilter
+  WorkoutEquipmentFilter,
+  DailyReadinessAssessment,
+  SleepQualityRating,
+  StressLevelRating,
+  MuscleSorenessRating,
+  ReadinessTier
 } from '../types';
 import { exerciseSeedData } from '../data/exerciseSeed';
 import { calculateProgramProgress, parseDateAtMidnight } from './dateUtils';
+import { StorageService } from './storage';
+import { RPECalculatorService } from './rpeService';
 
 export interface AdaptiveWorkoutOptions {
   profile: UserProfile;
@@ -30,6 +37,7 @@ export interface AdaptiveWorkoutOptions {
   location?: 'gym' | 'home' | 'both';
   isAdaptiveReturn?: boolean;
   inactivityDays?: number;
+  readiness?: DailyReadinessAssessment | null;
   customName?: string;
   customNameAr?: string;
   substitutionDetails?: {
@@ -64,6 +72,18 @@ export interface SmartSubstituteItem {
   isLowerFatigue: boolean;
 }
 
+export interface SetRPEProgressionSuggestion {
+  setNumber: number;
+  lastWeight: number;
+  lastReps: number;
+  lastRpe: number;
+  suggestedWeight: number;
+  weightDelta: number;
+  action: 'increase' | 'maintain' | 'decrease';
+  reasonEn: string;
+  reasonAr: string;
+}
+
 export interface ProgressionAdvice {
   recommendedWeight: number;
   recommendedReps: string;
@@ -71,6 +91,12 @@ export interface ProgressionAdvice {
   reason: string;
   reasonAr: string;
   status: 'increase' | 'maintain' | 'deload' | 'baseline';
+  lastWeight?: number;
+  lastReps?: number;
+  lastAvgRpe?: number;
+  weightDeltaKg?: number;
+  estimated1RM?: number;
+  setBySetSuggestions?: SetRPEProgressionSuggestion[];
 }
 
 export interface TransitionPhaseInfo {
@@ -190,6 +216,202 @@ export const PPLEngine = {
     });
   },
 
+  // Calculate Daily Readiness from Sleep, Stress, and Muscle Soreness
+  calculateDailyReadiness(answers: {
+    sleepQuality: SleepQualityRating;
+    stressLevel: StressLevelRating;
+    muscleSoreness: MuscleSorenessRating;
+    soreMuscleGroups?: string[];
+    sleepHoursEstimated?: number;
+    notes?: string;
+  }): DailyReadinessAssessment {
+    const today = new Date().toISOString().split('T')[0];
+
+    // 1. Sleep Quality Score (0-100, 40% weighting)
+    const sleepScores: Record<SleepQualityRating, number> = {
+      optimal: 100,
+      good: 82,
+      fair: 55,
+      poor: 25,
+    };
+    const sleepScore = sleepScores[answers.sleepQuality] ?? 70;
+
+    // 2. Stress Level Score (inverted: low stress = high recovery, 30% weighting)
+    const stressScores: Record<StressLevelRating, number> = {
+      low: 100,
+      moderate: 75,
+      high: 45,
+      extreme: 15,
+    };
+    const stressScore = stressScores[answers.stressLevel] ?? 70;
+
+    // 3. Muscle Soreness Score (inverted: none = high recovery, 30% weighting)
+    const sorenessScores: Record<MuscleSorenessRating, number> = {
+      none: 100,
+      mild: 80,
+      moderate: 50,
+      severe: 20,
+    };
+    const sorenessScore = sorenessScores[answers.muscleSoreness] ?? 70;
+
+    // Composite Weighted Score (0 - 100)
+    const compositeScore = Math.min(100, Math.max(0, Math.round(
+      sleepScore * 0.40 + stressScore * 0.30 + sorenessScore * 0.30
+    )));
+
+    // Categorize tier & establish PPLEngine parameters
+    let tier: ReadinessTier = 'moderate';
+    let intensityAdj = 0;
+    let setsMod = 0;
+    let rpeMod = 0;
+    let restMod = 0;
+    let titleEn = '';
+    let titleAr = '';
+    let descEn = '';
+    let descAr = '';
+    let pplActionEn = '';
+    let pplActionAr = '';
+    let recModalityEn = '';
+    let recModalityAr = '';
+
+    if (compositeScore >= 80) {
+      tier = 'optimal';
+      intensityAdj = 5;
+      setsMod = 0;
+      rpeMod = 0.5;
+      restMod = 0;
+      titleEn = 'Prime Readiness • High Output Green Light';
+      titleAr = 'جاهزية قصوى • الضوء الأخضر لأعلى أداء';
+      descEn = 'Muscles, central nervous system, and systemic recovery are in an optimal state. Prime day to push progressive overload and challenge personal records.';
+      descAr = 'الجهاز العصبي والعضلات في أتم الجاهزية والاستشفاء. يوم مثالي لتطبيق الحمل التدريبي المتدرج ومحاولة كسر أرقامك الشخصية.';
+      pplActionEn = 'Full prescribed volume • Target RPE 8.0-9.0 • Green light for progressive overload attempts';
+      pplActionAr = 'الحجم التدريبي الكامل متاح • استهداف RPE 8.0-9.0 • الضوء الأخضر لزيادة الأوزان والتحدي';
+      recModalityEn = 'Push top sets with intensity, focus on progressive resistance.';
+      recModalityAr = 'تنفيذ المجموعات بشدة عالية مع التركيز على رفع الأوزان تدريجياً.';
+    } else if (compositeScore < 55) {
+      tier = 'low';
+      intensityAdj = -10;
+      setsMod = -1;
+      rpeMod = -1.5;
+      restMod = 30;
+      titleEn = 'Fatigue Mitigation • Auto-Regulation Deload (-10%)';
+      titleAr = 'تخفيف الإجهاد • معايرة استشفائية (-10% أوزان)';
+      descEn = 'Elevated systemic fatigue detected from poor sleep, elevated stress, or acute muscle soreness. Training intensity is scaled down to prevent CNS burnout and joint strain.';
+      descAr = 'تم رصد إجهاد مرتفع ناتج عن قلة النوم، ضغط عصبي، أو إجهاد عضلي. تم تخفيف شدة التدريب بنسبة 10% وتمديد فترات الراحة لحماية المفاصل والجهاز العصبي.';
+      pplActionEn = 'Target weights -10% • Sets -1 on heavy compounds • Target RPE 6.5-7.0 • Rest intervals +30s';
+      pplActionAr = 'تخفيف الأوزان -10% • إنقاص مجموعة من التمارين المركبة • استهداف RPE 6.5-7.0 • زيادة فترات الراحة +30 ثانية';
+      recModalityEn = 'Emphasize smooth tempo, full range of motion, and joint-friendly execution.';
+      recModalityAr = 'التركيز على النزول البطيء المحكوم، المدى الحركي الكامل، وتجنب الفشل العضلي التام.';
+    } else {
+      tier = 'moderate';
+      intensityAdj = 0;
+      setsMod = 0;
+      rpeMod = 0;
+      restMod = 0;
+      titleEn = 'Balanced Baseline • Standard Hypertrophy';
+      titleAr = 'مستوى متوازن • الحجم البنائي القياسي';
+      descEn = 'Good baseline recovery. Proceed with the planned workout volume, standard rest intervals, and controlled form.';
+      descAr = 'مستوى استشفاء معتاد ومناسب. استمر في التدريب وفق الخطة القياسية المعتمدة للأوزان والمجموعات.';
+      pplActionEn = 'Standard 3-4 sets per exercise • Target RPE 8.0 • Standard 90s rest';
+      pplActionAr = 'المجموعات القياسية 3-4 مجموعات • جهد مستهدف 8.0 • راحة 90 ثانية معتادة';
+      recModalityEn = 'Balanced hypertrophy and standard progressive overload.';
+      recModalityAr = 'حجم تدريبي متوازن وحمل تدريبي تدريجي معتاد.';
+    }
+
+    return {
+      id: `readiness_${today}_${Date.now()}`,
+      date: today,
+      timestamp: Date.now(),
+      sleepQuality: answers.sleepQuality,
+      sleepHoursEstimated: answers.sleepHoursEstimated,
+      stressLevel: answers.stressLevel,
+      muscleSoreness: answers.muscleSoreness,
+      soreMuscleGroups: answers.soreMuscleGroups || [],
+      notes: answers.notes,
+      readinessScore: compositeScore,
+      readinessTier: tier,
+      intensityAdjustmentPercent: intensityAdj,
+      setsModifier: setsMod,
+      rpeModifier: rpeMod,
+      restSecondsModifier: restMod,
+      titleEn,
+      titleAr,
+      descriptionEn: descEn,
+      descriptionAr: descAr,
+      pplActionDirectiveEn: pplActionEn,
+      pplActionDirectiveAr: pplActionAr,
+      recommendedModalityEn: recModalityEn,
+      recommendedModalityAr: recModalityAr,
+    };
+  },
+
+  // Dynamically calibrate an existing WorkoutSession with readiness assessment
+  applyReadinessIntensityAdjustment(session: WorkoutSession, readiness: DailyReadinessAssessment): WorkoutSession {
+    const isLow = readiness.readinessTier === 'low';
+    const isOptimal = readiness.readinessTier === 'optimal';
+
+    const updatedExercises: WorkoutExercise[] = (session.exercises || []).map((ex) => {
+      let baseSets = ex.sets || [];
+      let newSets = [...baseSets];
+
+      if (isLow && newSets.length > 2) {
+        newSets = newSets.slice(0, newSets.length - 1);
+      }
+
+      newSets = newSets.map((s) => {
+        let adjWeight = s.targetWeight || s.actualWeight || 0;
+        let adjRpe = s.rpe || 8;
+
+        if (isLow) {
+          adjWeight = Math.max(0, Math.round((adjWeight * 0.90) / 2.5) * 2.5);
+          adjRpe = Math.max(6.0, adjRpe - 1.5);
+        } else if (isOptimal) {
+          adjRpe = Math.min(9.5, adjRpe + 0.5);
+        }
+
+        return {
+          ...s,
+          targetWeight: adjWeight,
+          actualWeight: adjWeight,
+          rpe: adjRpe,
+        };
+      });
+
+      let rest = ex.restSeconds || 90;
+      if (isLow) rest += 30;
+
+      return {
+        ...ex,
+        sets: newSets,
+        restSeconds: rest,
+        targetRpe: isLow ? Math.max(6.0, (ex.targetRpe || 8) - 1.5) : (ex.targetRpe || 8),
+      };
+    });
+
+    let newName = session.name;
+    let newNameAr = session.nameAr;
+
+    // Clean prior tags
+    newName = newName.replace(/ • (Readiness Scaled \(.*?\)|Peak Readiness)/g, '');
+    newNameAr = newNameAr.replace(/ • (معدل بالجاهزية \(.*?\)|ذروة الجاهزية)/g, '');
+
+    if (isLow) {
+      newName += ' • Readiness Scaled (-10% Deload)';
+      newNameAr += ' • معدل بالجاهزية (-10% تخفيف)';
+    } else if (isOptimal) {
+      newName += ' • Peak Readiness';
+      newNameAr += ' • ذروة الجاهزية';
+    }
+
+    return {
+      ...session,
+      name: newName,
+      nameAr: newNameAr,
+      exercises: updatedExercises,
+      dailyReadiness: readiness,
+    };
+  },
+
   // Core Adaptive Workout Generation Engine
   buildAdaptiveWorkout(options: AdaptiveWorkoutOptions): WorkoutSession {
     const {
@@ -202,6 +424,7 @@ export const PPLEngine = {
       location = profile.preferredLocation,
       isAdaptiveReturn = false,
       inactivityDays = 0,
+      readiness,
       customName,
       customNameAr,
       substitutionDetails,
@@ -209,6 +432,14 @@ export const PPLEngine = {
 
     const today = new Date().toISOString().split('T')[0];
     const isHome = location === 'home' || equipment === 'home';
+
+    // Daily readiness auto-regulation lookup:
+    // If readiness is explicitly provided (or null), use that; otherwise pull today's saved check-in
+    const effectiveReadiness: DailyReadinessAssessment | null = 
+      readiness !== undefined ? readiness : StorageService.getTodayDailyReadiness();
+
+    const hasLowReadiness = effectiveReadiness?.readinessTier === 'low';
+    const hasOptimalReadiness = effectiveReadiness?.readinessTier === 'optimal';
 
     // Base Split Names & Definitions
     const splitMeta: Record<string, { name: string; nameAr: string; type: any }> = {
@@ -240,6 +471,14 @@ export const PPLEngine = {
       finalSessionNameAr = `عودة تدريجية: ${finalSessionNameAr}`;
     }
 
+    if (hasLowReadiness) {
+      finalSessionName += ' • Readiness Scaled (-10% Deload)';
+      finalSessionNameAr += ' • معدل بالجاهزية (-10% أوزان)';
+    } else if (hasOptimalReadiness) {
+      finalSessionName += ' • Peak Readiness';
+      finalSessionNameAr += ' • ذروة الجاهزية';
+    }
+
     // Helper to filter exercises by equipment constraints
     const matchesEquipment = (ex: Exercise): boolean => {
       const eq = ex.equipment.toLowerCase();
@@ -260,48 +499,48 @@ export const PPLEngine = {
       return true;
     };
 
-    // Curate candidate exercises per split
+    // Curate candidate exercises per split — DISTINCT exercise lineups for Easy, Standard, and Advanced
     let rawExercises: Exercise[] = [];
 
     if (splitId === 'push') {
       if (difficultyLevel === 'easy') {
-        // Easy Level 1: 3-4 gentle exercises, focus on machine/DB, minimal joint strain
-        const e1 = isHome ? this.getExerciseById('push_pushups') : (this.getExerciseById('push_machine_chest_press') || this.getExerciseById('push_dumbbell_incline_press'));
-        const e2 = this.getExerciseById('push_seated_dumbbell_shoulder_press');
-        const e3 = this.getExerciseById('push_lateral_raises');
+        // Easy Level 1: Joint, Shoulder & Lower-Back Safe (Cables & Machines — zero axial spinal load or shoulder impingement)
+        const e1 = isHome ? this.getExerciseById('push_pushups') : this.getExerciseById('push_machine_chest_press');
+        const e2 = isHome ? this.getExerciseById('push_dumbbell_incline_press') : this.getExerciseById('push_incline_cable_fly');
+        const e3 = isHome ? this.getExerciseById('push_lateral_raises') : this.getExerciseById('push_cable_lateral_raise');
         const e4 = isHome ? this.getExerciseById('push_bench_dips') : this.getExerciseById('push_tricep_rope_pushdown');
         [e1, e2, e3, e4].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
       } else if (difficultyLevel === 'hard') {
-        // Hard Level 3: 6-7 high-volume exercises, heavy compounds + drop sets + finishers
+        // Hard Level 3: Heavy Barbell & Dumbbell Compounds + Full Hypertrophy Volume
         const e1 = isHome ? this.getExerciseById('push_dumbbell_incline_press') : this.getExerciseById('push_barbell_bench_press');
         const e2 = this.getExerciseById('push_dumbbell_incline_press');
         const e3 = isHome ? this.getExerciseById('push_seated_dumbbell_shoulder_press') : this.getExerciseById('push_overhead_barbell_press');
-        const e4 = this.getExerciseById('push_weighted_dips') || this.getExerciseById('push_machine_chest_press') || this.getExerciseById('push_pushups');
+        const e4 = this.getExerciseById('push_cable_chest_fly') || this.getExerciseById('push_pushups');
         const e5 = this.getExerciseById('push_lateral_raises');
-        const e6 = this.getExerciseById('push_cable_lateral_raise') || this.getExerciseById('push_lateral_raises');
-        const e7 = this.getExerciseById('push_skull_crushers') || this.getExerciseById('push_tricep_rope_pushdown');
+        const e6 = this.getExerciseById('push_skull_crushers');
+        const e7 = this.getExerciseById('push_tricep_rope_pushdown');
         [e1, e2, e3, e4, e5, e6, e7].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
       } else {
-        // Standard Level 2: 5 balanced exercises
-        const e1 = isHome ? this.getExerciseById('push_pushups') : this.getExerciseById('push_barbell_bench_press');
-        const e2 = this.getExerciseById('push_dumbbell_incline_press');
-        const e3 = isHome ? this.getExerciseById('push_seated_dumbbell_shoulder_press') : this.getExerciseById('push_overhead_barbell_press');
+        // Standard Level 2: Balanced Dumbbells + Cables (Supported Shoulder & Spine Posture)
+        const e1 = this.getExerciseById('push_dumbbell_incline_press');
+        const e2 = isHome ? this.getExerciseById('push_pushups') : this.getExerciseById('push_cable_chest_fly');
+        const e3 = this.getExerciseById('push_seated_dumbbell_shoulder_press');
         const e4 = this.getExerciseById('push_lateral_raises');
-        const e5 = isHome ? this.getExerciseById('push_skull_crushers') : this.getExerciseById('push_tricep_rope_pushdown');
+        const e5 = this.getExerciseById('push_bench_dips') || this.getExerciseById('push_tricep_rope_pushdown');
         [e1, e2, e3, e4, e5].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
       }
     } else if (splitId === 'pull') {
       if (difficultyLevel === 'easy') {
-        // Easy Level 1: 3-4 exercises, chest supported rows, lat pulldown, bicep curls
-        const e1 = this.getExerciseById('pull_lat_pulldown') || this.getExerciseById('pull_seated_cable_row');
+        // Easy Level 1: 100% Lower-Back Unloaded & Rotator-Cuff Supporting Cables/Machines
+        const e1 = isHome ? this.getExerciseById('pull_single_arm_dumbbell_row') : this.getExerciseById('pull_straight_arm_pulldown');
         const e2 = this.getExerciseById('pull_seated_cable_row') || this.getExerciseById('pull_single_arm_dumbbell_row');
-        const e3 = this.getExerciseById('pull_face_pulls') || this.getExerciseById('pull_reverse_pec_deck');
-        const e4 = this.getExerciseById('pull_hammer_curls');
+        const e3 = this.getExerciseById('pull_reverse_pec_deck') || this.getExerciseById('pull_face_pulls');
+        const e4 = isHome ? this.getExerciseById('pull_hammer_curls') : this.getExerciseById('pull_cable_bicep_curl');
         [e1, e2, e3, e4].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
       } else if (difficultyLevel === 'hard') {
-        // Hard Level 3: 6-7 exercises, heavy deadlift / barbell row, weighted pullups, curls
+        // Hard Level 3: Heavy Barbell Rows, Wide Pull-Ups, Chest-Supported Rows, Bicep Peak
         const e1 = this.getExerciseById('pull_barbell_bent_row');
-        const e2 = this.getExerciseById('pull_lat_pulldown') || this.getExerciseById('pull_pullups');
+        const e2 = this.getExerciseById('pull_pullups') || this.getExerciseById('pull_lat_pulldown');
         const e3 = this.getExerciseById('pull_single_arm_dumbbell_row');
         const e4 = this.getExerciseById('pull_seated_cable_row');
         const e5 = this.getExerciseById('pull_face_pulls');
@@ -309,72 +548,138 @@ export const PPLEngine = {
         const e7 = this.getExerciseById('pull_hammer_curls');
         [e1, e2, e3, e4, e5, e6, e7].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
       } else {
-        // Standard Level 2
-        const e1 = this.getExerciseById('pull_barbell_bent_row') || this.getExerciseById('pull_lat_pulldown');
-        const e2 = this.getExerciseById('pull_lat_pulldown') || this.getExerciseById('pull_seated_cable_row');
-        const e3 = this.getExerciseById('pull_seated_cable_row') || this.getExerciseById('pull_single_arm_dumbbell_row');
-        const e4 = this.getExerciseById('pull_face_pulls') || this.getExerciseById('pull_reverse_pec_deck');
-        const e5 = this.getExerciseById('pull_incline_dumbbell_curl') || this.getExerciseById('pull_hammer_curls');
-        const e6 = this.getExerciseById('pull_hammer_curls');
-        [e1, e2, e3, e4, e5, e6].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+        // Standard Level 2: Lat Pulldown + Chest-Supported Dumbbell Row + Face Pulls + Dumbbell Curls
+        const e1 = this.getExerciseById('pull_lat_pulldown');
+        const e2 = this.getExerciseById('pull_single_arm_dumbbell_row');
+        const e3 = this.getExerciseById('pull_face_pulls');
+        const e4 = this.getExerciseById('pull_incline_dumbbell_curl');
+        const e5 = this.getExerciseById('pull_hammer_curls');
+        [e1, e2, e3, e4, e5].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
       }
     } else if (splitId === 'legs') {
       if (difficultyLevel === 'easy') {
-        // Easy Level 1: Goblet squat, Romanian deadlift, Calf raise
-        const e1 = this.getExerciseById('legs_dumbbell_goblet_squat') || this.getExerciseById('legs_leg_press');
-        const e2 = this.getExerciseById('legs_romanian_deadlift');
-        const e3 = this.getExerciseById('legs_leg_extension') || this.getExerciseById('legs_dumbbell_lunges');
-        const e4 = this.getExerciseById('legs_standing_calf_raise');
+        // Easy Level 1: Zero Lumbar Compression (Goblet Squat, Supported Glute Bridge, Seated Machines)
+        const e1 = this.getExerciseById('legs_dumbbell_goblet_squat');
+        const e2 = this.getExerciseById('legs_glute_bridge');
+        const e3 = this.getExerciseById('legs_leg_extension');
+        const e4 = this.getExerciseById('legs_leg_curl');
         [e1, e2, e3, e4].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
       } else if (difficultyLevel === 'hard') {
-        // Hard Level 3: Heavy Squat, Heavy RDL, Bulgarian Split Squats, Leg Press, Leg Curls, Calves
-        const e1 = isHome ? this.getExerciseById('legs_dumbbell_goblet_squat') : this.getExerciseById('legs_barbell_squat');
+        // Hard Level 3: Heavy Barbell Squat, Romanian Deadlift, Leg Press, Bulgarian Split Squat, Curls, Calves
+        const e1 = isHome ? this.getExerciseById('legs_bulgarian_split_squat') : this.getExerciseById('legs_barbell_squat');
         const e2 = this.getExerciseById('legs_romanian_deadlift');
-        const e3 = this.getExerciseById('legs_bulgarian_split_squat') || this.getExerciseById('legs_dumbbell_lunges');
-        const e4 = this.getExerciseById('legs_leg_press') || this.getExerciseById('legs_leg_extension');
+        const e3 = this.getExerciseById('legs_leg_press');
+        const e4 = this.getExerciseById('legs_bulgarian_split_squat');
         const e5 = this.getExerciseById('legs_leg_curl');
-        const e6 = this.getExerciseById('legs_leg_extension') || this.getExerciseById('legs_dumbbell_lunges');
-        const e7 = this.getExerciseById('legs_standing_calf_raise');
-        [e1, e2, e3, e4, e5, e6, e7].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+        const e6 = this.getExerciseById('legs_standing_calf_raise');
+        [e1, e2, e3, e4, e5, e6].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
       } else {
-        // Standard Level 2
-        const e1 = isHome ? this.getExerciseById('legs_romanian_deadlift') : this.getExerciseById('legs_barbell_squat');
-        const e2 = this.getExerciseById('legs_romanian_deadlift') || this.getExerciseById('legs_dumbbell_goblet_squat');
-        const e3 = this.getExerciseById('legs_leg_press') || this.getExerciseById('legs_leg_extension') || this.getExerciseById('legs_bulgarian_split_squat');
-        const e4 = this.getExerciseById('legs_leg_curl') || this.getExerciseById('legs_dumbbell_lunges');
+        // Standard Level 2: Back-Supported Leg Press + Unilateral Split Squat + Isolation Machines
+        const e1 = isHome ? this.getExerciseById('legs_dumbbell_goblet_squat') : this.getExerciseById('legs_leg_press');
+        const e2 = this.getExerciseById('legs_bulgarian_split_squat');
+        const e3 = this.getExerciseById('legs_leg_curl');
+        const e4 = this.getExerciseById('legs_leg_extension');
         const e5 = this.getExerciseById('legs_standing_calf_raise');
         [e1, e2, e3, e4, e5].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
       }
     } else if (splitId === 'shoulders_arms') {
-      const e1 = this.getExerciseById('push_overhead_barbell_press') || this.getExerciseById('push_seated_dumbbell_shoulder_press');
-      const e2 = this.getExerciseById('push_lateral_raises');
-      const e3 = this.getExerciseById('pull_face_pulls') || this.getExerciseById('pull_reverse_pec_deck');
-      const e4 = this.getExerciseById('pull_incline_dumbbell_curl') || this.getExerciseById('pull_barbell_bicep_curl');
-      const e5 = this.getExerciseById('push_tricep_rope_pushdown') || this.getExerciseById('push_skull_crushers');
-      const e6 = this.getExerciseById('pull_hammer_curls');
-      [e1, e2, e3, e4, e5, e6].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      if (difficultyLevel === 'easy') {
+        // Easy: Pure Cable & Supported Deltoid/Arm Isolation (Zero overhead impingement)
+        const e1 = this.getExerciseById('push_cable_lateral_raise');
+        const e2 = this.getExerciseById('pull_reverse_pec_deck');
+        const e3 = this.getExerciseById('push_tricep_rope_pushdown');
+        const e4 = this.getExerciseById('pull_cable_bicep_curl');
+        [e1, e2, e3, e4].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      } else if (difficultyLevel === 'hard') {
+        const e1 = this.getExerciseById('push_overhead_barbell_press');
+        const e2 = this.getExerciseById('push_seated_dumbbell_shoulder_press');
+        const e3 = this.getExerciseById('push_lateral_raises');
+        const e4 = this.getExerciseById('pull_face_pulls');
+        const e5 = this.getExerciseById('push_skull_crushers');
+        const e6 = this.getExerciseById('pull_incline_dumbbell_curl');
+        const e7 = this.getExerciseById('pull_hammer_curls');
+        [e1, e2, e3, e4, e5, e6, e7].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      } else {
+        const e1 = this.getExerciseById('push_seated_dumbbell_shoulder_press');
+        const e2 = this.getExerciseById('push_lateral_raises');
+        const e3 = this.getExerciseById('pull_face_pulls');
+        const e4 = this.getExerciseById('pull_incline_dumbbell_curl');
+        const e5 = this.getExerciseById('push_bench_dips');
+        [e1, e2, e3, e4, e5].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      }
     } else if (splitId === 'upper') {
-      const e1 = this.getExerciseById('push_barbell_bench_press') || this.getExerciseById('push_dumbbell_incline_press');
-      const e2 = this.getExerciseById('pull_lat_pulldown') || this.getExerciseById('pull_barbell_bent_row');
-      const e3 = this.getExerciseById('push_seated_dumbbell_shoulder_press');
-      const e4 = this.getExerciseById('pull_seated_cable_row');
-      const e5 = this.getExerciseById('push_lateral_raises');
-      const e6 = this.getExerciseById('pull_incline_dumbbell_curl');
-      [e1, e2, e3, e4, e5, e6].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      if (difficultyLevel === 'easy') {
+        const e1 = this.getExerciseById('push_machine_chest_press');
+        const e2 = this.getExerciseById('pull_straight_arm_pulldown');
+        const e3 = this.getExerciseById('pull_seated_cable_row');
+        const e4 = this.getExerciseById('push_cable_lateral_raise');
+        const e5 = this.getExerciseById('pull_cable_bicep_curl');
+        [e1, e2, e3, e4, e5].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      } else if (difficultyLevel === 'hard') {
+        const e1 = this.getExerciseById('push_barbell_bench_press');
+        const e2 = this.getExerciseById('pull_barbell_bent_row');
+        const e3 = this.getExerciseById('push_dumbbell_incline_press');
+        const e4 = this.getExerciseById('pull_pullups');
+        const e5 = this.getExerciseById('push_overhead_barbell_press');
+        const e6 = this.getExerciseById('push_skull_crushers');
+        const e7 = this.getExerciseById('pull_incline_dumbbell_curl');
+        [e1, e2, e3, e4, e5, e6, e7].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      } else {
+        const e1 = this.getExerciseById('push_dumbbell_incline_press');
+        const e2 = this.getExerciseById('pull_lat_pulldown');
+        const e3 = this.getExerciseById('pull_single_arm_dumbbell_row');
+        const e4 = this.getExerciseById('push_seated_dumbbell_shoulder_press');
+        const e5 = this.getExerciseById('pull_incline_dumbbell_curl');
+        const e6 = this.getExerciseById('push_tricep_rope_pushdown');
+        [e1, e2, e3, e4, e5, e6].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      }
     } else if (splitId === 'lower') {
-      const e1 = this.getExerciseById('legs_romanian_deadlift');
-      const e2 = this.getExerciseById('legs_dumbbell_goblet_squat') || this.getExerciseById('legs_leg_press');
-      const e3 = this.getExerciseById('legs_leg_curl') || this.getExerciseById('legs_bulgarian_split_squat');
-      const e4 = this.getExerciseById('legs_dumbbell_lunges') || this.getExerciseById('legs_leg_extension');
-      const e5 = this.getExerciseById('legs_standing_calf_raise');
-      [e1, e2, e3, e4, e5].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      if (difficultyLevel === 'easy') {
+        const e1 = this.getExerciseById('legs_dumbbell_goblet_squat');
+        const e2 = this.getExerciseById('legs_glute_bridge');
+        const e3 = this.getExerciseById('legs_leg_extension');
+        const e4 = this.getExerciseById('legs_leg_curl');
+        [e1, e2, e3, e4].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      } else if (difficultyLevel === 'hard') {
+        const e1 = isHome ? this.getExerciseById('legs_bulgarian_split_squat') : this.getExerciseById('legs_barbell_squat');
+        const e2 = this.getExerciseById('legs_romanian_deadlift');
+        const e3 = this.getExerciseById('legs_leg_press');
+        const e4 = this.getExerciseById('legs_bulgarian_split_squat');
+        const e5 = this.getExerciseById('legs_leg_curl');
+        const e6 = this.getExerciseById('legs_standing_calf_raise');
+        [e1, e2, e3, e4, e5, e6].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      } else {
+        const e1 = this.getExerciseById('legs_leg_press');
+        const e2 = this.getExerciseById('legs_bulgarian_split_squat');
+        const e3 = this.getExerciseById('legs_glute_bridge');
+        const e4 = this.getExerciseById('legs_leg_curl');
+        const e5 = this.getExerciseById('legs_standing_calf_raise');
+        [e1, e2, e3, e4, e5].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      }
     } else if (splitId === 'full_body') {
-      const e1 = isHome ? this.getExerciseById('push_pushups') : this.getExerciseById('push_barbell_bench_press');
-      const e2 = this.getExerciseById('pull_single_arm_dumbbell_row') || this.getExerciseById('pull_lat_pulldown');
-      const e3 = this.getExerciseById('legs_dumbbell_goblet_squat') || this.getExerciseById('legs_romanian_deadlift');
-      const e4 = this.getExerciseById('push_lateral_raises');
-      const e5 = this.getExerciseById('core_plank_hold');
-      [e1, e2, e3, e4, e5].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      if (difficultyLevel === 'easy') {
+        const e1 = this.getExerciseById('push_machine_chest_press');
+        const e2 = this.getExerciseById('pull_seated_cable_row');
+        const e3 = this.getExerciseById('legs_dumbbell_goblet_squat');
+        const e4 = this.getExerciseById('push_cable_lateral_raise');
+        const e5 = this.getExerciseById('core_dead_bug');
+        [e1, e2, e3, e4, e5].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      } else if (difficultyLevel === 'hard') {
+        const e1 = this.getExerciseById('push_barbell_bench_press');
+        const e2 = this.getExerciseById('pull_barbell_bent_row');
+        const e3 = this.getExerciseById('legs_barbell_squat');
+        const e4 = this.getExerciseById('legs_romanian_deadlift');
+        const e5 = this.getExerciseById('push_overhead_barbell_press');
+        const e6 = this.getExerciseById('core_cable_crunch');
+        [e1, e2, e3, e4, e5, e6].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      } else {
+        const e1 = this.getExerciseById('push_dumbbell_incline_press');
+        const e2 = this.getExerciseById('pull_lat_pulldown');
+        const e3 = this.getExerciseById('legs_leg_press');
+        const e4 = this.getExerciseById('push_lateral_raises');
+        const e5 = this.getExerciseById('core_pallof_press');
+        [e1, e2, e3, e4, e5].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
+      }
     } else {
       // Active recovery / core
       const e1 = this.getExerciseById('core_plank_hold');
@@ -420,12 +725,18 @@ export const PPLEngine = {
     const workoutExercises: WorkoutExercise[] = finalExercisesToInclude.map((ex, idx) => {
       const advice = this.calculateProgression(ex.id, history);
 
-      // Calibrate sets based on difficulty level, time constraint, and return status
+      // Calibrate sets based on difficulty level, time constraint, return status, and daily readiness
       let baseSets = ex.targetSets || 3;
       if (difficultyLevel === 'easy' || isAdaptiveReturn) {
-        baseSets = Math.max(2, baseSets - 1);
+        baseSets = 2; // Easy Level 1: 2 controlled joint-safe sets per exercise
       } else if (difficultyLevel === 'hard') {
-        baseSets = idx === 0 ? baseSets + 2 : baseSets + 1; // 4-5 sets on main compound
+        baseSets = idx <= 1 ? 5 : 4; // Advanced Level 3: 4-5 sets per exercise
+      } else {
+        baseSets = Math.max(3, Math.min(4, baseSets)); // Standard Level 2: 3-4 sets
+      }
+
+      if (hasLowReadiness && baseSets > 2) {
+        baseSets = Math.max(2, baseSets - 1);
       }
 
       if (timeConstraint === '10min') baseSets = 2;
@@ -437,27 +748,54 @@ export const PPLEngine = {
       let restSeconds = ex.restSeconds || 90;
 
       if (difficultyLevel === 'easy' || isAdaptiveReturn) {
-        targetRepRange = '10-12';
+        targetRepRange = '12-15';
         targetRpe = 6.5;
         restSeconds = 60;
       } else if (difficultyLevel === 'hard') {
-        if (idx === 0) {
+        if (idx <= 1) {
           targetRepRange = '6-8';
           targetRpe = 9;
           restSeconds = 120;
         } else {
-          targetRepRange = '8-12';
+          targetRepRange = '8-10';
           targetRpe = 8.5;
+          restSeconds = 105;
         }
+      } else {
+        targetRepRange = '8-12';
+        targetRpe = 8.0;
+        restSeconds = 90;
+      }
+
+      // Auto-Regulate based on Daily Readiness
+      if (hasLowReadiness) {
+        targetRpe = Math.max(6.0, targetRpe - 1.5);
+        restSeconds = restSeconds + 30; // Extra recovery buffer between sets
+      } else if (hasOptimalReadiness) {
+        targetRpe = Math.min(9.5, targetRpe + 0.5);
       }
 
       const sets: SetLog[] = [];
       for (let i = 1; i <= baseSets; i++) {
-        let recWeight = advice.recommendedWeight;
+        // Use per-set RPE-calibrated weight suggestion from previous session if available
+        const setRpeAdvice =
+          advice.setBySetSuggestions?.[i - 1] ||
+          (advice.setBySetSuggestions && advice.setBySetSuggestions.length > 0
+            ? advice.setBySetSuggestions[advice.setBySetSuggestions.length - 1]
+            : undefined);
+
+        let recWeight = setRpeAdvice ? setRpeAdvice.suggestedWeight : advice.recommendedWeight;
         if (isAdaptiveReturn) {
-          recWeight = Math.max(0, Math.round(recWeight * 0.85 / 2.5) * 2.5); // 15% deload on return
+          recWeight = Math.max(0, Math.round((recWeight * 0.85) / 2.5) * 2.5); // 15% deload on return
         } else if (difficultyLevel === 'easy') {
-          recWeight = Math.max(0, Math.round(recWeight * 0.9 / 2.5) * 2.5);
+          recWeight = Math.max(0, Math.round((recWeight * 0.85) / 2.5) * 2.5); // 15% lighter for joint/shoulder/back safety
+        } else if (difficultyLevel === 'hard' && recWeight > 0) {
+          const boosted = Math.round((recWeight * 1.075) / 2.5) * 2.5;
+          recWeight = boosted > recWeight ? boosted : recWeight + 2.5; // +5-7.5% overload on Advanced
+        }
+
+        if (hasLowReadiness && difficultyLevel !== 'easy') {
+          recWeight = Math.max(0, Math.round((recWeight * 0.90) / 2.5) * 2.5); // 10% auto-regulation deload
         }
 
         sets.push({
@@ -498,6 +836,7 @@ export const PPLEngine = {
       name: finalSessionName,
       nameAr: finalSessionNameAr,
       type: currentMeta.type,
+      splitId,
       mode: profile.mode,
       durationMinutes: estimatedDuration,
       exercises: workoutExercises,
@@ -507,6 +846,7 @@ export const PPLEngine = {
       timeConstraint,
       equipmentFocus: equipment,
       isAdaptiveReturn,
+      dailyReadiness: effectiveReadiness || undefined,
       primaryMusclesTrained: Array.from(new Set(workoutExercises.map(e => e.primaryMuscle))),
       isSubstituted: Boolean(substitutionDetails),
       originalType: substitutionDetails?.originalType,
@@ -927,82 +1267,222 @@ export const PPLEngine = {
     }).slice(0, 8);
   },
 
-  // Progressive Overload Intelligence Engine
+  // Progressive Overload & RPE Auto-Regulation Intelligence Engine for Future Sessions
   calculateProgression(exerciseId: string, history: WorkoutSession[]): ProgressionAdvice {
     const exercise = this.getExerciseById(exerciseId);
+    const isCompound = exercise?.exerciseType === 'compound';
     const defaultBaselineWeight = exercise?.category === 'legs' ? 60 : exercise?.category === 'push' ? 40 : 35;
 
-    // Find previous sessions with this exercise
-    const pastSessionsWithEx: WorkoutExercise[] = [];
-    for (const session of history) {
-      if (!session.completed) continue;
-      const found = session.exercises.find(e => e.exerciseId === exerciseId);
-      if (found) pastSessionsWithEx.push(found);
-    }
+    // Find previous sessions with this exercise (sorted newest first)
+    const matchingSessions = (history || [])
+      .filter(s => s.completed && s.exercises?.some(e => e.exerciseId === exerciseId))
+      .sort((a, b) => {
+        const tA = a.completedAt || a.startedAt || new Date(a.date).getTime();
+        const tB = b.completedAt || b.startedAt || new Date(b.date).getTime();
+        return tB - tA;
+      });
 
-    if (pastSessionsWithEx.length === 0) {
+    if (matchingSessions.length === 0) {
       return {
         recommendedWeight: defaultBaselineWeight,
         recommendedReps: exercise?.targetRepRange || '8-10',
         recommendedRpe: exercise?.rpeTarget || 8,
-        reason: 'Initial calibrated baseline weight for technique mastery.',
-        reasonAr: 'وزن ابتدائي لتأكيد التكنيك والمسار الحركي السليم.',
+        reason: 'Initial calibrated baseline weight for technique mastery. Log RPE on each set to unlock dynamic next-session weight adjustments.',
+        reasonAr: 'وزن ابتدائي لتأكيد التكنيك السليم. سجّل مؤشر الجهد (RPE) بجانب كل مجموعة ليقوم النظام باقتراح تعديلات الوزن تلقائياً في الجلسات القادمة.',
         status: 'baseline',
+        weightDeltaKg: 0,
       };
     }
 
-    const lastExData = pastSessionsWithEx[0];
+    const lastExData = matchingSessions[0].exercises.find(e => e.exerciseId === exerciseId)!;
     const completedSets = lastExData.sets.filter(s => s.completed);
 
     if (completedSets.length === 0) {
+      const fallbackW = lastExData.sets[0]?.targetWeight || defaultBaselineWeight;
       return {
-        recommendedWeight: lastExData.sets[0]?.targetWeight || defaultBaselineWeight,
+        recommendedWeight: fallbackW,
         recommendedReps: exercise?.targetRepRange || '8-10',
         recommendedRpe: 8,
-        reason: 'Maintain previous session target.',
-        reasonAr: 'الحفاظ على وزن الجلسة السابقة.',
+        reason: 'Maintain previous session target weight.',
+        reasonAr: 'الحفاظ على الوزن المستهدف من الجلسة السابقة.',
         status: 'maintain',
+        lastWeight: fallbackW,
+        weightDeltaKg: 0,
       };
     }
 
-    const lastWeight = completedSets[0].actualWeight || completedSets[0].targetWeight;
-    const avgRpe = completedSets.reduce((sum, s) => sum + (s.rpe || 8), 0) / completedSets.length;
-    const avgReps = completedSets.reduce((sum, s) => sum + (s.actualReps || 8), 0) / completedSets.length;
+    const repParts = (exercise?.targetRepRange || '8-10').split('-').map(p => parseInt(p, 10));
+    const minTargetReps = repParts[0] || 8;
+    const maxTargetReps = repParts[1] || minTargetReps || 10;
+    const targetRpe = exercise?.rpeTarget || 8;
 
-    // Target top of rep range
-    const maxTargetReps = parseInt(exercise?.targetRepRange?.split('-')[1] || '10', 10);
+    // Build per-set RPE-driven weight suggestions for the next session
+    const setBySetSuggestions: SetRPEProgressionSuggestion[] = completedSets.map((s, idx) => {
+      const w = typeof s.actualWeight === 'number' ? s.actualWeight : (s.targetWeight || defaultBaselineWeight);
+      const r = typeof s.actualReps === 'number' ? s.actualReps : minTargetReps;
+      const loggedRpe = typeof s.rpe === 'number' ? s.rpe : 8;
 
-    if (avgReps >= maxTargetReps && avgRpe <= 8) {
-      // Incremental progressive load increase
-      const increment = exercise?.exerciseType === 'compound' ? 2.5 : 1.25;
+      const rpeCalc = RPECalculatorService.calculateSuggestion({
+        currentWeight: w,
+        actualReps: r,
+        actualRpe: loggedRpe,
+        targetRpe,
+        targetReps: r,
+        exerciseName: exercise?.name,
+        isCompound,
+      });
+
+      let suggestedW = rpeCalc.suggestedWeight;
+      let action: 'increase' | 'maintain' | 'decrease' = 'maintain';
+
+      if (w > 0) {
+        if (loggedRpe <= 7.0) {
+          const jump = isCompound && w >= 40 ? 5 : 2.5;
+          suggestedW = Math.round((w + jump) * 10) / 10;
+          action = 'increase';
+        } else if (loggedRpe <= 8.0 && r >= minTargetReps) {
+          const jump = isCompound ? 2.5 : (w < 20 ? 1 : 2.5);
+          suggestedW = Math.round((w + jump) * 10) / 10;
+          action = 'increase';
+        } else if (loggedRpe <= 8.5 && r >= maxTargetReps) {
+          const jump = isCompound ? 2.5 : 1;
+          suggestedW = Math.round((w + jump) * 10) / 10;
+          action = 'increase';
+        } else if (loggedRpe >= 9.5 || (loggedRpe >= 9.0 && r < minTargetReps)) {
+          const drop = isCompound && w >= 40 ? 2.5 : (w >= 15 ? 2 : 1);
+          suggestedW = Math.max(0, Math.round((w - drop) * 10) / 10);
+          action = 'decrease';
+        } else {
+          suggestedW = w;
+          action = 'maintain';
+        }
+      }
+
+      const delta = Math.round((suggestedW - w) * 10) / 10;
+      return {
+        setNumber: idx + 1,
+        lastWeight: w,
+        lastReps: r,
+        lastRpe: loggedRpe,
+        suggestedWeight: suggestedW,
+        weightDelta: delta,
+        action,
+        reasonEn:
+          action === 'increase'
+            ? `Set ${idx + 1} was logged at RPE ${loggedRpe} (${10 - loggedRpe} RIR) → +${delta} kg suggested`
+            : action === 'decrease'
+            ? `Set ${idx + 1} reached RPE ${loggedRpe} (near failure) → ${delta} kg deload suggested`
+            : `Set ${idx + 1} at RPE ${loggedRpe} → Maintain ${w} kg`,
+        reasonAr:
+          action === 'increase'
+            ? `المجموعة ${idx + 1} سُجلت بجهد RPE ${loggedRpe} (${10 - loggedRpe} تكرار احتياطي) ← زيادة +${delta} كجم`
+            : action === 'decrease'
+            ? `المجموعة ${idx + 1} وصلت لجهد RPE ${loggedRpe} (قرب الفشل) ← تخفيف ${delta} كجم لحماية المفاصل`
+            : `المجموعة ${idx + 1} عند RPE ${loggedRpe} ← تثبيت ${w} كجم`,
+      };
+    });
+
+    const lastWeight = completedSets[0].actualWeight || completedSets[0].targetWeight || defaultBaselineWeight;
+    const avgRpe = Math.round((completedSets.reduce((sum, s) => sum + (s.rpe || 8), 0) / completedSets.length) * 10) / 10;
+    const avgReps = Math.round((completedSets.reduce((sum, s) => sum + (s.actualReps || minTargetReps), 0) / completedSets.length) * 10) / 10;
+    const e1rm = RPECalculatorService.calculateE1RM(lastWeight, Math.round(avgReps), avgRpe);
+
+    // Session-level RPE-based weight adjustment decision for future session
+    if (avgRpe <= 7.0 && lastWeight > 0) {
+      const increment = isCompound && lastWeight >= 40 ? 5 : 2.5;
       const newWeight = Math.round((lastWeight + increment) * 10) / 10;
       return {
         recommendedWeight: newWeight,
-        recommendedReps: exercise?.targetRepRange || '6-8',
-        recommendedRpe: 8,
-        reason: `Overload achieved! Hit ${avgReps.toFixed(0)} reps at RPE ${avgRpe.toFixed(1)}. Incremented by +${increment}kg.`,
-        reasonAr: `تم تحقيق شرط الزيادة! حققت ${avgReps.toFixed(0)} تكرار بمعدل RPE ${avgRpe.toFixed(1)}. تمت زيادة الوزن بـ +${increment} كجم.`,
+        recommendedReps: exercise?.targetRepRange || '8-10',
+        recommendedRpe: targetRpe,
+        lastWeight,
+        lastReps: Math.round(avgReps),
+        lastAvgRpe: avgRpe,
+        weightDeltaKg: increment,
+        estimated1RM: e1rm,
+        setBySetSuggestions,
+        reason: `Low exertion logged last session (avg RPE ${avgRpe}, ~${Math.round(10 - avgRpe)} RIR at ${lastWeight}kg × ${Math.round(avgReps)}). Dynamically increased by +${increment}kg to reach optimal hypertrophy zone.`,
+        reasonAr: `مؤشر الجهد المسجل في الجلسة السابقة كان خفيفاً (متوسط RPE ${avgRpe} بوزن ${lastWeight} كجم × ${Math.round(avgReps)}). تم رفع الوزن المقترح تلقائياً بـ +${increment} كجم للوصول لنطاق البناء العضلي الأمثل.`,
         status: 'increase',
       };
-    } else if (avgRpe >= 9.5) {
+    } else if (
+      lastWeight > 0 &&
+      ((avgRpe <= 8.0 && avgReps >= minTargetReps) || (avgRpe <= 8.5 && avgReps >= maxTargetReps))
+    ) {
+      const increment = isCompound ? 2.5 : (lastWeight < 20 ? 1 : 2.5);
+      const newWeight = Math.round((lastWeight + increment) * 10) / 10;
       return {
-        recommendedWeight: lastWeight,
+        recommendedWeight: newWeight,
         recommendedReps: exercise?.targetRepRange || '8-10',
-        recommendedRpe: 8,
-        reason: `RPE reached ${avgRpe.toFixed(1)} (near failure). Maintain ${lastWeight}kg to solidify motor pattern.`,
-        reasonAr: `معدل الجهد RPE وصل إلى ${avgRpe.toFixed(1)}. يفضل تثبيت وزن ${lastWeight} كجم لتثبيت التكنيك والاستشفاء.`,
-        status: 'maintain',
+        recommendedRpe: targetRpe,
+        lastWeight,
+        lastReps: Math.round(avgReps),
+        lastAvgRpe: avgRpe,
+        weightDeltaKg: increment,
+        estimated1RM: e1rm,
+        setBySetSuggestions,
+        reason: `Progressive overload unlocked! Completed ${Math.round(avgReps)} reps at controlled RPE ${avgRpe} (${(10 - avgRpe).toFixed(1)} RIR). Suggested +${increment}kg (${newWeight}kg) for this session.`,
+        reasonAr: `تم تحقيق شرط التدرج! أنجزت ${Math.round(avgReps)} تكرار بجهد مثالي RPE ${avgRpe} (${(10 - avgRpe).toFixed(1)} تكرار احتياطي). نقترح زيادة +${increment} كجم ليصبح الوزن ${newWeight} كجم.`,
+        status: 'increase',
+      };
+    } else if (avgRpe >= 9.5 || (avgRpe >= 9.0 && avgReps < minTargetReps)) {
+      const decrement = isCompound && lastWeight >= 40 ? 2.5 : (lastWeight >= 15 ? 2 : 1);
+      const reducedWeight = Math.max(0, Math.round((lastWeight - decrement) * 10) / 10);
+      return {
+        recommendedWeight: reducedWeight,
+        recommendedReps: exercise?.targetRepRange || '8-10',
+        recommendedRpe: targetRpe,
+        lastWeight,
+        lastReps: Math.round(avgReps),
+        lastAvgRpe: avgRpe,
+        weightDeltaKg: -decrement,
+        estimated1RM: e1rm,
+        setBySetSuggestions,
+        reason: `High fatigue detected last session (avg RPE ${avgRpe} near failure at ${lastWeight}kg). Suggested -${decrement}kg adjustment (${reducedWeight}kg) to protect joints & CNS and restore target RPE 8.`,
+        reasonAr: `وصل مؤشر الجهد في الجلسة السابقة إلى RPE ${avgRpe} (قرب الفشل العضلي بوزن ${lastWeight} كجم). تم اقتراح تخفيف ذكي بمقدار -${decrement} كجم (${reducedWeight} كجم) لحماية المفاصل واستعادة الأداء عند RPE 8.`,
+        status: 'deload',
       };
     }
 
     return {
       recommendedWeight: lastWeight,
       recommendedReps: exercise?.targetRepRange || '8-10',
-      recommendedRpe: 8,
-      reason: `Solid performance at ${lastWeight}kg. Strive for +1 rep before increasing weight.`,
-      reasonAr: `أداء ممتاز بوزن ${lastWeight} كجم. حاول إضافة تكرار إضافي قبل زيادة الوزن.`,
+      recommendedRpe: targetRpe,
+      lastWeight,
+      lastReps: Math.round(avgReps),
+      lastAvgRpe: avgRpe,
+      weightDeltaKg: 0,
+      estimated1RM: e1rm,
+      setBySetSuggestions,
+      reason: `Solid working intensity last session (${lastWeight}kg × ${Math.round(avgReps)} @ RPE ${avgRpe}). Maintain ${lastWeight}kg and aim to lower RPE to 8.0 or add +1 rep before increasing load.`,
+      reasonAr: `شدة تدريبية ممتازة في الجلسة السابقة (${lastWeight} كجم × ${Math.round(avgReps)} عند RPE ${avgRpe}). حافظ على وزن ${lastWeight} كجم واستهدف تكراراً إضافياً أو خفض الجهد إلى RPE 8 قبل زيادة الوزن.`,
       status: 'maintain',
     };
+  },
+
+  // Live Next-Session Weight Forecast based on current in-progress exercise sets & RPE inputs
+  calculateNextSessionForecastFromCurrentSets(currentExercise: WorkoutExercise): ProgressionAdvice {
+    const simulatedSession: WorkoutSession = {
+      id: 'sim_forecast',
+      date: new Date().toISOString().split('T')[0],
+      name: 'Current Session',
+      nameAr: 'الجلسة الحالية',
+      type: 'push',
+      mode: 'muscle_recomp',
+      durationMinutes: 45,
+      completed: true,
+      completedAt: Date.now(),
+      exercises: [
+        {
+          ...currentExercise,
+          sets: currentExercise.sets.map(s => ({
+            ...s,
+            completed: true, // evaluate all sets or completed sets
+          })),
+        },
+      ],
+    };
+    return this.calculateProgression(currentExercise.exerciseId, [simulatedSession]);
   },
 
   // Exercise Substitutions (preserving movement pattern and target muscle)

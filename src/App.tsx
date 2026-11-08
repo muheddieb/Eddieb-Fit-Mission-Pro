@@ -241,6 +241,7 @@ export default function App() {
             onStartWorkout={handleStartWorkout}
             onStartSpecificWorkout={(session) => {
               setActiveWorkout(session);
+              StorageService.saveActiveWorkout(session);
               setActiveWorkoutOpen(true);
             }}
             onFinishActiveWorkout={handleFinishActiveWorkoutFromDashboard}
@@ -255,6 +256,7 @@ export default function App() {
               history={workoutHistory}
               onStartSpecificWorkout={(session) => {
                 setActiveWorkout(session);
+                StorageService.saveActiveWorkout(session);
                 setActiveWorkoutOpen(true);
               }}
               onNavigateToSection={(sec) => setCurrentSection(sec)}

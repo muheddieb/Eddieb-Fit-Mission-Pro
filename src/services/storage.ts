@@ -12,7 +12,8 @@ import {
   BodyMeasurement, 
   Achievement, 
   AIChatMessage, 
-  GeneratedImageRecord 
+  GeneratedImageRecord,
+  DailyReadinessAssessment
 } from '../types';
 import { exerciseSeedData } from '../data/exerciseSeed';
 
@@ -25,6 +26,7 @@ const STORAGE_KEYS = {
   CORE_HISTORY: 'eddieb_core_history_v1',
   RECOVERY_HISTORY: 'eddieb_recovery_history_v1',
   SLEEP_HISTORY: 'eddieb_sleep_history_v1',
+  DAILY_READINESS: 'eddieb_daily_readiness_v1',
   NUTRITION_HISTORY: 'eddieb_nutrition_history_v1',
   HYDRATION_HISTORY: 'eddieb_hydration_history_v1',
   MEASUREMENTS: 'eddieb_measurements_v1',
@@ -1015,6 +1017,50 @@ export const StorageService = {
   deleteSleepLog(id: string): void {
     const list = this.getSleepHistory().filter(item => item.id !== id);
     this.saveSleepHistory(list);
+  },
+
+  getDailyReadinessHistory(): DailyReadinessAssessment[] {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.DAILY_READINESS);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.error('Error loading daily readiness history:', e);
+    }
+    return [];
+  },
+
+  getTodayDailyReadiness(): DailyReadinessAssessment | null {
+    const today = new Date().toISOString().split('T')[0];
+    const history = this.getDailyReadinessHistory();
+    return history.find(r => r.date === today) || null;
+  },
+
+  saveDailyReadiness(assessment: DailyReadinessAssessment): void {
+    try {
+      const list = this.getDailyReadinessHistory();
+      const existingIdx = list.findIndex(r => r.date === assessment.date || r.id === assessment.id);
+      if (existingIdx >= 0) {
+        list[existingIdx] = assessment;
+      } else {
+        list.unshift(assessment);
+      }
+      list.sort((a, b) => b.timestamp - a.timestamp);
+      localStorage.setItem(STORAGE_KEYS.DAILY_READINESS, JSON.stringify(list));
+    } catch (e) {
+      console.error('Error saving daily readiness:', e);
+    }
+  },
+
+  deleteDailyReadiness(id: string): void {
+    try {
+      const list = this.getDailyReadinessHistory().filter(r => r.id !== id);
+      localStorage.setItem(STORAGE_KEYS.DAILY_READINESS, JSON.stringify(list));
+    } catch (e) {
+      console.error('Error deleting daily readiness:', e);
+    }
   },
 
   getNutritionHistory(): NutritionEntry[] {

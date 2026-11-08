@@ -30,11 +30,15 @@ import {
   Bell,
   Award,
   Calculator,
-  Gauge
+  Gauge,
+  Feather,
+  Dumbbell,
+  SlidersHorizontal,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
-import { WorkoutSession, WorkoutExercise, SetLog, UserProfile, Exercise, RestSoundType, PersonalRecordEvent } from '../../types';
+import { WorkoutSession, WorkoutExercise, SetLog, UserProfile, Exercise, RestSoundType, PersonalRecordEvent, WorkoutDifficultyLevel } from '../../types';
 import { translations } from '../../i18n/translations';
 import { PPLEngine, ProgressionAdvice } from '../../services/pplEngine';
 import { StorageService } from '../../services/storage';
@@ -107,6 +111,14 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
 
   // Achievement Confetti & PR Celebration State
   const [activePRToast, setActivePRToast] = useState<PersonalRecordEvent | null>(null);
+
+  // Difficulty Toggle Live Feedback State
+  const [difficultyToast, setDifficultyToast] = useState<{
+    level: WorkoutDifficultyLevel;
+    title: string;
+    subtitle: string;
+    exercisesList: string[];
+  } | null>(null);
 
   const timerRef = useRef<any>(null);
   const hasTriggeredStartCue = useRef<boolean>(false);
@@ -350,12 +362,13 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
    */
   const prefillExerciseWithLastSession = useCallback((
     exerciseIndex: number = currentExerciseIndex,
-    forceOverride: boolean = false
+    forceOverride: boolean = false,
+    useRpeAdjusted: boolean = true
   ): boolean => {
     const targetExercise = workout.exercises[exerciseIndex];
     if (!targetExercise) return false;
 
-    const { lastSession } = PPLEngine.getExerciseComparison(targetExercise.exerciseId, history);
+    const { lastSession, progressionAdvice: exAdvice } = PPLEngine.getExerciseComparison(targetExercise.exerciseId, history);
     if (!lastSession || !lastSession.sets || lastSession.sets.length === 0) {
       return false;
     }
@@ -371,14 +384,27 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
         const prevSet = lastSession.sets[sIdx] || lastSession.sets[lastSession.sets.length - 1];
         if (!prevSet) return s;
 
+        const rpeSetSuggestion = exAdvice.setBySetSuggestions?.[sIdx] ||
+          (exAdvice.setBySetSuggestions && exAdvice.setBySetSuggestions.length > 0
+            ? exAdvice.setBySetSuggestions[exAdvice.setBySetSuggestions.length - 1]
+            : undefined);
+
+        const targetW = useRpeAdjusted
+          ? (rpeSetSuggestion?.suggestedWeight ?? exAdvice.recommendedWeight ?? prevSet.weight)
+          : prevSet.weight;
+
+        const targetR = useRpeAdjusted
+          ? (rpeSetSuggestion?.lastReps ?? prevSet.reps)
+          : prevSet.reps;
+
         modified = true;
         return {
           ...s,
-          targetWeight: prevSet.weight,
-          actualWeight: prevSet.weight,
-          targetReps: prevSet.reps,
-          actualReps: prevSet.reps,
-          rpe: prevSet.rpe ?? s.rpe ?? 8,
+          targetWeight: targetW,
+          actualWeight: targetW,
+          targetReps: targetR,
+          actualReps: targetR,
+          rpe: useRpeAdjusted ? 8 : (prevSet.rpe ?? s.rpe ?? 8),
         };
       });
 
@@ -392,7 +418,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     return false;
   }, [workout.exercises, currentExerciseIndex, history]);
 
-  // Automatically pre-fill the current exercise's input fields with last session's weight and reps
+  // Automatically pre-fill the current exercise's input fields with RPE-calibrated suggested weights from last session
   useEffect(() => {
     const ex = workout.exercises[currentExerciseIndex];
     if (!ex) return;
@@ -400,13 +426,48 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     if (!autoPrefilledExerciseIds.current.has(ex.exerciseId)) {
       const anyCompleted = ex.sets.some(s => s.completed);
       if (!anyCompleted) {
-        const success = prefillExerciseWithLastSession(currentExerciseIndex, false);
+        const success = prefillExerciseWithLastSession(currentExerciseIndex, false, true);
         if (success) {
           autoPrefilledExerciseIds.current.add(ex.exerciseId);
         }
       }
     }
   }, [currentExerciseIndex, prefillExerciseWithLastSession, workout.exercises]);
+
+  // Compute live forecast for NEXT future session based on current exercise's logged RPEs
+  const nextSessionForecast = useMemo(() => {
+    if (!currentExercise) return null;
+    return PPLEngine.calculateNextSessionForecastFromCurrentSets(currentExercise);
+  }, [currentExercise]);
+
+  // Handler: Apply RPE-adjusted suggested weights from previous session across all sets of current exercise
+  const handleApplyRpeProgressionAdvice = () => {
+    if (!currentExercise || !progressionAdvice) return;
+    const updatedExercises = workout.exercises.map((ex, idx) => {
+      if (idx !== currentExerciseIndex) return ex;
+      const updatedSets = ex.sets.map((s, sIdx) => {
+        const setSuggestion = progressionAdvice.setBySetSuggestions?.[sIdx] ||
+          (progressionAdvice.setBySetSuggestions && progressionAdvice.setBySetSuggestions.length > 0
+            ? progressionAdvice.setBySetSuggestions[progressionAdvice.setBySetSuggestions.length - 1]
+            : undefined);
+        const suggestedW = setSuggestion?.suggestedWeight ?? progressionAdvice.recommendedWeight;
+        const suggestedR = setSuggestion?.lastReps ?? (typeof s.actualReps === 'number' ? s.actualReps : 10);
+        return {
+          ...s,
+          targetWeight: suggestedW,
+          actualWeight: suggestedW,
+          targetReps: suggestedR,
+          actualReps: suggestedR,
+          rpe: 8,
+        };
+      });
+      return { ...ex, sets: updatedSets };
+    });
+    setWorkout({ ...workout, exercises: updatedExercises });
+    if (soundEnabled) {
+      AudioService.playBeep(880, 0.1, 0.2);
+    }
+  };
 
   // Handler: Apply preset sets from history comparison shortcuts
   const handleApplyPresetSets = (newSetsData: Partial<SetLog>[]) => {
@@ -735,6 +796,105 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     setRpeCalculatorOpen(true);
   };
 
+  // Current active difficulty level of this session
+  const activeDifficultyLevel: WorkoutDifficultyLevel = workout.difficultyLevel || 'standard';
+
+  // Handler: Dynamically switch Difficulty Level (Easy, Standard, Advanced) and replace today's exercises, sets, & weights
+  const handleSelectDifficultyLevel = (newLevel: WorkoutDifficultyLevel) => {
+    if (newLevel === activeDifficultyLevel) return;
+
+    // Resolve splitId from workout.splitId or workout.type
+    const effectiveSplitId =
+      workout.splitId ||
+      (['push', 'pull', 'legs', 'shoulders_arms', 'upper', 'lower', 'full_body', 'rest_active'].includes(workout.type as string)
+        ? (workout.type as string)
+        : 'push');
+
+    // Strip previous difficulty suffix from custom name if present
+    const cleanBaseName = (workout.name || '').replace(/ • (Light \/ Level 1|Advanced \/ Level 3|Readiness Scaled \(.*?\)|Peak Readiness)/g, '');
+    const cleanBaseNameAr = (workout.nameAr || '').replace(/ • (المستوى 1 \(خفيف \/ مرن\)|المستوى 3 \(متقدم \/ مكثف\)|معدل بالجاهزية \(.*?\)|ذروة الجاهزية)/g, '');
+
+    const regeneratedSession = PPLEngine.buildAdaptiveWorkout({
+      profile,
+      history,
+      splitId: effectiveSplitId,
+      difficultyLevel: newLevel,
+      timeConstraint: workout.timeConstraint || 'full',
+      equipment: workout.equipmentFocus || 'all',
+      location: profile.preferredLocation,
+      isAdaptiveReturn: workout.isAdaptiveReturn,
+      readiness: workout.dailyReadiness,
+      customName: cleanBaseName || undefined,
+      customNameAr: cleanBaseNameAr || undefined,
+    });
+
+    // Preserve any already-completed sets if the same exercise exists in the new tier
+    const mergedExercises = regeneratedSession.exercises.map((newEx) => {
+      const existingMatch = workout.exercises.find((oldEx) => oldEx.exerciseId === newEx.exerciseId);
+      if (existingMatch && existingMatch.sets.some((s) => s.completed)) {
+        const completedOldSets = existingMatch.sets.filter((s) => s.completed);
+        const remainingNewSets = newEx.sets.slice(completedOldSets.length).map((s, idx) => ({
+          ...s,
+          setNumber: completedOldSets.length + idx + 1,
+        }));
+        const combinedSets = [...completedOldSets, ...remainingNewSets];
+        return {
+          ...newEx,
+          sets: combinedSets,
+          completed: combinedSets.length > 0 && combinedSets.every((s) => s.completed),
+        };
+      }
+      return newEx;
+    });
+
+    const updatedWorkout: WorkoutSession = {
+      ...regeneratedSession,
+      id: workout.id,
+      startedAt: workout.startedAt || Date.now(),
+      difficultyLevel: newLevel,
+      splitId: effectiveSplitId,
+      exercises: mergedExercises,
+    };
+
+    setWorkout(updatedWorkout);
+    setCurrentExerciseIndex(0);
+    autoPrefilledExerciseIds.current.clear();
+
+    if (soundEnabled) {
+      AudioService.playBeep(newLevel === 'hard' ? 980 : newLevel === 'easy' ? 640 : 800, 0.12, 0.25);
+    }
+
+    const exNames = updatedWorkout.exercises.map((e) => (isAr && e.exerciseNameAr ? e.exerciseNameAr : e.exerciseName));
+    const levelTitles: Record<WorkoutDifficultyLevel, { titleEn: string; titleAr: string; subEn: string; subAr: string }> = {
+      easy: {
+        titleEn: 'Switched to Easy (Level 1 • Joint, Shoulder & Lower-Back Safe)',
+        titleAr: 'تم التحويل إلى المستوى السهل (كابلات وأجهزة آمنة للكتف وأسفل الظهر)',
+        subEn: 'Exercises replaced with cable/supported movements • 2 sets × 12-15 reps • -15% lighter load • 60s rest',
+        subAr: 'تم استبدال التمارين بتمارين كابلات ودامبل مسنود • مجموعتان × 12-15 تكرار • تخفيف الوزن 15% • راحة 60 ثانية',
+      },
+      standard: {
+        titleEn: 'Switched to Standard (Level 2 • Balanced Dumbbells & Cables)',
+        titleAr: 'تم التحويل إلى المستوى القياسي (مزيج متوازن دامبل وكابلات)',
+        subEn: 'Exercises updated to balanced hypertrophy lineup • 3-4 sets × 8-12 reps • 100% target weight • 90s rest',
+        subAr: 'تم تحديث التمارين للوضع القياسي المتوازن • 3-4 مجموعات × 8-12 تكرار • الوزن المستهدف 100% • راحة 90 ثانية',
+      },
+      hard: {
+        titleEn: 'Switched to Advanced (Level 3 • Heavy Compound & Peak Volume)',
+        titleAr: 'تم التحويل إلى المستوى المتقدم (تمارين مركبة ثقيلة وحجم تدريبي مكثف)',
+        subEn: 'Exercises upgraded to heavy barbell & dumbbell compounds • 4-5 sets × 6-8 reps • +5-7.5% overload • 120s rest',
+        subAr: 'تم ترقية التمارين للمركبات الثقيلة بالبار والدامبل • 4-5 مجموعات × 6-8 تكرار • زيادة الوزن +5% • راحة 120 ثانية',
+      },
+    };
+
+    const meta = levelTitles[newLevel];
+    setDifficultyToast({
+      level: newLevel,
+      title: isAr ? meta.titleAr : meta.titleEn,
+      subtitle: isAr ? meta.subAr : meta.subEn,
+      exercisesList: exNames,
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-md" dir={isAr ? 'rtl' : 'ltr'}>
       {/* Top Session Action Bar */}
@@ -879,6 +1039,194 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
       {/* Main Active Workout Grid */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
         <div className="mx-auto max-w-4xl space-y-5">
+          {/* Interactive 3-Tier Difficulty Toggle (Easy, Standard, Advanced) — Swaps Exercises, Sets & Weights */}
+          <div
+            id="active-workout-difficulty-toggle-card"
+            className="rounded-2xl border border-border bg-card/90 p-3.5 sm:p-4 shadow-md space-y-3"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary border border-primary/25">
+                  <SlidersHorizontal className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xs sm:text-sm font-black text-foreground">
+                      {isAr
+                        ? 'مستوى صعوبة التمرين ونوعية الأجهزة (يغيّر التمارين والأوزان فوراً)'
+                        : 'Session Difficulty & Exercise Lineup Toggle'}
+                    </h3>
+                    <span className="rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                      <ShieldCheck className="h-3 w-3" />
+                      <span>{isAr ? 'مراعاة الكتف وأسفل الظهر' : 'Shoulder & Lower-Back Safe'}</span>
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {isAr
+                      ? 'اختر المستوى المناسب لطاقتك اليوم ليتم فوراً تحويل تمارين اليوم والمجموعات والأوزان المقترحة:'
+                      : 'Switch anytime to dynamically replace exercises, sets, rest times, and weight suggestions:'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {/* Easy Tier Button */}
+              <button
+                id="btn-modal-difficulty-easy"
+                type="button"
+                onClick={() => handleSelectDifficultyLevel('easy')}
+                className={`flex flex-col justify-between rounded-xl border p-3 text-start transition-all cursor-pointer ${
+                  activeDifficultyLevel === 'easy'
+                    ? 'border-emerald-500 bg-emerald-500/15 ring-2 ring-emerald-500/30 shadow-md'
+                    : 'border-border/80 bg-secondary/30 hover:bg-secondary/60'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 w-full">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      <Feather className="h-3.5 w-3.5" />
+                    </div>
+                    <div>
+                      <div className={`text-xs font-black ${activeDifficultyLevel === 'easy' ? 'text-emerald-400' : 'text-foreground'}`}>
+                        {isAr ? 'سهل (كابلات وأجهزة آمنة)' : 'Easy (Cables & Safe DB)'}
+                      </div>
+                      <div className="text-[10px] font-mono text-muted-foreground">
+                        {isAr ? 'حماية للكتف والقطنية' : 'Shoulder & Spine Safe'}
+                      </div>
+                    </div>
+                  </div>
+                  {activeDifficultyLevel === 'easy' && (
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-black">
+                      <Check className="h-3 w-3 stroke-[3]" />
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2 pt-1.5 border-t border-border/50 flex items-center justify-between text-[10px] font-mono text-muted-foreground w-full">
+                  <span>{isAr ? 'مجموعتان × 12-15' : '2 Sets × 12-15'}</span>
+                  <span className="text-emerald-400 font-bold">{isAr ? '-15% وزن • راحة 60ث' : '-15% Load • 60s'}</span>
+                </div>
+              </button>
+
+              {/* Standard Tier Button */}
+              <button
+                id="btn-modal-difficulty-standard"
+                type="button"
+                onClick={() => handleSelectDifficultyLevel('standard')}
+                className={`flex flex-col justify-between rounded-xl border p-3 text-start transition-all cursor-pointer ${
+                  activeDifficultyLevel === 'standard'
+                    ? 'border-primary bg-primary/15 ring-2 ring-primary/30 shadow-md'
+                    : 'border-border/80 bg-secondary/30 hover:bg-secondary/60'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 w-full">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/20 text-primary border border-primary/30">
+                      <Dumbbell className="h-3.5 w-3.5" />
+                    </div>
+                    <div>
+                      <div className={`text-xs font-black ${activeDifficultyLevel === 'standard' ? 'text-primary' : 'text-foreground'}`}>
+                        {isAr ? 'قياسي (دامبل + كابلات)' : 'Standard (DB + Cables)'}
+                      </div>
+                      <div className="text-[10px] font-mono text-muted-foreground">
+                        {isAr ? 'توازن مثالي للبناء العضلي' : 'Balanced Hypertrophy'}
+                      </div>
+                    </div>
+                  </div>
+                  {activeDifficultyLevel === 'standard' && (
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      <Check className="h-3 w-3 stroke-[3]" />
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2 pt-1.5 border-t border-border/50 flex items-center justify-between text-[10px] font-mono text-muted-foreground w-full">
+                  <span>{isAr ? '3-4 مجموعات × 8-12' : '3-4 Sets × 8-12'}</span>
+                  <span className="text-primary font-bold">{isAr ? 'وزن 100% • راحة 90ث' : '100% Load • 90s'}</span>
+                </div>
+              </button>
+
+              {/* Advanced Tier Button */}
+              <button
+                id="btn-modal-difficulty-hard"
+                type="button"
+                onClick={() => handleSelectDifficultyLevel('hard')}
+                className={`flex flex-col justify-between rounded-xl border p-3 text-start transition-all cursor-pointer ${
+                  activeDifficultyLevel === 'hard'
+                    ? 'border-purple-500 bg-purple-500/15 ring-2 ring-purple-500/30 shadow-md'
+                    : 'border-border/80 bg-secondary/30 hover:bg-secondary/60'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 w-full">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                      <Zap className="h-3.5 w-3.5" />
+                    </div>
+                    <div>
+                      <div className={`text-xs font-black ${activeDifficultyLevel === 'hard' ? 'text-purple-400' : 'text-foreground'}`}>
+                        {isAr ? 'متقدم (مركبات ثقيلة + بار)' : 'Advanced (Heavy Compound)'}
+                      </div>
+                      <div className="text-[10px] font-mono text-muted-foreground">
+                        {isAr ? 'أقصى قوة وحجم تدريبي' : 'Peak Strength & Volume'}
+                      </div>
+                    </div>
+                  </div>
+                  {activeDifficultyLevel === 'hard' && (
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-500 text-white">
+                      <Check className="h-3 w-3 stroke-[3]" />
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2 pt-1.5 border-t border-border/50 flex items-center justify-between text-[10px] font-mono text-muted-foreground w-full">
+                  <span>{isAr ? '4-5 مجموعات × 6-8' : '4-5 Sets × 6-8'}</span>
+                  <span className="text-purple-400 font-bold">{isAr ? '+5% وزن • راحة 120ث' : '+5% Load • 120s'}</span>
+                </div>
+              </button>
+            </div>
+
+            {/* Live Confirmation Toast showing the newly replaced exercises when Difficulty changes */}
+            <AnimatePresence>
+              {difficultyToast && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0, y: -6 }}
+                  animate={{ opacity: 1, height: 'auto', y: 0 }}
+                  exit={{ opacity: 0, height: 0, y: -6 }}
+                  className={`rounded-xl border p-3 text-xs space-y-1.5 ${
+                    difficultyToast.level === 'easy'
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+                      : difficultyToast.level === 'hard'
+                      ? 'border-purple-500/40 bg-purple-500/10 text-purple-200'
+                      : 'border-primary/40 bg-primary/10 text-foreground'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 font-black">
+                      <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+                      <span>{difficultyToast.title}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDifficultyToast(null)}
+                      className="text-muted-foreground hover:text-foreground p-0.5"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">{difficultyToast.subtitle}</p>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {difficultyToast.exercisesList.map((exName, i) => (
+                      <span
+                        key={i}
+                        className="rounded-lg bg-card/80 border border-border px-2 py-0.5 text-[10px] font-bold text-foreground"
+                      >
+                        {i + 1}. {exName}
+                      </span>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           {/* Dynamic Warm-up Suggestion Banner (Prior to First Set) */}
           {!workout.exercises.some(ex => ex.sets.some(s => s.completed)) && !warmupBannerDismissed && (
             <div className="relative overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent p-3.5 sm:p-4 shadow-sm flex items-center justify-between gap-3">
@@ -1011,18 +1359,149 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                 </div>
               </div>
 
-              {/* Progressive Overload Advisor Banner */}
+              {/* Progressive Overload & RPE Dynamic Future Session Weight Advisor Banner */}
               {progressionAdvice && (
-                <div className="rounded-xl border border-primary/25 bg-primary/10 p-3.5 flex items-start gap-3">
-                  <TrendingUp className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                  <div className="text-xs">
-                    <div className="font-bold text-foreground mb-0.5">
-                      {t.workout.progression}: {progressionAdvice.recommendedWeight} kg ({progressionAdvice.status.toUpperCase()})
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  {/* Card 1: Today's Suggested Weight (Based on Previous Session's RPE) */}
+                  <div className={`rounded-2xl border p-3.5 flex flex-col justify-between gap-2.5 transition-all ${
+                    progressionAdvice.status === 'increase'
+                      ? 'border-emerald-500/35 bg-gradient-to-br from-emerald-500/15 via-card to-card'
+                      : progressionAdvice.status === 'deload'
+                        ? 'border-rose-500/35 bg-gradient-to-br from-rose-500/15 via-card to-card'
+                        : 'border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card'
+                  }`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                          progressionAdvice.status === 'increase'
+                            ? 'bg-emerald-500/20 text-emerald-400'
+                            : progressionAdvice.status === 'deload'
+                              ? 'bg-rose-500/20 text-rose-400'
+                              : 'bg-primary/20 text-primary'
+                        }`}>
+                          {progressionAdvice.status === 'increase' ? (
+                            <TrendingUp className="h-4 w-4" />
+                          ) : progressionAdvice.status === 'deload' ? (
+                            <TrendingDown className="h-4 w-4" />
+                          ) : (
+                            <Gauge className="h-4 w-4" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                              {isAr ? 'الوزن المقترح لليوم (بناءً على RPE السابق)' : "Today's RPE-Adjusted Weight"}
+                            </span>
+                            {progressionAdvice.lastAvgRpe !== undefined && (
+                              <span className="rounded-md bg-secondary/90 px-1.5 py-0.5 text-[10px] font-mono font-bold text-foreground border border-border">
+                                {isAr ? `السابق: RPE ${progressionAdvice.lastAvgRpe}` : `Last: RPE ${progressionAdvice.lastAvgRpe}`}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-baseline gap-2 mt-0.5">
+                            <span className="text-lg font-black font-mono text-foreground">
+                              {progressionAdvice.recommendedWeight} kg
+                            </span>
+                            {progressionAdvice.weightDeltaKg !== undefined && progressionAdvice.weightDeltaKg !== 0 && (
+                              <span className={`text-xs font-extrabold font-mono ${
+                                progressionAdvice.weightDeltaKg > 0 ? 'text-emerald-400' : 'text-rose-400'
+                              }`}>
+                                ({progressionAdvice.weightDeltaKg > 0 ? `+${progressionAdvice.weightDeltaKg}` : progressionAdvice.weightDeltaKg} kg)
+                              </span>
+                            )}
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${
+                              progressionAdvice.status === 'increase'
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : progressionAdvice.status === 'deload'
+                                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                  : 'bg-primary/20 text-primary border border-primary/30'
+                            }`}>
+                              {progressionAdvice.status === 'increase'
+                                ? (isAr ? 'زيادة تدريجية' : 'Overload')
+                                : progressionAdvice.status === 'deload'
+                                  ? (isAr ? 'تخفيف ذكي' : 'RPE Deload')
+                                  : (isAr ? 'تثبيت الوزن' : 'Maintain')}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        id="btn-apply-rpe-progression-advice"
+                        type="button"
+                        onClick={handleApplyRpeProgressionAdvice}
+                        className="shrink-0 flex items-center gap-1 rounded-xl bg-primary px-2.5 py-1.5 text-[11px] font-bold text-primary-foreground shadow-sm hover:bg-primary/90 active:scale-95 transition-all"
+                        title={isAr ? 'تطبيق الأوزان المقترحة حسب RPE على جميع المجموعات' : 'Apply RPE-calibrated suggested weights to all sets'}
+                      >
+                        <Zap className="h-3 w-3" />
+                        <span>{isAr ? 'تطبيق المقترح' : 'Apply Weight'}</span>
+                      </button>
                     </div>
-                    <div className="text-muted-foreground">
+
+                    <p className="text-xs text-muted-foreground leading-relaxed">
                       {isAr && progressionAdvice.reasonAr ? progressionAdvice.reasonAr : progressionAdvice.reason}
-                    </div>
+                    </p>
                   </div>
+
+                  {/* Card 2: Live Next-Session Weight Forecast (Based on Today's Logged Set RPEs) */}
+                  {nextSessionForecast && (
+                    <div className={`rounded-2xl border p-3.5 flex flex-col justify-between gap-2.5 transition-all ${
+                      nextSessionForecast.status === 'increase'
+                        ? 'border-emerald-500/35 bg-gradient-to-br from-emerald-500/10 via-card to-card'
+                        : nextSessionForecast.status === 'deload'
+                          ? 'border-rose-500/35 bg-gradient-to-br from-rose-500/10 via-card to-card'
+                          : 'border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-card to-card'
+                    }`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                            nextSessionForecast.status === 'increase'
+                              ? 'bg-emerald-500/20 text-emerald-400'
+                              : nextSessionForecast.status === 'deload'
+                                ? 'bg-rose-500/20 text-rose-400'
+                                : 'bg-amber-500/20 text-amber-400'
+                          }`}>
+                            <Sparkles className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                                {isAr ? 'توقع وزن الجلسة القادمة (حسب RPE اليوم)' : 'Next Session Weight Forecast (Live RPE)'}
+                              </span>
+                              {nextSessionForecast.lastAvgRpe !== undefined && (
+                                <span className="rounded-md bg-secondary/90 px-1.5 py-0.5 text-[10px] font-mono font-bold text-foreground border border-border">
+                                  {isAr ? `متوسط اليوم: RPE ${nextSessionForecast.lastAvgRpe}` : `Today Avg: RPE ${nextSessionForecast.lastAvgRpe}`}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-baseline gap-2 mt-0.5">
+                              <span className="text-lg font-black font-mono text-foreground">
+                                {nextSessionForecast.recommendedWeight} kg
+                              </span>
+                              {nextSessionForecast.weightDeltaKg !== undefined && (
+                                <span className={`text-xs font-extrabold font-mono ${
+                                  nextSessionForecast.weightDeltaKg > 0
+                                    ? 'text-emerald-400'
+                                    : nextSessionForecast.weightDeltaKg < 0
+                                      ? 'text-rose-400'
+                                      : 'text-amber-400'
+                                }`}>
+                                  ({nextSessionForecast.weightDeltaKg > 0 ? `+${nextSessionForecast.weightDeltaKg} kg` : nextSessionForecast.weightDeltaKg === 0 ? (isAr ? 'ثبات' : '0 kg') : `${nextSessionForecast.weightDeltaKg} kg`})
+                                </span>
+                              )}
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                {isAr ? `للجلسة القادمة` : `Next Session`}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        {isAr && nextSessionForecast.reasonAr ? nextSessionForecast.reasonAr : nextSessionForecast.reason}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1084,18 +1563,29 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                       <Sparkles className="h-4 w-4 text-primary shrink-0" />
                       <span>{t.workout.autoPrefillBadge}</span>
                       <span className="text-[11px] font-mono text-muted-foreground">
-                        ({comparisonData.lastSession.sets[0]?.weight} kg × {comparisonData.lastSession.sets[0]?.reps} reps)
+                        ({isAr ? 'السابق' : 'Last'}: {comparisonData.lastSession.sets[0]?.weight} kg × {comparisonData.lastSession.sets[0]?.reps} @ RPE {comparisonData.lastSession.sets[0]?.rpe ?? 8} → {isAr ? 'مقترح اليوم' : 'Today'}: {progressionAdvice?.recommendedWeight ?? comparisonData.lastSession.sets[0]?.weight} kg)
                       </span>
                     </div>
-                    <button
-                      id="btn-reapply-last-prefill"
-                      type="button"
-                      onClick={() => prefillExerciseWithLastSession(currentExerciseIndex, true)}
-                      className="text-xs font-bold text-primary hover:underline hover:text-primary/80 transition-colors"
-                      title={t.workout.autoPrefilledNote}
-                    >
-                      {t.workout.quickFillLast}
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        id="btn-reapply-rpe-prefill"
+                        type="button"
+                        onClick={() => prefillExerciseWithLastSession(currentExerciseIndex, true, true)}
+                        className="text-xs font-bold text-emerald-400 hover:underline transition-colors"
+                        title={isAr ? 'تعبئة الأوزان المعدلة حسب RPE الجلسة السابقة' : 'Fill RPE-adjusted weights from last session'}
+                      >
+                        {isAr ? 'تعبئة مقترح RPE' : 'Fill RPE Suggested'}
+                      </button>
+                      <button
+                        id="btn-reapply-last-prefill"
+                        type="button"
+                        onClick={() => prefillExerciseWithLastSession(currentExerciseIndex, true, false)}
+                        className="text-xs font-bold text-primary hover:underline hover:text-primary/80 transition-colors"
+                        title={t.workout.autoPrefilledNote}
+                      >
+                        {t.workout.quickFillLast}
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -1320,132 +1810,207 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
 
                 <div className="grid grid-cols-12 gap-2 text-center text-xs font-bold text-muted-foreground px-2">
                   <div className="col-span-2 text-left">{t.workout.set}</div>
-                  <div className="col-span-4">{isAr ? 'الوزن (قائمة منسدلة)' : 'Weight (Drop-Down)'}</div>
-                  <div className="col-span-3">{isAr ? 'التكرار (قائمة)' : 'Reps (Drop-Down)'}</div>
-                  <div className="col-span-2">{t.workout.rpe}</div>
+                  <div className="col-span-3">{isAr ? 'الوزن (كجم)' : 'Weight (kg)'}</div>
+                  <div className="col-span-3">{isAr ? 'التكرار' : 'Reps'}</div>
+                  <div className="col-span-3">{isAr ? 'معدل الجهد (RPE)' : 'RPE (Exertion)'}</div>
                   <div className="col-span-1">{t.common.done}</div>
                 </div>
 
                 <div className="space-y-2.5">
                   <AnimatePresence initial={false}>
-                    {currentExercise.sets.map((setLog) => (
-                      <motion.div
-                        key={setLog.id}
-                        layout
-                        initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.94, height: 0 }}
-                        transition={{ duration: 0.16 }}
-                        className={`grid grid-cols-12 items-center gap-2 rounded-xl border p-2.5 transition-all ${
-                          setLog.isPR
-                            ? 'border-amber-400/60 bg-amber-400/10 shadow-sm shadow-amber-500/15 ring-1 ring-amber-400/30'
-                            : setLog.completed
-                              ? 'border-emerald-500/40 bg-emerald-500/10'
-                              : 'border-border bg-secondary/30'
-                        }`}
-                      >
-                        {/* Set Number & PR Badge */}
-                        <div className="col-span-2 flex items-center gap-1.5 font-bold text-foreground text-sm">
-                          <span className={`flex h-7 w-7 items-center justify-center rounded-xl text-xs font-black shadow-inner ${
-                            setLog.isPR ? 'bg-amber-400 text-black shadow-amber-400/30' : 'bg-secondary'
-                          }`}>
-                            {setLog.setNumber}
-                          </span>
-                          {setLog.isPR && (
-                            <span 
-                              className="hidden sm:inline-flex items-center gap-0.5 rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-black text-amber-400 border border-amber-500/30 animate-pulse"
-                              title={setLog.prType === 'weight' ? (isAr ? 'رقم قياسي في الوزن' : 'Weight PR') : (isAr ? 'رقم قياسي في الحجم' : 'Volume PR')}
-                            >
-                              <Trophy className="h-2.5 w-2.5" />
-                              <span>{isAr ? 'رقم قياسي' : 'PR'}</span>
+                    {currentExercise.sets.map((setLog) => {
+                      const currentRpe = typeof setLog.rpe === 'number' ? setLog.rpe : 8;
+                      const currentW = typeof setLog.actualWeight === 'number' ? setLog.actualWeight : 0;
+                      const rirValue = Math.max(0, Math.round((10 - currentRpe) * 10) / 10);
+
+                      // Dynamic next-session weight impact for this specific set based on logged RPE
+                      const nextSetDeltaKg = currentW === 0
+                        ? 0
+                        : currentRpe <= 7.0
+                          ? 5
+                          : currentRpe <= 8.0
+                            ? 2.5
+                            : currentRpe <= 9.0
+                              ? 0
+                              : -2.5;
+                      const nextSessionSetWeight = Math.max(0, Math.round((currentW + nextSetDeltaKg) * 2) / 2);
+
+                      const rpeColorClasses =
+                        currentRpe <= 7.0
+                          ? 'border-sky-500/40 bg-sky-500/10 text-sky-300'
+                          : currentRpe <= 8.5
+                            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                            : currentRpe <= 9.0
+                              ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                              : 'border-rose-500/40 bg-rose-500/10 text-rose-300';
+
+                      return (
+                        <motion.div
+                          key={setLog.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.96, y: -4 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.94, height: 0 }}
+                          transition={{ duration: 0.16 }}
+                          className={`grid grid-cols-12 items-center gap-2 rounded-xl border p-2.5 transition-all ${
+                            setLog.isPR
+                              ? 'border-amber-400/60 bg-amber-400/10 shadow-sm shadow-amber-500/15 ring-1 ring-amber-400/30'
+                              : setLog.completed
+                                ? 'border-emerald-500/40 bg-emerald-500/10'
+                                : 'border-border bg-secondary/30'
+                          }`}
+                        >
+                          {/* Set Number & PR Badge */}
+                          <div className="col-span-2 flex items-center gap-1.5 font-bold text-foreground text-sm">
+                            <span className={`flex h-7 w-7 items-center justify-center rounded-xl text-xs font-black shadow-inner ${
+                              setLog.isPR ? 'bg-amber-400 text-black shadow-amber-400/30' : 'bg-secondary'
+                            }`}>
+                              {setLog.setNumber}
                             </span>
-                          )}
-                        </div>
-
-                        {/* Weight Drop-Down List (Select) */}
-                        <div className="col-span-4">
-                          <select
-                            id={`select-weight-${setLog.id}`}
-                            value={setLog.actualWeight}
-                            onChange={e => handleUpdateSet(setLog.id, 'actualWeight', parseFloat(e.target.value))}
-                            className="w-full rounded-xl border border-border bg-card py-2 px-2 text-center text-xs sm:text-sm font-bold text-foreground focus:border-primary focus:outline-none transition-colors cursor-pointer hover:border-primary/50"
-                          >
-                            {!WEIGHT_OPTIONS.includes(setLog.actualWeight) && setLog.actualWeight > 0 && (
-                              <option value={setLog.actualWeight}>{setLog.actualWeight} kg (Custom)</option>
+                            {setLog.isPR && (
+                              <span 
+                                className="hidden sm:inline-flex items-center gap-0.5 rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-black text-amber-400 border border-amber-500/30 animate-pulse"
+                                title={setLog.prType === 'weight' ? (isAr ? 'رقم قياسي في الوزن' : 'Weight PR') : (isAr ? 'رقم قياسي في الحجم' : 'Volume PR')}
+                              >
+                                <Trophy className="h-2.5 w-2.5" />
+                                <span>{isAr ? 'رقم قياسي' : 'PR'}</span>
+                              </span>
                             )}
-                            {WEIGHT_OPTIONS.map(w => (
-                              <option key={w} value={w}>
-                                {w === 0 ? (isAr ? 'وزن الجسم (0 kg)' : 'Bodyweight (0 kg)') : `${w} kg`}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                          </div>
 
-                        {/* Reps Drop-Down List (Select) */}
-                        <div className="col-span-3">
-                          <select
-                            id={`select-reps-${setLog.id}`}
-                            value={setLog.actualReps}
-                            onChange={e => handleUpdateSet(setLog.id, 'actualReps', parseInt(e.target.value, 10))}
-                            className="w-full rounded-xl border border-border bg-card py-2 px-2 text-center text-xs sm:text-sm font-bold text-foreground focus:border-primary focus:outline-none transition-colors cursor-pointer hover:border-primary/50"
-                          >
-                            {!REPS_OPTIONS.includes(setLog.actualReps) && setLog.actualReps > 0 && (
-                              <option value={setLog.actualReps}>{setLog.actualReps} Reps</option>
-                            )}
-                            {REPS_OPTIONS.map(r => (
-                              <option key={r} value={r}>
-                                {r} {isAr ? 'تكرار' : 'reps'}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                          {/* Weight Drop-Down List (Select) */}
+                          <div className="col-span-3">
+                            <select
+                              id={`select-weight-${setLog.id}`}
+                              value={setLog.actualWeight}
+                              onChange={e => handleUpdateSet(setLog.id, 'actualWeight', parseFloat(e.target.value))}
+                              className="w-full rounded-xl border border-border bg-card py-2 px-1.5 text-center text-xs sm:text-sm font-bold text-foreground focus:border-primary focus:outline-none transition-colors cursor-pointer hover:border-primary/50"
+                            >
+                              {!WEIGHT_OPTIONS.includes(setLog.actualWeight) && setLog.actualWeight > 0 && (
+                                <option value={setLog.actualWeight}>{setLog.actualWeight} kg</option>
+                              )}
+                              {WEIGHT_OPTIONS.map(w => (
+                                <option key={w} value={w}>
+                                  {w === 0 ? (isAr ? 'وزن الجسم (0)' : 'BW (0 kg)') : `${w} kg`}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                        {/* RPE Selector (6 - 10) with RIR and Calculator Shortcut */}
-                        <div className="col-span-2 flex flex-col items-center">
-                          <select
-                            id={`select-rpe-${setLog.id}`}
-                            value={setLog.rpe || 8}
-                            onChange={e => handleUpdateSet(setLog.id, 'rpe', parseFloat(e.target.value))}
-                            className="w-full rounded-xl border border-border bg-card py-2 px-1 text-center text-xs font-semibold text-foreground focus:border-primary focus:outline-none cursor-pointer"
-                          >
-                            <option value="6">RPE 6</option>
-                            <option value="6.5">6.5</option>
-                            <option value="7">RPE 7</option>
-                            <option value="7.5">7.5</option>
-                            <option value="8">RPE 8</option>
-                            <option value="8.5">8.5</option>
-                            <option value="9">RPE 9</option>
-                            <option value="9.5">9.5</option>
-                            <option value="10">10 (Max)</option>
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenRPECalculator(setLog.actualWeight, setLog.actualReps, setLog.rpe)}
-                            className="mt-0.5 text-[9px] text-muted-foreground hover:text-primary transition-colors flex items-center gap-0.5"
-                            title={isAr ? 'فتح حاسبة RPE' : 'Open RPE Calculator'}
-                          >
-                            <Calculator className="h-2.5 w-2.5" />
-                            <span>{Math.max(0, Math.round((10 - (setLog.rpe || 8)) * 10) / 10)} RIR</span>
-                          </button>
-                        </div>
+                          {/* Reps Drop-Down List (Select) */}
+                          <div className="col-span-3">
+                            <select
+                              id={`select-reps-${setLog.id}`}
+                              value={setLog.actualReps}
+                              onChange={e => handleUpdateSet(setLog.id, 'actualReps', parseInt(e.target.value, 10))}
+                              className="w-full rounded-xl border border-border bg-card py-2 px-1.5 text-center text-xs sm:text-sm font-bold text-foreground focus:border-primary focus:outline-none transition-colors cursor-pointer hover:border-primary/50"
+                            >
+                              {!REPS_OPTIONS.includes(setLog.actualReps) && setLog.actualReps > 0 && (
+                                <option value={setLog.actualReps}>{setLog.actualReps} Reps</option>
+                              )}
+                              {REPS_OPTIONS.map(r => (
+                                <option key={r} value={r}>
+                                  {r} {isAr ? 'تكرار' : 'reps'}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                        {/* Completed Checkbox Button */}
-                        <div className="col-span-1 flex justify-center">
-                          <button
-                            id={`btn-toggle-set-${setLog.id}`}
-                            onClick={() => handleToggleSetCompletion(setLog)}
-                            className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all ${
-                              setLog.completed
-                                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30 scale-105'
-                                : 'border border-border bg-card text-muted-foreground hover:bg-secondary'
-                            }`}
-                            title={isAr ? 'تأكيد إكمال المجموعة وبدء الراحة' : 'Log set and start rest timer'}
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </motion.div>
-                    ))}
+                          {/* Interactive RPE Input Control (Stepper + Selector + RIR & Next-Session Weight Adjustment Badge) */}
+                          <div className="col-span-3 flex flex-col items-center gap-1">
+                            <div className="flex w-full items-center gap-0.5">
+                              <button
+                                id={`btn-rpe-minus-${setLog.id}`}
+                                type="button"
+                                onClick={() => handleUpdateSet(setLog.id, 'rpe', Math.max(6, Math.round((currentRpe - 0.5) * 2) / 2))}
+                                disabled={currentRpe <= 6}
+                                className="hidden sm:flex h-8 w-6 shrink-0 items-center justify-center rounded-l-lg border border-border bg-card text-xs font-black text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-30 transition-colors"
+                                title={isAr ? 'تقليل RPE بمقدار 0.5' : 'Decrease RPE by 0.5'}
+                              >
+                                -
+                              </button>
+                              <select
+                                id={`select-rpe-${setLog.id}`}
+                                value={currentRpe}
+                                onChange={e => handleUpdateSet(setLog.id, 'rpe', parseFloat(e.target.value))}
+                                className={`w-full rounded-xl sm:rounded-none border py-1.5 px-1 text-center text-xs font-black focus:border-primary focus:outline-none cursor-pointer transition-colors ${rpeColorClasses}`}
+                              >
+                                <option value="6" className="bg-card text-foreground">RPE 6 (4 RIR)</option>
+                                <option value="6.5" className="bg-card text-foreground">RPE 6.5 (3.5 RIR)</option>
+                                <option value="7" className="bg-card text-foreground">RPE 7 (3 RIR)</option>
+                                <option value="7.5" className="bg-card text-foreground">RPE 7.5 (2.5 RIR)</option>
+                                <option value="8" className="bg-card text-foreground">RPE 8 (2 RIR)</option>
+                                <option value="8.5" className="bg-card text-foreground">RPE 8.5 (1.5 RIR)</option>
+                                <option value="9" className="bg-card text-foreground">RPE 9 (1 RIR)</option>
+                                <option value="9.5" className="bg-card text-foreground">RPE 9.5 (0.5 RIR)</option>
+                                <option value="10" className="bg-card text-foreground">RPE 10 (Max)</option>
+                              </select>
+                              <button
+                                id={`btn-rpe-plus-${setLog.id}`}
+                                type="button"
+                                onClick={() => handleUpdateSet(setLog.id, 'rpe', Math.min(10, Math.round((currentRpe + 0.5) * 2) / 2))}
+                                disabled={currentRpe >= 10}
+                                className="hidden sm:flex h-8 w-6 shrink-0 items-center justify-center rounded-r-lg border border-border bg-card text-xs font-black text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-30 transition-colors"
+                                title={isAr ? 'زيادة RPE بمقدار 0.5' : 'Increase RPE by 0.5'}
+                              >
+                                +
+                              </button>
+                            </div>
+
+                            {/* Live RIR + Next-Session Weight Adjustment Pill */}
+                            <div className="flex flex-wrap items-center justify-center gap-1 w-full">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenRPECalculator(setLog.actualWeight, setLog.actualReps, currentRpe)}
+                                className="text-[9px] font-bold text-muted-foreground hover:text-primary transition-colors flex items-center gap-0.5"
+                                title={isAr ? 'فتح حاسبة RPE' : 'Open RPE Calculator'}
+                              >
+                                <Calculator className="h-2.5 w-2.5" />
+                                <span>{rirValue} RIR</span>
+                              </button>
+                              {currentW > 0 && (
+                                <span
+                                  className={`rounded px-1 py-0.2 text-[9px] font-mono font-extrabold ${
+                                    nextSetDeltaKg > 0
+                                      ? 'bg-emerald-500/20 text-emerald-400'
+                                      : nextSetDeltaKg < 0
+                                        ? 'bg-rose-500/20 text-rose-400'
+                                        : 'bg-secondary text-muted-foreground'
+                                  }`}
+                                  title={
+                                    isAr
+                                      ? `الوزن المقترح للجلسة القادمة لهذه المجموعة: ${nextSessionSetWeight} كجم`
+                                      : `Suggested weight for this set in next session: ${nextSessionSetWeight} kg`
+                                  }
+                                >
+                                  {nextSetDeltaKg > 0
+                                    ? `+${nextSetDeltaKg}kg ${isAr ? 'القادم' : 'next'}`
+                                    : nextSetDeltaKg < 0
+                                      ? `${nextSetDeltaKg}kg ${isAr ? 'القادم' : 'next'}`
+                                      : isAr ? 'تثبيت القادم' : 'Hold next'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Completed Checkbox Button */}
+                          <div className="col-span-1 flex justify-center">
+                            <button
+                              id={`btn-toggle-set-${setLog.id}`}
+                              onClick={() => handleToggleSetCompletion(setLog)}
+                              className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all ${
+                                setLog.completed
+                                  ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30 scale-105'
+                                  : 'border border-border bg-card text-muted-foreground hover:bg-secondary'
+                              }`}
+                              title={isAr ? 'تأكيد إكمال المجموعة وبدء الراحة' : 'Log set and start rest timer'}
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
                   </AnimatePresence>
                 </div>
 

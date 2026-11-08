@@ -178,6 +178,7 @@ export interface WorkoutSession {
   startedAt?: number;
   completedAt?: number;
   timestamp?: number;
+  splitId?: string;
   difficultyLevel?: WorkoutDifficultyLevel;
   timeConstraint?: WorkoutTimeConstraint;
   equipmentFocus?: WorkoutEquipmentFilter;
@@ -196,6 +197,44 @@ export interface WorkoutSession {
     primaryZone?: HeartRateZone;
     deviceName?: string;
   };
+  dailyReadiness?: DailyReadinessAssessment;
+}
+
+export type SleepQualityRating = 'poor' | 'fair' | 'good' | 'optimal';
+export type StressLevelRating = 'low' | 'moderate' | 'high' | 'extreme';
+export type MuscleSorenessRating = 'none' | 'mild' | 'moderate' | 'severe';
+export type ReadinessTier = 'optimal' | 'moderate' | 'low';
+
+export interface DailyReadinessAssessment {
+  id: string;
+  date: string; // YYYY-MM-DD
+  timestamp: number;
+  sleepQuality: SleepQualityRating;
+  sleepHoursEstimated?: number;
+  stressLevel: StressLevelRating;
+  muscleSoreness: MuscleSorenessRating;
+  soreMuscleGroups?: string[]; // e.g. ['Chest', 'Legs', 'Back', 'Shoulders']
+  notes?: string;
+  
+  // Computed scores
+  readinessScore: number; // 0 - 100
+  readinessTier: ReadinessTier;
+  
+  // PPLEngine intensity adjustment parameters
+  intensityAdjustmentPercent: number; // -10 (low), 0 (moderate), +5 (optimal)
+  setsModifier: number; // -1 on compound if low, 0 otherwise
+  rpeModifier: number; // -1.0 to -1.5 if low, +0.5 if optimal, 0 if moderate
+  restSecondsModifier: number; // +30s if low, 0 if moderate, 0 if optimal
+  
+  // Descriptive recommendations
+  titleEn: string;
+  titleAr: string;
+  descriptionEn: string;
+  descriptionAr: string;
+  pplActionDirectiveEn: string;
+  pplActionDirectiveAr: string;
+  recommendedModalityEn: string;
+  recommendedModalityAr: string;
 }
 
 export type CardioModality = 
@@ -587,6 +626,7 @@ export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error' | 'idle';
 export type HeartRateZone = 1 | 2 | 3 | 4 | 5;
 
 export type BluetoothDeviceType = 
+  | 'oraimo_watch'
   | 'samsung_galaxy_watch' 
   | 'apple_watch' 
   | 'garmin' 
@@ -638,6 +678,7 @@ export interface BluetoothDeviceInfo {
   supportedMetrics?: ('heart_rate' | 'hrv' | 'spo2' | 'steps' | 'calories' | 'battery' | 'temperature')[];
   firmwareVersion?: string;
   manufacturerName?: string;
+  connectionMode?: 'gatt_live' | 'hybrid_ble' | 'simulated';
 }
 
 export interface SamsungHealthDailySummary {

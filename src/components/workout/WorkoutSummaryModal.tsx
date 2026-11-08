@@ -40,6 +40,7 @@ import {
 } from 'recharts';
 import { UserProfile, WorkoutSession } from '../../types';
 import { AudioService } from '../../services/audioService';
+import { PPLEngine } from '../../services/pplEngine';
 
 interface WorkoutSummaryModalProps {
   workout: WorkoutSession;
@@ -564,6 +565,73 @@ Next Session: ${nextWorkoutInfo.nextName}`;
                     </BarChart>
                   )}
                 </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* 3.5. Dynamic RPE Weight Adjustments for Next Session */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  <span>
+                    {isAr
+                      ? 'تعديلات الأوزان للجلسة القادمة (بناءً على RPE المسجل اليوم)'
+                      : "Next Session Dynamic Weight Adjustments (Based on Today's RPE)"}
+                  </span>
+                </h4>
+                <span className="rounded-lg bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary border border-primary/30">
+                  {isAr ? `متوسط الجهد: RPE ${stats.avgRpe}` : `Session Avg: RPE ${stats.avgRpe}`}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {workout.exercises.map((ex) => {
+                  const forecast = PPLEngine.calculateNextSessionForecastFromCurrentSets(ex);
+                  return (
+                    <div
+                      key={ex.exerciseId}
+                      className={`rounded-xl border p-3 flex items-center justify-between gap-2.5 ${
+                        forecast.status === 'increase'
+                          ? 'border-emerald-500/35 bg-emerald-500/10'
+                          : forecast.status === 'deload'
+                            ? 'border-rose-500/35 bg-rose-500/10'
+                            : 'border-border bg-card'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="text-xs font-black text-foreground truncate">
+                          {isAr && ex.exerciseNameAr ? ex.exerciseNameAr : ex.exerciseName}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                          {isAr
+                            ? `اليوم: ${forecast.lastWeight ?? 0} كجم @ RPE ${forecast.lastAvgRpe ?? 8}`
+                            : `Today: ${forecast.lastWeight ?? 0} kg @ RPE ${forecast.lastAvgRpe ?? 8}`}
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <div className="text-xs font-black font-mono text-foreground">
+                          {forecast.recommendedWeight} kg
+                        </div>
+                        <span
+                          className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-mono font-extrabold ${
+                            (forecast.weightDeltaKg ?? 0) > 0
+                              ? 'bg-emerald-500/20 text-emerald-400'
+                              : (forecast.weightDeltaKg ?? 0) < 0
+                                ? 'bg-rose-500/20 text-rose-400'
+                                : 'bg-secondary text-muted-foreground'
+                          }`}
+                        >
+                          {(forecast.weightDeltaKg ?? 0) > 0
+                            ? `+${forecast.weightDeltaKg} kg ${isAr ? 'القادم' : 'Next'}`
+                            : (forecast.weightDeltaKg ?? 0) < 0
+                              ? `${forecast.weightDeltaKg} kg ${isAr ? 'القادم' : 'Next'}`
+                              : isAr ? 'تثبيت الوزن' : 'Maintain'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
