@@ -774,6 +774,18 @@ export const DailyWorkoutHub: React.FC<DailyWorkoutHubProps> = ({
                 const sampleReps = ex.sets?.[0]?.targetReps || '8-12';
                 const targetWeight = ex.sets?.[0]?.targetWeight || 0;
                 const rpe = ex.targetRpe || 8.5;
+                const nameLower = `${ex.exerciseName} ${ex.exerciseNameAr || ''} ${ex.primaryMuscle || ''}`.toLowerCase();
+                const isDualHand =
+                  nameLower.includes('dumbbell') ||
+                  nameLower.includes('db ') ||
+                  nameLower.includes('دمبل') ||
+                  nameLower.includes('bicep') ||
+                  nameLower.includes('curl') ||
+                  nameLower.includes('باي') ||
+                  nameLower.includes('تبادل') ||
+                  nameLower.includes('lateral raise') ||
+                  nameLower.includes('رفرفة');
+                const englishYtUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${ex.exerciseName} proper form exercise tutorial`)}`;
 
                 return (
                   <div
@@ -781,13 +793,20 @@ export const DailyWorkoutHub: React.FC<DailyWorkoutHubProps> = ({
                     className="flex items-start justify-between rounded-2xl border border-border/80 bg-secondary/30 p-3.5 sm:p-4 hover:border-primary/40 hover:bg-secondary/40 transition-all"
                   >
                     <div className="space-y-1.5 flex-1 pr-2">
-                      <div className="flex items-center gap-2">
-                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/20 text-[10px] font-mono font-black text-primary">
+                      <div className="flex items-start gap-2">
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/20 text-[10px] font-mono font-black text-primary">
                           {String(exIdx + 1).padStart(2, '0')}
                         </span>
-                        <h5 className="text-xs sm:text-sm font-black text-foreground">
-                          {isAr ? ex.exerciseNameAr || ex.exerciseName : ex.exerciseName}
-                        </h5>
+                        <div className="space-y-0.5">
+                          <h5 className="text-xs sm:text-sm font-black text-foreground">
+                            {isAr ? ex.exerciseNameAr || ex.exerciseName : ex.exerciseName}
+                          </h5>
+                          {ex.exerciseNameAr && (
+                            <p className="text-[11px] font-mono font-semibold text-primary/90" dir="ltr">
+                              {isAr ? ex.exerciseName : ex.exerciseNameAr}
+                            </p>
+                          )}
+                        </div>
                       </div>
 
                       {/* Muscle, Sets, Suggested Weight & Rest Badge */}
@@ -800,7 +819,11 @@ export const DailyWorkoutHub: React.FC<DailyWorkoutHubProps> = ({
                         </span>
                         {targetWeight > 0 && (
                           <span className="rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-black text-emerald-400 font-mono">
-                            {targetWeight} kg {isAr ? 'مقترح' : 'suggested'}
+                            {isDualHand
+                              ? isAr
+                                ? `${targetWeight} كجم لكل يد (إجمالي ${targetWeight * 2} كجم)`
+                                : `${targetWeight} kg/hand (${targetWeight * 2} kg total)`
+                              : `${targetWeight} kg ${isAr ? 'مقترح' : 'suggested'}`}
                           </span>
                         )}
                         <span className="rounded-md bg-secondary px-2 py-0.5 text-[10px] font-bold text-muted-foreground font-mono">
@@ -809,35 +832,69 @@ export const DailyWorkoutHub: React.FC<DailyWorkoutHubProps> = ({
                       </div>
                     </div>
 
-                    {onSelectExercise && (
-                      <button
-                        type="button"
-                        onClick={() => onSelectExercise(ex.exerciseId)}
-                        className="rounded-xl border border-border p-2 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                        title={isAr ? 'عرض تفاصيل وتكنيك التمرين' : 'View exercise technique'}
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      {onSelectExercise && (
+                        <button
+                          type="button"
+                          onClick={() => onSelectExercise(ex.exerciseId)}
+                          className="rounded-xl border border-border p-2 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                          title={isAr ? 'عرض تفاصيل وتكنيك التمرين' : 'View exercise technique'}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                      )}
+                      <a
+                        href={englishYtUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] font-bold text-red-400 hover:bg-red-500/20 transition-colors"
+                        title={isAr ? `بحث فيديو بالاسم الإنجليزي: ${ex.exerciseName}` : `Search YouTube in English: ${ex.exerciseName}`}
                       >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                    )}
+                        <Play className="h-2.5 w-2.5 fill-current" />
+                        <span>{isAr ? 'فيديو EN' : 'Video EN'}</span>
+                      </a>
+                    </div>
                   </div>
                 );
               })
             ) : (
-              // Fallback exercise names list
-              (isAr ? activeDay.exerciseNamesAr : activeDay.exerciseNames).map((name, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between rounded-2xl border border-border bg-secondary/30 p-3.5"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/20 text-[10px] font-mono font-black text-primary">
-                      {String(i + 1).padStart(2, '0')}
-                    </span>
-                    <span className="text-xs sm:text-sm font-bold text-foreground">{name}</span>
+              // Fallback exercise names list (Bilingual Arabic + English)
+              activeDay.exerciseNames.map((enName, i) => {
+                const arName = activeDay.exerciseNamesAr?.[i] || enName;
+                const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${enName} proper form exercise tutorial`)}`;
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between rounded-2xl border border-border bg-secondary/30 p-3.5"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/20 text-[10px] font-mono font-black text-primary">
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <div>
+                        <div className="text-xs sm:text-sm font-bold text-foreground">
+                          {isAr ? arName : enName}
+                        </div>
+                        <div className="text-[11px] font-mono text-primary/90" dir="ltr">
+                          {isAr ? enName : arName}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={ytUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] font-bold text-red-400 hover:bg-red-500/20 transition-colors"
+                      >
+                        <Play className="h-2.5 w-2.5 fill-current" />
+                        <span>{isAr ? 'فيديو EN' : 'Video EN'}</span>
+                      </a>
+                      <span className="text-[10px] font-bold text-muted-foreground">3 {isAr ? 'مجموعات' : 'Sets'}</span>
+                    </div>
                   </div>
-                  <span className="text-[10px] font-bold text-muted-foreground">3 {isAr ? 'مجموعات' : 'Sets'}</span>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

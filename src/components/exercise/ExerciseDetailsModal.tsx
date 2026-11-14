@@ -40,6 +40,7 @@ export const ExerciseDetailsModal: React.FC<ExerciseDetailsModalProps> = ({
   const [showEmbeddedVideo, setShowEmbeddedVideo] = useState(false);
 
   const title = isAr && exercise.nameAr ? exercise.nameAr : exercise.name;
+  const bilingualSubtitle = isAr && exercise.nameAr ? exercise.name : (exercise.nameAr || '');
   const primaryMuscle = isAr && exercise.primaryMuscleAr ? exercise.primaryMuscleAr : exercise.primaryMuscle;
   const secondaryMuscles = isAr && exercise.secondaryMusclesAr ? exercise.secondaryMusclesAr : exercise.secondaryMuscles;
   const instructions = isAr && exercise.instructionsAr && exercise.instructionsAr.length > 0 ? exercise.instructionsAr : exercise.instructions;
@@ -48,7 +49,9 @@ export const ExerciseDetailsModal: React.FC<ExerciseDetailsModalProps> = ({
   const breathing = isAr && exercise.breathingAr ? exercise.breathingAr : exercise.breathing;
   const equipment = isAr && exercise.equipmentAr ? exercise.equipmentAr : exercise.equipment;
 
-  const youtubeQuery = encodeURIComponent(exercise.youtubeSearchQuery || `${exercise.name} form tutorial technique fitness`);
+  // Always search YouTube using the English exercise name for accurate form tutorials
+  const englishSearchTerm = `${exercise.name} proper form exercise tutorial`;
+  const youtubeQuery = encodeURIComponent(englishSearchTerm);
   const searchUrl = `https://www.youtube.com/results?search_query=${youtubeQuery}`;
 
   const handleHomeClick = () => {
@@ -80,8 +83,13 @@ export const ExerciseDetailsModal: React.FC<ExerciseDetailsModalProps> = ({
             </button>
 
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg sm:text-xl font-black text-foreground">{title}</h2>
+                {bilingualSubtitle && (
+                  <span className="rounded-lg border border-border bg-secondary/70 px-2 py-0.5 text-xs font-bold font-mono text-primary" dir="ltr">
+                    {bilingualSubtitle}
+                  </span>
+                )}
                 {exercise.tags.includes('back_safe') && (
                   <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-400 border border-emerald-500/30">
                     <ShieldCheck className="h-3 w-3" />
@@ -155,7 +163,7 @@ export const ExerciseDetailsModal: React.FC<ExerciseDetailsModalProps> = ({
                     </span>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {exercise.youtubeVideoId && (
                       <button
                         id="btn-play-embedded-video"
@@ -171,10 +179,13 @@ export const ExerciseDetailsModal: React.FC<ExerciseDetailsModalProps> = ({
                       href={searchUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 rounded-xl bg-secondary/90 px-3 py-1.5 text-xs font-semibold text-foreground border border-border hover:bg-secondary transition-colors"
+                      className="flex items-center gap-1.5 rounded-xl bg-secondary/95 px-3 py-1.5 text-xs font-bold text-foreground border border-primary/40 hover:bg-secondary transition-colors shadow"
+                      title={`YouTube Search (EN): ${englishSearchTerm}`}
                     >
-                      <Search className="h-3.5 w-3.5" />
-                      <span>{t.common.openYoutube}</span>
+                      <Search className="h-3.5 w-3.5 text-primary" />
+                      <span>
+                        {isAr ? `بحث فيديو بالإنجليزي (${exercise.name})` : `Search YouTube (${exercise.name})`}
+                      </span>
                     </a>
                   </div>
                 </div>
@@ -253,23 +264,29 @@ export const ExerciseDetailsModal: React.FC<ExerciseDetailsModalProps> = ({
                   const altEx = PPLEngine.getExerciseById(altId);
                   if (!altEx) return null;
                   const altTitle = isAr && altEx.nameAr ? altEx.nameAr : altEx.name;
+                  const altSub = isAr && altEx.nameAr ? altEx.name : (altEx.nameAr || '');
 
                   return (
                     <button
                       key={altId}
                       id={`btn-select-alt-${altId}`}
                       onClick={() => onSelectAlternative && onSelectAlternative(altId)}
-                      className="flex items-center justify-between rounded-xl border border-border bg-secondary/40 p-3 text-left hover:bg-secondary hover:border-primary/40 transition-colors group"
+                      className="flex items-center justify-between rounded-xl border border-border bg-secondary/40 p-3 text-left rtl:text-right hover:bg-secondary hover:border-primary/40 transition-colors group"
                     >
                       <div>
                         <div className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
                           {altTitle}
                         </div>
-                        <div className="text-[11px] text-muted-foreground">
+                        {altSub && (
+                          <div className="text-[10px] font-mono text-primary/90" dir="ltr">
+                            {altSub}
+                          </div>
+                        )}
+                        <div className="text-[11px] text-muted-foreground mt-0.5">
                           {altEx.equipment} • {altEx.difficulty}
                         </div>
                       </div>
-                      <span className="text-xs font-semibold text-primary">{t.common.viewDetails}</span>
+                      <span className="text-xs font-semibold text-primary shrink-0">{t.common.viewDetails}</span>
                     </button>
                   );
                 })}

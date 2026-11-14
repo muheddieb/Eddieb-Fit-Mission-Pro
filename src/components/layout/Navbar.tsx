@@ -68,6 +68,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isRTL = profile.language === 'ar';
   const [syncPopoverOpen, setSyncPopoverOpen] = useState(false);
   const [themePopoverOpen, setThemePopoverOpen] = useState(false);
+  const [themeCategoryFilter, setThemeCategoryFilter] = useState<'all' | 'pro_athlete' | 'performance'>('all');
   const [isRetrying, setIsRetrying] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const themePopoverRef = useRef<HTMLDivElement>(null);
@@ -98,8 +99,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   const toggleTheme = () => {
-    const themeCycle = ['elegant_dark', 'fitness_dark', 'dark', 'light', 'warm_amber'] as const;
-    const currentIndex = themeCycle.indexOf(profile.theme as any);
+    const themeCycle: AppTheme[] = [
+      'olympic_arena',
+      'carbon_track',
+      'tactical_hybrid',
+      'iron_chalkhouse',
+      'fitness_dark',
+      'elegant_dark',
+      'light',
+    ];
+    const currentIndex = themeCycle.indexOf(profile.theme);
     const nextTheme = themeCycle[(currentIndex + 1) % themeCycle.length];
     onUpdateProfile({ ...profile, theme: nextTheme });
   };
@@ -412,10 +421,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             />
           </button>
 
-          {/* Theme Picker Dropdown Popover */}
+          {/* Quick Theme Studio Drawer Popover */}
           {themePopoverOpen && (
             <div 
-              className={`absolute top-full mt-2 z-50 w-72 sm:w-80 max-w-[calc(100vw-1rem)] rounded-2xl border p-3.5 shadow-2xl animate-in fade-in zoom-in-95 duration-150 ${
+              id="popover-quick-theme-studio"
+              className={`absolute top-full mt-2 z-50 w-80 sm:w-96 max-w-[calc(100vw-1rem)] rounded-2xl border p-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150 ${
                 isRTL ? 'left-0 sm:left-auto sm:right-0' : 'right-0'
               }`}
               style={{ 
@@ -425,64 +435,84 @@ export const Navbar: React.FC<NavbarProps> = ({
               }}
               dir={isRTL ? 'rtl' : 'ltr'}
             >
-              <div className="flex items-center justify-between border-b border-border/80 pb-2.5 mb-2.5 px-1">
+              <div className="flex items-center justify-between border-b border-border/80 pb-2.5 mb-2.5">
                 <div className="flex items-center gap-2">
                   <Palette className="h-4 w-4 text-primary" />
                   <span className="text-xs font-black text-foreground">
-                    {isRTL ? 'السمات والألوان التحفيزية' : 'Motivational Themes'}
+                    {isRTL ? 'استوديو السمات الرياضية السريع' : 'Quick Athlete Theme Studio'}
                   </span>
                 </div>
-                <span className="text-[10px] font-bold text-muted-foreground bg-secondary/80 px-2 py-0.5 rounded-full border border-border">
-                  {THEME_OPTIONS.length} Themes
+                <span className="text-[11px] font-mono text-muted-foreground">
+                  {THEME_OPTIONS.length} {isRTL ? 'سمة' : 'Themes'}
                 </span>
               </div>
 
+              {/* Category Filter Tabs */}
+              <div className="grid grid-cols-3 gap-1 rounded-xl bg-secondary/60 p-1 mb-3 border border-border/60">
+                {[
+                  { id: 'all', labelEn: 'All (16)', labelAr: 'الكل (16)' },
+                  { id: 'pro_athlete', labelEn: 'Pro Athlete (4)', labelAr: 'نخبة الأبطال (4)' },
+                  { id: 'performance', labelEn: 'Classics (12)', labelAr: 'الأداء (12)' },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setThemeCategoryFilter(tab.id as any)}
+                    className={`rounded-lg py-1.5 px-2 text-[11px] font-bold transition-colors whitespace-nowrap ${
+                      themeCategoryFilter === tab.id
+                        ? 'bg-primary text-primary-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {isRTL ? tab.labelAr : tab.labelEn}
+                  </button>
+                ))}
+              </div>
+
               <div className="max-h-80 overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
-                {THEME_OPTIONS.map((themeOpt) => {
+                {THEME_OPTIONS.filter(tOpt => themeCategoryFilter === 'all' || tOpt.category === themeCategoryFilter).map((themeOpt) => {
                   const isSelected = profile.theme === themeOpt.id;
                   return (
                     <button
                       key={themeOpt.id}
+                      id={`nav-theme-opt-${themeOpt.id}`}
                       onClick={() => {
                         onUpdateProfile({ ...profile, theme: themeOpt.id });
                         setThemePopoverOpen(false);
                       }}
-                      className={`w-full flex items-center justify-between gap-2.5 p-2 rounded-xl border text-start transition-all ${
+                      className={`w-full flex items-center justify-between gap-2.5 p-2.5 rounded-xl border text-start transition-all ${
                         isSelected 
                           ? 'border-primary bg-secondary font-bold shadow-sm ring-1 ring-primary/30'
                           : 'border-transparent bg-secondary/30 hover:border-border hover:bg-secondary/70 text-muted-foreground hover:text-foreground'
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div 
-                          className="h-4 w-4 rounded-full border border-white/30 shrink-0 shadow-sm"
-                          style={{ backgroundColor: themeOpt.primaryColor }}
-                        />
+                        {/* Dual-Swatch Preview (Background + Primary Accent) */}
+                        <div
+                          className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border shadow-xs"
+                          style={{
+                            backgroundColor: themeOpt.bgPreview,
+                            borderColor: themeOpt.borderPreview,
+                          }}
+                        >
+                          <div 
+                            className="h-3 w-3 rounded-full"
+                            style={{ backgroundColor: themeOpt.primaryColor }}
+                          />
+                        </div>
                         <div className="min-w-0 truncate">
                           <div className="text-xs font-bold text-foreground truncate">
                             {isRTL ? themeOpt.nameAr : themeOpt.nameEn}
                           </div>
                           <div className="text-[10px] text-muted-foreground truncate">
-                            {isRTL ? themeOpt.vibeAr : themeOpt.vibeEn}
+                            {isRTL ? themeOpt.vibeAr : themeOpt.vibeEn} · {isRTL ? themeOpt.badgeAr : themeOpt.badge}
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span 
-                          className="rounded px-1.5 py-0.5 text-[8px] font-extrabold"
-                          style={{
-                            backgroundColor: `${themeOpt.primaryColor}25`,
-                            color: themeOpt.primaryColor,
-                            border: `1px solid ${themeOpt.primaryColor}40`
-                          }}
-                        >
-                          {isRTL ? themeOpt.badgeAr : themeOpt.badge}
-                        </span>
-                        {isSelected && (
-                          <div className="h-2 w-2 rounded-full bg-primary" />
-                        )}
-                      </div>
+                      {isSelected && (
+                        <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                      )}
                     </button>
                   );
                 })}

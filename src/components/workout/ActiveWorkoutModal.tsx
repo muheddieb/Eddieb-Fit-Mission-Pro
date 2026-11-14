@@ -34,11 +34,13 @@ import {
   Feather,
   Dumbbell,
   SlidersHorizontal,
-  ShieldCheck
+  ShieldCheck,
+  ArrowLeftRight,
+  Search
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
-import { WorkoutSession, WorkoutExercise, SetLog, UserProfile, Exercise, RestSoundType, PersonalRecordEvent, WorkoutDifficultyLevel } from '../../types';
+import { WorkoutSession, WorkoutExercise, SetLog, UserProfile, Exercise, RestSoundType, PersonalRecordEvent, WorkoutDifficultyLevel, WorkoutEquipmentFilter } from '../../types';
 import { translations } from '../../i18n/translations';
 import { PPLEngine, ProgressionAdvice } from '../../services/pplEngine';
 import { StorageService } from '../../services/storage';
@@ -62,20 +64,146 @@ interface ActiveWorkoutModalProps {
   onOpenExerciseDetails: (exercise: Exercise) => void;
 }
 
-// Preset weights from 0 kg to 200 kg with fine-grained increments
+// Preset weights from 0 kg to 200 kg with fine-grained increments (supports all dumbbell & barbell steps)
 const WEIGHT_OPTIONS: number[] = [
-  0, 1, 2, 2.5, 3, 4, 5, 6, 7, 7.5, 8, 9, 10, 
-  12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30, 32.5, 35, 37.5, 40, 
-  42.5, 45, 47.5, 50, 52.5, 55, 57.5, 60, 62.5, 65, 67.5, 70, 
-  72.5, 75, 77.5, 80, 82.5, 85, 87.5, 90, 95, 100, 105, 110, 
+  0, 1, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10,
+  11, 11.5, 12, 12.5, 13, 13.5, 14, 15, 16, 17, 17.5, 18, 19, 20, 22.5, 25, 27.5, 30, 32.5, 35, 37.5, 40,
+  42.5, 45, 47.5, 50, 52.5, 55, 57.5, 60, 62.5, 65, 67.5, 70,
+  72.5, 75, 77.5, 80, 82.5, 85, 87.5, 90, 95, 100, 105, 110,
   115, 120, 125, 130, 135, 140, 145, 150, 160, 170, 180, 190, 200
 ];
+
+function detectDualHandExercise(exercise?: WorkoutExercise | null, fullEx?: Exercise | null): boolean {
+  if (!exercise) return false;
+  const combined = [
+    exercise.exerciseName || '',
+    exercise.exerciseNameAr || '',
+    fullEx?.name || '',
+    fullEx?.nameAr || '',
+    fullEx?.equipment || '',
+    fullEx?.equipmentAr || '',
+    exercise.primaryMuscle || '',
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  const isExplicitBarbellOnly =
+    (combined.includes('barbell') || combined.includes('ez-bar') || combined.includes('بار')) &&
+    !combined.includes('dumbbell') &&
+    !combined.includes('دمبل');
+
+  if (isExplicitBarbellOnly) return false;
+
+  return (
+    combined.includes('dumbbell') ||
+    combined.includes('dumbbells') ||
+    combined.includes('db ') ||
+    combined.includes('دمبل') ||
+    combined.includes('دمبلز') ||
+    combined.includes('bicep') ||
+    combined.includes('curl') ||
+    combined.includes('بايسبس') ||
+    combined.includes('باي') ||
+    combined.includes('تبادل') ||
+    combined.includes('hammer') ||
+    combined.includes('هامر') ||
+    combined.includes('lateral raise') ||
+    combined.includes('رفرفة') ||
+    combined.includes('fly') ||
+    combined.includes('تفتيح') ||
+    combined.includes('split squat') ||
+    combined.includes('بلغاري') ||
+    combined.includes('single arm') ||
+    combined.includes('يد واحدة')
+  );
+}
 
 // Preset reps from 1 to 50
 const REPS_OPTIONS: number[] = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 
   16, 17, 18, 19, 20, 22, 24, 25, 28, 30, 35, 40, 45, 50
 ];
+
+interface PlateSpec {
+  weight: number;
+  nameEn: string;
+  nameAr: string;
+  bgClass: string;
+  borderClass: string;
+  textClass: string;
+  dotColor: string;
+  heightClass: string;
+  widthClass: string;
+}
+
+const COMPETITION_PLATES: PlateSpec[] = [
+  { weight: 25, nameEn: 'Red 25kg', nameAr: 'أحمر 25 كجم', bgClass: 'bg-rose-600', borderClass: 'border-rose-400', textClass: 'text-white', dotColor: '#e11d48', heightClass: 'h-24', widthClass: 'w-6' },
+  { weight: 20, nameEn: 'Blue 20kg', nameAr: 'أزرق 20 كجم', bgClass: 'bg-blue-600', borderClass: 'border-blue-400', textClass: 'text-white', dotColor: '#2563eb', heightClass: 'h-24', widthClass: 'w-5' },
+  { weight: 15, nameEn: 'Yellow 15kg', nameAr: 'أصفر 15 كجم', bgClass: 'bg-amber-400', borderClass: 'border-amber-300', textClass: 'text-black', dotColor: '#fbbf24', heightClass: 'h-20', widthClass: 'w-5' },
+  { weight: 10, nameEn: 'Green 10kg', nameAr: 'أخضر 10 كجم', bgClass: 'bg-emerald-600', borderClass: 'border-emerald-400', textClass: 'text-white', dotColor: '#059669', heightClass: 'h-16', widthClass: 'w-4' },
+  { weight: 5, nameEn: 'White 5kg', nameAr: 'أبيض 5 كجم', bgClass: 'bg-zinc-100', borderClass: 'border-zinc-300', textClass: 'text-zinc-950', dotColor: '#f4f4f5', heightClass: 'h-14', widthClass: 'w-4' },
+  { weight: 2.5, nameEn: 'Black 2.5kg', nameAr: 'أسود 2.5 كجم', bgClass: 'bg-zinc-800', borderClass: 'border-zinc-500', textClass: 'text-zinc-100', dotColor: '#52525b', heightClass: 'h-12', widthClass: 'w-3.5' },
+  { weight: 1.25, nameEn: 'Silver 1.25kg', nameAr: 'فضي 1.25 كجم', bgClass: 'bg-slate-400', borderClass: 'border-slate-200', textClass: 'text-slate-950', dotColor: '#94a3b8', heightClass: 'h-10', widthClass: 'w-3' },
+];
+
+function calculatePlateBreakdown(totalWeightKg: number, barWeightKg: number) {
+  if (totalWeightKg <= 0) {
+    return {
+      isBodyweight: true,
+      isBarOnly: false,
+      perSideKg: 0,
+      groupedPerSide: [] as { spec: PlateSpec; count: number }[],
+      flatPlatesPerSide: [] as PlateSpec[],
+      remainderPerSideKg: 0,
+      compactText: '',
+    };
+  }
+
+  if (totalWeightKg <= barWeightKg) {
+    return {
+      isBodyweight: false,
+      isBarOnly: true,
+      perSideKg: 0,
+      groupedPerSide: [] as { spec: PlateSpec; count: number }[],
+      flatPlatesPerSide: [] as PlateSpec[],
+      remainderPerSideKg: 0,
+      compactText: 'Bar Only',
+    };
+  }
+
+  const targetPerSide = Math.max(0, (totalWeightKg - barWeightKg) / 2);
+  let remaining = Math.round(targetPerSide * 100) / 100;
+  const groupedPerSide: { spec: PlateSpec; count: number }[] = [];
+  const flatPlatesPerSide: PlateSpec[] = [];
+
+  for (const spec of COMPETITION_PLATES) {
+    if (remaining >= spec.weight - 0.001) {
+      const count = Math.floor((remaining + 0.001) / spec.weight);
+      if (count > 0) {
+        groupedPerSide.push({ spec, count });
+        for (let i = 0; i < Math.min(count, 8); i++) {
+          flatPlatesPerSide.push(spec);
+        }
+        remaining = Math.round((remaining - count * spec.weight) * 100) / 100;
+      }
+    }
+  }
+
+  const compactText = groupedPerSide
+    .map(g => (g.count > 1 ? `${g.spec.weight}×${g.count}` : `${g.spec.weight}`))
+    .join('+');
+
+  return {
+    isBodyweight: false,
+    isBarOnly: false,
+    perSideKg: Math.round(targetPerSide * 100) / 100,
+    groupedPerSide,
+    flatPlatesPerSide,
+    remainderPerSideKg: remaining,
+    compactText,
+  };
+}
+
 
 export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   workout: initialWorkout,
@@ -99,6 +227,9 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [selectedSound, setSelectedSound] = useState<RestSoundType>(profile.restSoundType || 'beep');
   const [swapExerciseOpen, setSwapExerciseOpen] = useState<boolean>(false);
+  const [swapEquipmentFilter, setSwapEquipmentFilter] = useState<WorkoutEquipmentFilter>('all');
+  const [swapReason, setSwapReason] = useState<'congestion' | 'unavailable' | 'joint_comfort' | 'preference'>('congestion');
+  const [swapSearchQuery, setSwapSearchQuery] = useState<string>('');
   const [substitutionModalOpen, setSubstitutionModalOpen] = useState<boolean>(false);
   const [soundPickerOpen, setSoundPickerOpen] = useState<boolean>(false);
   const [showRestPresets, setShowRestPresets] = useState<boolean>(false);
@@ -108,6 +239,15 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   // RPE Calculator & Auto-Regulation State
   const [rpeCalculatorOpen, setRpeCalculatorOpen] = useState<boolean>(false);
   const [rpeCalcInitialData, setRpeCalcInitialData] = useState<{ weight?: number; reps?: number; rpe?: number } | null>(null);
+
+  // Barbell Plate Loading Visualizer State
+  const [plateVisualizerOpen, setPlateVisualizerOpen] = useState<boolean>(false);
+  const [selectedBarWeight, setSelectedBarWeight] = useState<number>(20);
+  const [inspectedPlateSetIndex, setInspectedPlateSetIndex] = useState<number>(0);
+
+  // Dual-Hand (Right + Left Dumbbell / Biceps) Weight Selection Mode State
+  const [dualWeightInputMode, setDualWeightInputMode] = useState<'per_hand' | 'total_both'>('per_hand');
+  const [dualHandOverrideMap, setDualHandOverrideMap] = useState<Record<string, boolean>>({});
 
   // Achievement Confetti & PR Celebration State
   const [activePRToast, setActivePRToast] = useState<PersonalRecordEvent | null>(null);
@@ -540,8 +680,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     setWorkout({ ...workout, exercises: updatedExercises });
   };
 
-  // Exercise substitution
-  // Smart Substitution for current exercise with logging
+  // Smart Substitution for current exercise with automatic weight calibration & logging
   const handleSubstituteExercise = (
     originalExerciseId: string,
     newExercise: Exercise,
@@ -550,22 +689,57 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     // Allow new exercise to be auto-prefilled from its own history
     autoPrefilledExerciseIds.current.delete(newExercise.id);
 
+    // Calculate appropriate starting weight & reps for the new exercise
+    const newExAdvice = PPLEngine.calculateProgression(newExercise.id, history);
+    const activeDiff = workout.difficultyLevel || 'standard';
+    const diffMultiplier = activeDiff === 'easy' ? 0.85 : activeDiff === 'hard' ? 1.075 : 1.0;
+    const defaultRepNum = activeDiff === 'easy'
+      ? 12
+      : activeDiff === 'hard'
+        ? 8
+        : (parseInt(String(newExercise.targetRepRange || '10').split('-')[0], 10) || 10);
+
     const updatedExercises = workout.exercises.map((ex, idx) => {
       if (idx !== currentExerciseIndex && ex.exerciseId !== originalExerciseId) return ex;
+
+      const rootOriginalId = ex.originalExerciseId || ex.exerciseId;
+      const rootOriginalName = ex.originalExerciseName || ex.exerciseName;
+      const rootOriginalNameAr = ex.originalExerciseNameAr || ex.exerciseNameAr || ex.exerciseName;
+
+      const calibratedSets: SetLog[] = ex.sets.map((s, sIdx) => {
+        if (s.completed) return s;
+        const setSuggestion = newExAdvice.setBySetSuggestions?.[sIdx] ||
+          (newExAdvice.setBySetSuggestions && newExAdvice.setBySetSuggestions.length > 0
+            ? newExAdvice.setBySetSuggestions[newExAdvice.setBySetSuggestions.length - 1]
+            : undefined);
+        const rawW = setSuggestion?.suggestedWeight ?? newExAdvice.recommendedWeight ?? 0;
+        const calibratedW = rawW > 0 ? Math.max(2.5, Math.round((rawW * diffMultiplier) / 2.5) * 2.5) : 0;
+        const calibratedR = setSuggestion?.lastReps ?? defaultRepNum;
+
+        return {
+          ...s,
+          targetWeight: calibratedW,
+          actualWeight: calibratedW,
+          targetReps: newExercise.targetRepRange || calibratedR,
+          actualReps: calibratedR,
+          rpe: newExercise.rpeTarget || 8,
+          completed: false,
+        };
+      });
+
       return {
         exerciseId: newExercise.id,
         exerciseName: newExercise.name,
         exerciseNameAr: newExercise.nameAr,
         primaryMuscle: newExercise.primaryMuscle,
-        targetRpe: 8,
+        targetRpe: newExercise.rpeTarget || 8,
         restSeconds: newExercise.restSeconds || 90,
-        isSubstituted: true,
-        originalExerciseId: originalExerciseId,
-        substitutionReason: reason || 'User requested exercise substitution during active workout',
-        sets: ex.sets.map(s => ({
-          ...s,
-          completed: false,
-        })),
+        isSubstituted: newExercise.id !== rootOriginalId,
+        originalExerciseId: newExercise.id !== rootOriginalId ? rootOriginalId : undefined,
+        originalExerciseName: newExercise.id !== rootOriginalId ? rootOriginalName : undefined,
+        originalExerciseNameAr: newExercise.id !== rootOriginalId ? rootOriginalNameAr : undefined,
+        substitutionReason: reason || 'Swapped for equivalent variation based on available equipment / gym congestion',
+        sets: calibratedSets,
         completed: false,
       };
     });
@@ -593,13 +767,26 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
       originalName: currentExercise.exerciseName,
       substitutedId: newExercise.id,
       substitutedName: newExercise.name,
-      reason: reason || 'Alternative equipment or preference',
-      reasonAr: reason || 'تفضيل أو توفر أجهزة بديلة',
+      reason: reason || 'Available equipment / gym congestion swap',
+      reasonAr: reason || 'تبديل حسب الأجهزة المتاحة أو ازدحام الصالة',
     });
 
     if (soundEnabled) {
       AudioService.playBeep(660, 0.1, 0.2);
     }
+  };
+
+  // Revert a swapped exercise back to its originally programmed movement
+  const handleRevertToOriginalExercise = () => {
+    if (!currentExercise?.originalExerciseId) return;
+    const origEx = PPLEngine.getExerciseById(currentExercise.originalExerciseId);
+    if (!origEx) return;
+    handleSubstituteExercise(
+      currentExercise.exerciseId,
+      origEx,
+      isAr ? 'استعادة التمرين الأصلي المبرمج' : 'Reverted to originally programmed movement'
+    );
+    setSwapExerciseOpen(false);
   };
 
   // Substitute entire workout day split (e.g. Push -> Pull or Full Body)
@@ -635,8 +822,30 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     }
   };
 
-  const handleSwapExercise = (newExercise: Exercise) => {
-    handleSubstituteExercise(currentExercise.exerciseId, newExercise, 'Quick alternative select');
+  const handleSwapExercise = (newExercise: Exercise, matchReason?: string) => {
+    const reasonTextEn =
+      swapReason === 'congestion'
+        ? `Gym congestion / machine busy (${newExercise.equipment})`
+        : swapReason === 'unavailable'
+          ? `Equipment unavailable — switched to ${newExercise.equipment}`
+          : swapReason === 'joint_comfort'
+            ? 'Joint & lower-back friendly variation'
+            : matchReason || 'Equivalent movement variation';
+
+    const reasonTextAr =
+      swapReason === 'congestion'
+        ? `ازدحام الصالة / الجهاز مشغول (التحويل إلى ${newExercise.equipmentAr || newExercise.equipment})`
+        : swapReason === 'unavailable'
+          ? `الأداة غير متوفرة — التحويل إلى ${newExercise.equipmentAr || newExercise.equipment}`
+          : swapReason === 'joint_comfort'
+            ? 'بديل مريح للمفاصل وأسفل الظهر'
+            : matchReason || 'بديل حركي مكافئ';
+
+    handleSubstituteExercise(
+      currentExercise.exerciseId,
+      newExercise,
+      isAr ? reasonTextAr : reasonTextEn
+    );
     setSwapExerciseOpen(false);
   };
 
@@ -699,9 +908,27 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     onFinishWorkout(finishedWorkout);
   };
 
-  const substitutes = fullExerciseData
-    ? PPLEngine.getAlternativeExercises(fullExerciseData.id)
-    : [];
+  // Smart ranked equivalent variations filtered by available equipment & search query
+  const smartRankedSubstitutes = useMemo(() => {
+    if (!currentExercise?.exerciseId) return [];
+    let list = PPLEngine.getSmartRankedSubstitutes(currentExercise.exerciseId, {
+      equipment: swapEquipmentFilter,
+      difficulty: workout.difficultyLevel || 'standard',
+      lowFatigueOnly: swapReason === 'joint_comfort',
+    });
+
+    if (swapSearchQuery.trim()) {
+      const q = swapSearchQuery.toLowerCase().trim();
+      list = list.filter(item =>
+        item.exercise.name.toLowerCase().includes(q) ||
+        (item.exercise.nameAr && item.exercise.nameAr.includes(q)) ||
+        item.exercise.equipment.toLowerCase().includes(q) ||
+        (item.exercise.equipmentAr && item.exercise.equipmentAr.includes(q)) ||
+        item.exercise.primaryMuscle.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [currentExercise?.exerciseId, swapEquipmentFilter, workout.difficultyLevel, swapReason, swapSearchQuery]);
 
   const comparisonData = PPLEngine.getExerciseComparison(currentExercise?.exerciseId, history);
 
@@ -1270,7 +1497,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
             </div>
           )}
 
-          {/* Exercise Selector Horizontal Pills */}
+          {/* Exercise Selector Horizontal Pills (Bilingual Arabic + English) */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
             {workout.exercises.map((ex, idx) => (
               <button
@@ -1286,9 +1513,17 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                 }`}
               >
                 <span>{idx + 1}.</span>
-                <span className="truncate max-w-[120px] sm:max-w-[160px]">
-                  {isAr && ex.exerciseNameAr ? ex.exerciseNameAr : ex.exerciseName}
+                <span className="truncate max-w-[160px] sm:max-w-[230px]">
+                  {ex.exerciseNameAr
+                    ? `${ex.exerciseNameAr} (${ex.exerciseName})`
+                    : ex.exerciseName}
                 </span>
+                {ex.isSubstituted && (
+                  <ArrowLeftRight
+                    className="h-3 w-3 opacity-80 shrink-0"
+                    title={isAr ? 'تم استبدال هذا التمرين' : 'Swapped exercise'}
+                  />
+                )}
                 {ex.completed && <Check className="h-3.5 w-3.5" />}
               </button>
             ))}
@@ -1307,40 +1542,103 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
               {/* Header info & quick action icons */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-4">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xl font-black text-foreground">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-lg sm:text-xl font-black text-foreground">
                       {isAr && currentExercise.exerciseNameAr ? currentExercise.exerciseNameAr : currentExercise.exerciseName}
                     </h3>
-                    <span className="rounded-lg bg-secondary px-2.5 py-0.5 text-xs text-muted-foreground font-semibold">
-                      {currentExercise.primaryMuscle}
+                    {currentExercise.exerciseNameAr && (
+                      <span
+                        className="rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-mono font-bold text-primary"
+                        dir="ltr"
+                      >
+                        {isAr ? currentExercise.exerciseName : currentExercise.exerciseNameAr}
+                      </span>
+                    )}
+                    <span className="text-xs text-muted-foreground font-semibold">
+                      · {isAr && fullExerciseData?.primaryMuscleAr ? fullExerciseData.primaryMuscleAr : currentExercise.primaryMuscle}
+                      {fullExerciseData?.equipment ? ` · ${isAr && fullExerciseData.equipmentAr ? fullExerciseData.equipmentAr : fullExerciseData.equipment}` : ''}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {t.workout.targetReps}: <span className="font-bold text-foreground">{fullExerciseData?.targetRepRange || '8-10'}</span> • {t.workout.rpe}: <span className="font-bold text-foreground">{currentExercise.targetRpe}</span> • {t.workout.rest}: <span className="font-bold text-foreground">{currentExercise.restSeconds}s</span>
+                    {t.workout.targetReps}: <span className="font-bold text-foreground">{fullExerciseData?.targetRepRange || '8-10'}</span> · {t.workout.rpe}: <span className="font-bold text-foreground">{currentExercise.targetRpe}</span> · {t.workout.rest}: <span className="font-bold text-foreground">{currentExercise.restSeconds}s</span>
                   </p>
                 </div>
 
                 <div className="flex items-center flex-wrap gap-2">
+                  {/* Direct YouTube Video Search using English Exercise Name */}
+                  <a
+                    id="btn-youtube-english-search"
+                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${currentExercise.exerciseName} proper form exercise tutorial`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 rounded-xl border border-red-500/40 bg-red-500/15 px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-500/25 transition-all shadow-sm"
+                    title={
+                      isAr
+                        ? `بحث فيديو التمرين على يوتيوب بالاسم الإنجليزي: ${currentExercise.exerciseName}`
+                        : `Search exercise tutorial on YouTube in English: ${currentExercise.exerciseName}`
+                    }
+                  >
+                    <Play className="h-3.5 w-3.5 fill-current text-red-400" />
+                    <span>{isAr ? `فيديو التمرين (EN)` : `Video (EN)`}</span>
+                  </a>
+
+                  {/* Instant In-Session Swap Exercise Toggle Button (Equipment / Congestion) */}
+                  <button
+                    id="btn-quick-swap-exercise"
+                    type="button"
+                    onClick={() => setSwapExerciseOpen(prev => !prev)}
+                    className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold transition-all shadow-sm ${
+                      swapExerciseOpen
+                        ? 'border-amber-500 bg-amber-500 text-black shadow-amber-500/20'
+                        : 'border-amber-500/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25'
+                    }`}
+                    title={
+                      isAr
+                        ? 'تبديل فوري للتمرين ببديل مكافئ حسب الأداة المتاحة أو ازدحام الصالة'
+                        : 'Instantly swap exercise with an equivalent variation based on available equipment or gym congestion'
+                    }
+                  >
+                    <ArrowLeftRight className="h-3.5 w-3.5" />
+                    <span>{isAr ? 'تبديل التمرين (بديل مكافئ)' : 'Swap Exercise'}</span>
+                  </button>
+
                   {/* RPE Auto-Regulation & Load Calculator Button */}
                   <button
                     id="btn-open-rpe-calculator"
                     type="button"
                     onClick={() => handleOpenRPECalculator()}
-                    className="flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-sm"
+                    className="flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-sm"
                     title={t.workout.rpeCalculatorSubtitle}
                   >
                     <Calculator className="h-3.5 w-3.5" />
                     <span>{t.workout.rpeCalculatorBtn}</span>
-                    <span className="rounded-md bg-primary/20 px-1.5 py-0.2 text-[10px] font-black text-primary">
-                      RPE {currentExercise.targetRpe || 8}
-                    </span>
+                  </button>
+
+                  {/* Barbell Plate Loading Visualizer Button */}
+                  <button
+                    id="btn-toggle-plate-visualizer"
+                    type="button"
+                    onClick={() => setPlateVisualizerOpen(prev => !prev)}
+                    className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-all shadow-sm ${
+                      plateVisualizerOpen
+                        ? 'border-cyan-400 bg-cyan-500 text-black shadow-cyan-500/20'
+                        : 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20'
+                    }`}
+                    title={
+                      isAr
+                        ? 'حاسبة ومخطط تركيب طارات البار لكل مجموعة'
+                        : 'Interactive Barbell Plate Loading Visualizer per set'
+                    }
+                  >
+                    <Dumbbell className="h-3.5 w-3.5" />
+                    <span>{isAr ? 'حساب الطارات' : 'Plate Loader'}</span>
                   </button>
 
                   {fullExerciseData && (
                     <button
                       id="btn-view-exercise-guide"
                       onClick={() => onOpenExerciseDetails(fullExerciseData)}
-                      className="flex items-center gap-1.5 rounded-xl border border-border bg-secondary/60 px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
+                      className="flex items-center gap-1.5 rounded-xl border border-border bg-secondary/60 px-3 py-2 text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
                     >
                       <Info className="h-4 w-4 text-primary" />
                       <span>{t.common.guideAndVideo}</span>
@@ -1350,14 +1648,46 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                   <button
                     id="btn-swap-exercise-toggle"
                     onClick={() => setSubstitutionModalOpen(true)}
-                    className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-sm"
-                    title={isAr ? 'استبدال التمرين ببديل ذكي لنفس العضلة أو تبديل البرنامج اليومي' : 'Substitute exercise or swap workout split'}
+                    className="flex items-center gap-1.5 rounded-xl border border-border bg-secondary/60 px-3 py-2 text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-secondary transition-all"
+                    title={isAr ? 'تخصيص شامل للجدول أو استعراض استشفاء العضلات' : 'Open full workout & split customization'}
                   >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    <span>{t.workout.substitute}</span>
+                    <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+                    <span className="hidden sm:inline">{isAr ? 'خيارات متقدمة' : 'Advanced Swap'}</span>
                   </button>
                 </div>
               </div>
+
+              {/* Active Substitution Status Banner with 1-Click Revert */}
+              {currentExercise.isSubstituted && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2 text-foreground">
+                    <ArrowLeftRight className="h-4 w-4 text-amber-400 shrink-0" />
+                    <div>
+                      <span className="font-bold text-amber-300">
+                        {isAr ? 'تم استبدال التمرين:' : 'Swapped Movement:'}{' '}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {isAr
+                          ? `كان في الأصل (${currentExercise.originalExerciseNameAr || currentExercise.originalExerciseName || 'التمرين المبرمج'})`
+                          : `Originally programmed as ${currentExercise.originalExerciseName || 'Scheduled Movement'}`}
+                        {currentExercise.substitutionReason ? ` · ${currentExercise.substitutionReason}` : ''}
+                      </span>
+                    </div>
+                  </div>
+
+                  {currentExercise.originalExerciseId && (
+                    <button
+                      id="btn-revert-original-exercise"
+                      type="button"
+                      onClick={handleRevertToOriginalExercise}
+                      className="flex items-center gap-1 rounded-lg border border-amber-500/40 bg-card/80 px-2.5 py-1 text-[11px] font-bold text-amber-300 hover:bg-amber-500/20 transition-colors"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      <span>{isAr ? 'استعادة التمرين الأصلي' : 'Revert to Original'}</span>
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* Progressive Overload & RPE Dynamic Future Session Weight Advisor Banner */}
               {progressionAdvice && (
@@ -1514,44 +1844,462 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                 onApplyPreset={handleApplyPresetSets}
               />
 
-              {/* Exercise Substitute Modal Drawer */}
+              {/* Instant In-Session Exercise Swap Drawer (Equipment Availability & Gym Congestion) */}
               <AnimatePresence>
                 {swapExerciseOpen && (
                   <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="rounded-xl border border-border bg-secondary/40 p-4 space-y-3"
+                    id="panel-instant-exercise-swap"
+                    initial={{ opacity: 0, height: 0, y: -6 }}
+                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: -6 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-card to-card p-4 space-y-4 shadow-lg"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-foreground">
-                        {isAr ? 'التمارين البديلة لنفس العضلة المستهدفة' : 'Targeted Alternative Exercises'}
-                      </span>
-                      <button
-                        onClick={() => setSwapExerciseOpen(false)}
-                        className="text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        {t.common.cancel}
-                      </button>
+                    {/* Top Row: Title + Close / Open Full Modal */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
+                          <ArrowLeftRight className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-foreground">
+                            {isAr
+                              ? 'تبديل فوري للتمرين (حسب الأداة المتاحة أو ازدحام الصالة)'
+                              : 'Instant Exercise Swap — Equivalent Variations'}
+                          </h4>
+                          <p className="text-xs text-muted-foreground">
+                            {isAr
+                              ? `اختر بديلاً مكافئاً لعضلة (${fullExerciseData?.primaryMuscleAr || currentExercise.primaryMuscle}) وسيتم ضبط الأوزان تلقائياً.`
+                              : `Select an equivalent movement targeting ${currentExercise.primaryMuscle}; weights calibrate automatically.`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSwapExerciseOpen(false);
+                            setSubstitutionModalOpen(true);
+                          }}
+                          className="rounded-lg border border-border bg-secondary/70 px-2.5 py-1.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors"
+                        >
+                          {isAr ? 'تبديل جدول اليوم بالكامل' : 'Swap Full Split'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSwapExerciseOpen(false)}
+                          className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {t.common.cancel}
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {substitutes.map(sub => (
-                        <button
-                          key={sub.id}
-                          onClick={() => handleSwapExercise(sub)}
-                          className="flex items-center justify-between rounded-lg border border-border bg-card p-2.5 text-left text-xs font-semibold text-foreground hover:border-primary transition-colors"
-                        >
-                          <div>
-                            <div className="font-bold">{isAr && sub.nameAr ? sub.nameAr : sub.name}</div>
-                            <div className="text-[10px] text-muted-foreground">{sub.equipment} • {sub.difficulty}</div>
-                          </div>
-                          <CheckCircle2 className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100" />
-                        </button>
-                      ))}
+                    {/* Controls Row: Reason Selector & Available Equipment Filter */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+                      {/* Reason for Swap (4 cols) */}
+                      <div className="lg:col-span-5 rounded-xl border border-border bg-card/70 p-2.5 space-y-1.5">
+                        <span className="text-[11px] font-bold text-muted-foreground block">
+                          {isAr ? 'سبب التبديل السريع:' : 'Why are you swapping?'}
+                        </span>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {[
+                            { id: 'congestion', labelEn: 'Machine Busy / Crowded', labelAr: 'الجهاز مشغول / ازدحام' },
+                            { id: 'unavailable', labelEn: 'Equipment Missing', labelAr: 'الأداة غير متوفرة' },
+                            { id: 'joint_comfort', labelEn: 'Joint / Back Comfort', labelAr: 'راحة المفاصل والظهر' },
+                            { id: 'preference', labelEn: 'Movement Variety', labelAr: 'تفضيل / تنويع' },
+                          ].map(r => (
+                            <button
+                              key={r.id}
+                              type="button"
+                              onClick={() => setSwapReason(r.id as any)}
+                              className={`px-2 py-1.5 rounded-lg text-[11px] font-bold border text-center transition-colors ${
+                                swapReason === r.id
+                                  ? 'bg-amber-500 text-black border-amber-500'
+                                  : 'bg-secondary/40 text-muted-foreground border-border hover:text-foreground'
+                              }`}
+                            >
+                              {isAr ? r.labelAr : r.labelEn}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Equipment Filter Bar (7 cols) */}
+                      <div className="lg:col-span-7 rounded-xl border border-border bg-card/70 p-2.5 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-muted-foreground">
+                            {isAr ? 'تصفية حسب الأداة المتاحة لك الآن:' : 'Filter by Available Equipment Right Now:'}
+                          </span>
+                          <span className="text-[10px] font-mono text-muted-foreground">
+                            {smartRankedSubstitutes.length} {isAr ? 'بدائل متاحة' : 'matches'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                          {[
+                            { id: 'all', labelEn: 'All Gear', labelAr: 'الكل' },
+                            { id: 'dumbbells', labelEn: 'Dumbbells', labelAr: 'دمبل' },
+                            { id: 'cables', labelEn: 'Cables', labelAr: 'كابلات' },
+                            { id: 'machines', labelEn: 'Machines', labelAr: 'أجهزة' },
+                            { id: 'barbell', labelEn: 'Barbell', labelAr: 'بار' },
+                            { id: 'bodyweight', labelEn: 'Bodyweight', labelAr: 'وزن الجسم' },
+                          ].map(eq => (
+                            <button
+                              key={eq.id}
+                              id={`btn-swap-filter-${eq.id}`}
+                              type="button"
+                              onClick={() => setSwapEquipmentFilter(eq.id as WorkoutEquipmentFilter)}
+                              className={`px-2 py-1.5 rounded-lg text-[11px] font-bold border text-center transition-colors ${
+                                swapEquipmentFilter === eq.id
+                                  ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                                  : 'bg-secondary/40 text-muted-foreground border-border hover:text-foreground'
+                              }`}
+                            >
+                              {isAr ? eq.labelAr : eq.labelEn}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Quick Search Input */}
+                    <div className="relative">
+                      <Search className="absolute right-3 top-2.5 h-3.5 w-3.5 text-muted-foreground rtl:right-auto rtl:left-3" />
+                      <input
+                        type="text"
+                        value={swapSearchQuery}
+                        onChange={e => setSwapSearchQuery(e.target.value)}
+                        placeholder={
+                          isAr
+                            ? 'ابحث عن التمرين البديل بالاسم أو الأداة (مثل: دمبل، كابل، جهاز)...'
+                            : 'Search alternative exercise by name or equipment (e.g., Dumbbell, Cable, Machine)...'
+                        }
+                        className="w-full rounded-xl border border-border bg-card py-2 px-9 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Ranked Equivalent Exercises Grid */}
+                    {smartRankedSubstitutes.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[320px] overflow-y-auto pr-1">
+                        {smartRankedSubstitutes.map(item => {
+                          const sub = item.exercise;
+                          const subAdvice = PPLEngine.calculateProgression(sub.id, history);
+                          return (
+                            <button
+                              key={sub.id}
+                              id={`btn-select-substitute-${sub.id}`}
+                              type="button"
+                              onClick={() => handleSwapExercise(sub, isAr ? item.reasonAr : item.reason)}
+                              className="group flex flex-col justify-between rounded-xl border border-border bg-card p-3 text-left rtl:text-right hover:border-amber-500/60 hover:bg-amber-500/5 transition-all"
+                            >
+                              <div className="space-y-1 w-full">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div>
+                                    <span className="text-xs font-black text-foreground group-hover:text-amber-400 transition-colors block">
+                                      {isAr && sub.nameAr ? sub.nameAr : sub.name}
+                                    </span>
+                                    {sub.nameAr && (
+                                      <span className="text-[10px] font-mono text-primary/90 block" dir="ltr">
+                                        {isAr ? sub.name : sub.nameAr}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] font-mono font-bold text-emerald-400 shrink-0">
+                                    {item.matchScore}% {isAr ? 'تطابق' : 'Match'}
+                                  </span>
+                                </div>
+
+                                <p className="text-[11px] text-muted-foreground line-clamp-1">
+                                  {isAr ? item.reasonAr : item.reason}
+                                </p>
+
+                                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground pt-1">
+                                  <span className="font-semibold text-foreground">
+                                    {isAr && sub.equipmentAr ? sub.equipmentAr : sub.equipment}
+                                  </span>
+                                  <span aria-hidden="true">·</span>
+                                  <span>{isAr && sub.primaryMuscleAr ? sub.primaryMuscleAr : sub.primaryMuscle}</span>
+                                  <span aria-hidden="true">·</span>
+                                  <span className="font-mono font-bold text-primary">
+                                    {subAdvice.recommendedWeight > 0
+                                      ? (isAr ? `المقترح: ${subAdvice.recommendedWeight} كجم` : `Suggested: ${subAdvice.recommendedWeight} kg`)
+                                      : (isAr ? 'وزن الجسم' : 'Bodyweight')}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="mt-2.5 pt-2 border-t border-border/50 flex items-center justify-between w-full text-[11px]">
+                                <span className="font-mono text-muted-foreground">
+                                  {sub.targetSets} sets × {sub.targetRepRange}
+                                </span>
+                                <span className="font-bold text-amber-400 flex items-center gap-1 group-hover:underline">
+                                  <span>{isAr ? 'استبدال فوراً' : 'Swap Now'}</span>
+                                  <ArrowLeftRight className="h-3 w-3" />
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-border bg-card/60 p-4 text-center space-y-2">
+                        <p className="text-xs text-muted-foreground">
+                          {isAr
+                            ? 'لا توجد تمارين مطابقة لهذا الفلتر المحدد. جرب عرض جميع الأدوات.'
+                            : 'No variations match this exact filter. Try switching to All Gear.'}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSwapEquipmentFilter('all');
+                            setSwapSearchQuery('');
+                          }}
+                          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
+                        >
+                          {isAr ? 'عرض جميع البدائل المكافئة' : 'Show All Equivalent Variations'}
+                        </button>
+                      </div>
+                    )}
                   </motion.div>
                 )}
+              </AnimatePresence>
+
+              {/* Interactive Barbell Plate Loading Visualizer Drawer */}
+              <AnimatePresence>
+                {plateVisualizerOpen && (() => {
+                  const safeSetIdx = Math.min(inspectedPlateSetIndex, Math.max(0, currentExercise.sets.length - 1));
+                  const inspectedSet = currentExercise.sets[safeSetIdx] || currentExercise.sets[0];
+                  const inspectedWeight = inspectedSet?.actualWeight || 0;
+                  const breakdown = calculatePlateBreakdown(inspectedWeight, selectedBarWeight);
+
+                  return (
+                    <motion.div
+                      id="panel-barbell-plate-visualizer"
+                      initial={{ opacity: 0, height: 0, y: -6 }}
+                      animate={{ opacity: 1, height: 'auto', y: 0 }}
+                      exit={{ opacity: 0, height: 0, y: -6 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden rounded-2xl border border-cyan-500/40 bg-gradient-to-br from-cyan-500/10 via-card to-card p-4 space-y-4 shadow-lg"
+                    >
+                      {/* Top Bar: Title + Barbell Selector + Close */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-400">
+                            <Dumbbell className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-black text-foreground">
+                              {isAr
+                                ? 'مخطط تركيب طارات البار الأولمبي لكل مجموعة'
+                                : 'Barbell Plate Loading Visualizer — IWF/IPF Spec'}
+                            </h4>
+                            <p className="text-xs text-muted-foreground">
+                              {isAr
+                                ? 'توزيع دقيق للطارات الملونة على كل جانب من البار حسب وزن المجموعة المختارة.'
+                                : 'Color-coded competition plate breakdown per side of the barbell sleeve.'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {[
+                            { kg: 20, labelEn: '20kg Olympic', labelAr: 'بار أولمبي 20 كجم' },
+                            { kg: 15, labelEn: '15kg Tech', labelAr: 'بار 15 كجم' },
+                            { kg: 10, labelEn: '10kg EZ-Bar', labelAr: 'بار زجزاج 10 كجم' },
+                            { kg: 0, labelEn: '0kg Sled/Plate', labelAr: 'جهاز / بدون بار (0)' },
+                          ].map(bar => (
+                            <button
+                              key={bar.kg}
+                              id={`btn-bar-weight-${bar.kg}`}
+                              type="button"
+                              onClick={() => setSelectedBarWeight(bar.kg)}
+                              className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold font-mono transition-colors ${
+                                selectedBarWeight === bar.kg
+                                  ? 'border-cyan-400 bg-cyan-500 text-black'
+                                  : 'border-border bg-card/80 text-muted-foreground hover:text-foreground'
+                              }`}
+                            >
+                              {isAr ? bar.labelAr : bar.labelEn}
+                            </button>
+                          ))}
+
+                          <button
+                            type="button"
+                            onClick={() => setPlateVisualizerOpen(false)}
+                            className="rounded-lg border border-border bg-card px-2 py-1 text-xs font-bold text-muted-foreground hover:text-foreground"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Set Selector Tabs + Quick Micro-Load Controls */}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {currentExercise.sets.map((s, idx) => (
+                            <button
+                              key={s.id}
+                              id={`btn-plate-inspect-set-${s.setNumber}`}
+                              type="button"
+                              onClick={() => setInspectedPlateSetIndex(idx)}
+                              className={`rounded-xl border px-3 py-1.5 text-xs font-bold font-mono tabular-nums transition-all ${
+                                safeSetIdx === idx
+                                  ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300 shadow-xs'
+                                  : 'border-border bg-secondary/50 text-muted-foreground hover:text-foreground'
+                              }`}
+                            >
+                              {isAr ? `مجموعة ${s.setNumber}` : `Set ${s.setNumber}`} · {s.actualWeight} kg
+                            </button>
+                          ))}
+                        </div>
+
+                        {inspectedSet && (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateSet(
+                                  inspectedSet.id,
+                                  'actualWeight',
+                                  Math.max(0, Math.round((inspectedWeight - 2.5) * 2) / 2)
+                                )
+                              }
+                              className="rounded-lg border border-border bg-secondary/70 px-2.5 py-1 text-xs font-mono font-bold text-foreground hover:bg-secondary"
+                            >
+                              -2.5 kg
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateSet(
+                                  inspectedSet.id,
+                                  'actualWeight',
+                                  Math.min(300, Math.round((inspectedWeight + 2.5) * 2) / 2)
+                                )
+                              }
+                              className="rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-2.5 py-1 text-xs font-mono font-bold text-cyan-300 hover:bg-cyan-500/25"
+                            >
+                              +2.5 kg
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Graphical Barbell Sleeve Diagram & Math Readout */}
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center rounded-xl border border-border bg-card/90 p-4">
+                        {/* Left 7 Cols: Visual Barbell Sleeve */}
+                        <div className="lg:col-span-7 flex items-center justify-center overflow-x-auto py-3">
+                          <div className="flex items-center min-w-[280px]" dir="ltr">
+                            {/* Inner Knurled Barbell Shaft */}
+                            <div className="h-3.5 w-16 sm:w-24 rounded-l-md bg-gradient-to-b from-zinc-300 via-zinc-500 to-zinc-700 border-y border-l border-zinc-400 flex items-center justify-center">
+                              <span className="text-[9px] font-mono font-black text-zinc-950 tracking-tighter">
+                                {selectedBarWeight}KG BAR
+                              </span>
+                            </div>
+
+                            {/* Inner Sleeve Collar Flange */}
+                            <div className="h-9 w-3 bg-gradient-to-b from-zinc-200 via-zinc-400 to-zinc-600 border border-zinc-300 rounded-xs shadow-md" />
+
+                            {/* Loaded Competition Plates (Innermost Heaviest -> Outermost Lightest) */}
+                            <div className="flex items-center gap-0.5 px-0.5">
+                              {breakdown.flatPlatesPerSide.length > 0 ? (
+                                breakdown.flatPlatesPerSide.map((plate, pIdx) => (
+                                  <motion.div
+                                    key={`${plate.weight}-${pIdx}`}
+                                    initial={{ scaleY: 0.5, opacity: 0 }}
+                                    animate={{ scaleY: 1, opacity: 1 }}
+                                    transition={{ duration: 0.15, delay: pIdx * 0.03 }}
+                                    className={`${plate.heightClass} ${plate.widthClass} ${plate.bgClass} ${plate.borderClass} ${plate.textClass} rounded-xs border flex flex-col items-center justify-center shadow-md shrink-0`}
+                                    title={isAr ? plate.nameAr : plate.nameEn}
+                                  >
+                                    <span className="text-[9px] font-mono font-black leading-none -rotate-90 whitespace-nowrap">
+                                      {plate.weight}
+                                    </span>
+                                  </motion.div>
+                                ))
+                              ) : (
+                                <div className="px-3 py-1 text-[11px] font-mono text-muted-foreground">
+                                  {breakdown.isBodyweight
+                                    ? isAr ? 'وزن الجسم (بدون طارات)' : 'Bodyweight (0 kg)'
+                                    : isAr ? 'البار فارغ بدون طارات' : 'Empty Bar Sleeve'}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Competition Lock Collar (if plates loaded) */}
+                            {breakdown.flatPlatesPerSide.length > 0 && (
+                              <div
+                                className="h-7 w-2.5 bg-gradient-to-b from-rose-500 to-rose-700 border border-rose-300 rounded-xs shadow-sm"
+                                title={isAr ? 'قفل أمان البار' : 'Competition Lock Collar'}
+                              />
+                            )}
+
+                            {/* Outer Barbell Sleeve Tip */}
+                            <div className="h-5 w-10 sm:w-14 rounded-r-sm bg-gradient-to-b from-zinc-300 via-zinc-400 to-zinc-600 border-y border-r border-zinc-400" />
+                          </div>
+                        </div>
+
+                        {/* Right 5 Cols: Per-Side Breakdown Telemetry */}
+                        <div className="lg:col-span-5 space-y-2.5 border-t lg:border-t-0 lg:border-s border-border pt-3 lg:pt-0 lg:ps-4">
+                          <div className="flex items-baseline justify-between">
+                            <span className="text-xs font-bold text-muted-foreground">
+                              {isAr ? `إجمالي وزن المجموعة ${inspectedSet?.setNumber || 1}:` : `Set ${inspectedSet?.setNumber || 1} Total Load:`}
+                            </span>
+                            <span className="text-xl font-black font-mono tabular-nums text-foreground">
+                              {inspectedWeight} kg
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs text-muted-foreground font-mono tabular-nums">
+                            <span>{isAr ? 'وزن البار:' : 'Barbell:'} {selectedBarWeight} kg</span>
+                            <span>·</span>
+                            <span className="text-cyan-400 font-bold">
+                              {isAr ? 'لكل جانب:' : 'Per Side:'} {breakdown.perSideKg} kg
+                            </span>
+                          </div>
+
+                          {breakdown.groupedPerSide.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {breakdown.groupedPerSide.map(item => (
+                                <span
+                                  key={item.spec.weight}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/70 px-2.5 py-1 text-xs font-mono font-bold text-foreground"
+                                >
+                                  <span
+                                    className="h-2.5 w-2.5 rounded-full shrink-0 border border-white/20"
+                                    style={{ backgroundColor: item.spec.dotColor }}
+                                  />
+                                  <span>
+                                    {item.count} × {item.spec.weight} kg
+                                  </span>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              {breakdown.isBodyweight
+                                ? isAr
+                                  ? 'اختر وزناً أعلى من 0 كجم لعرض تقسيم الطارات.'
+                                  : 'Select a weight above 0 kg to see plate loading.'
+                                : isAr
+                                  ? `الوزن يساوي أو أقل من وزن البار (${selectedBarWeight} كجم).`
+                                  : `Weight is at or below bar weight (${selectedBarWeight} kg).`}
+                            </p>
+                          )}
+
+                          {breakdown.remainderPerSideKg > 0 && (
+                            <p className="text-[11px] text-amber-400 font-mono">
+                              {isAr
+                                ? `* متبقي ${breakdown.remainderPerSideKg} كجم لكل جانب (يتطلب طارات مايكرو صغيرة).`
+                                : `* +${breakdown.remainderPerSideKg} kg/side micro-plates required.`}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })()}
               </AnimatePresence>
 
               {/* Sets Logging Table with Dropdown Lists for Weight & Reps */}
@@ -1808,9 +2556,173 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                   )}
                 </AnimatePresence>
 
+                {/* Smart Dual-Hand / Dumbbell / Biceps Weight Entry Guide & Mode Selector */}
+                {(() => {
+                  const autoDetectedDual = detectDualHandExercise(currentExercise, fullExerciseData);
+                  const isDualHand =
+                    dualHandOverrideMap[currentExercise.exerciseId] !== undefined
+                      ? dualHandOverrideMap[currentExercise.exerciseId]
+                      : autoDetectedDual;
+
+                  return (
+                    <div
+                      id="banner-dual-hand-weight-helper"
+                      className={`rounded-2xl border p-3.5 space-y-3 transition-all ${
+                        isDualHand
+                          ? 'border-amber-500/40 bg-gradient-to-br from-amber-500/15 via-card to-card shadow-md'
+                          : 'border-border bg-secondary/20'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                            isDualHand ? 'bg-amber-500/20 text-amber-400' : 'bg-secondary text-muted-foreground'
+                          }`}>
+                            <Dumbbell className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="text-xs sm:text-sm font-black text-foreground">
+                                {isAr
+                                  ? 'طريقة حساب واختيار الوزن (تمارين الدامبلز / البايسبس / يمين وشمال)'
+                                  : 'Dumbbell & Dual-Hand Weight Mode (Right + Left)'}
+                              </h4>
+                              <span className={`rounded-md px-2 py-0.5 text-[10px] font-black ${
+                                isDualHand
+                                  ? 'bg-amber-500 text-black'
+                                  : 'bg-secondary text-muted-foreground'
+                              }`}>
+                                {isDualHand
+                                  ? (isAr ? 'نشط: وزن يمين + شمال' : 'Active: Right + Left')
+                                  : (isAr ? 'وزن موحد (بار / جهاز)' : 'Single Load (Bar / Machine)')}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                              {isAr
+                                ? 'مثال عملي: لو بترفع 15 كجم مجموع اليدين (7.5 يمين + 7.5 شمال) أو 25 كجم (12.5 يمين + 12.5 شمال)، اختر الطريقة الأسهل لك بالأسفل وستظهر لك الحسبة كاملة تلقائياً!'
+                                : 'Example: Lifting 15 kg total (7.5 kg Right + 7.5 kg Left)? Pick either Single-Hand (7.5 kg) or Total (15 kg) mode below—both numbers are shown side-by-side!'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          id="btn-toggle-dual-hand-override"
+                          type="button"
+                          onClick={() =>
+                            setDualHandOverrideMap(prev => ({
+                              ...prev,
+                              [currentExercise.exerciseId]: !isDualHand,
+                            }))
+                          }
+                          className="rounded-xl border border-border bg-card px-2.5 py-1.5 text-[11px] font-bold text-foreground hover:bg-secondary transition-colors shrink-0"
+                        >
+                          {isDualHand
+                            ? (isAr ? 'تحويل إلى وزن موحد (بار)' : 'Switch to Single Barbell Mode')
+                            : (isAr ? 'تفعيل حساب يمين وشمال (دمبل)' : 'Enable Right + Left Dumbbell Mode')}
+                        </button>
+                      </div>
+
+                      {isDualHand && (
+                        <>
+                          {/* 2-Way Mode Toggle: Pick by Single Hand (7.5 kg) OR Pick by Total Combined (15 kg) */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <button
+                              id="btn-weight-mode-per-hand"
+                              type="button"
+                              onClick={() => setDualWeightInputMode('per_hand')}
+                              className={`flex flex-col items-start rounded-xl border p-2.5 text-start transition-all ${
+                                dualWeightInputMode === 'per_hand'
+                                  ? 'border-amber-400 bg-amber-500/20 text-foreground ring-1 ring-amber-400/50'
+                                  : 'border-border bg-card/70 text-muted-foreground hover:text-foreground'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <span className="text-xs font-black text-amber-300">
+                                  {isAr ? '✋ الطريقة 1 (الأسهل): أختار وزن اليد الواحدة' : '✋ Option 1: Select Weight Per Hand'}
+                                </span>
+                                {dualWeightInputMode === 'per_hand' && <Check className="h-3.5 w-3.5 text-amber-400" />}
+                              </div>
+                              <span className="text-[11px] text-muted-foreground mt-0.5 font-mono">
+                                {isAr
+                                  ? 'تختار (7.5 كجم لكل يد) ← يظهر بجانبها (إجمالي 15 كجم)'
+                                  : 'Pick 7.5 kg/hand → Shows (15 kg Total)'}
+                              </span>
+                            </button>
+
+                            <button
+                              id="btn-weight-mode-total-both"
+                              type="button"
+                              onClick={() => setDualWeightInputMode('total_both')}
+                              className={`flex flex-col items-start rounded-xl border p-2.5 text-start transition-all ${
+                                dualWeightInputMode === 'total_both'
+                                  ? 'border-emerald-400 bg-emerald-500/20 text-foreground ring-1 ring-emerald-400/50'
+                                  : 'border-border bg-card/70 text-muted-foreground hover:text-foreground'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <span className="text-xs font-black text-emerald-300">
+                                  {isAr ? '🙌 الطريقة 2: أختار الوزن الإجمالي لليدين معاً' : '🙌 Option 2: Select Total Combined Weight'}
+                                </span>
+                                {dualWeightInputMode === 'total_both' && <Check className="h-3.5 w-3.5 text-emerald-400" />}
+                              </div>
+                              <span className="text-[11px] text-muted-foreground mt-0.5 font-mono">
+                                {isAr
+                                  ? 'تختار (15 كجم إجمالي) ← يظهر بجانبها (7.5 يمين + 7.5 شمال)'
+                                  : 'Pick 15 kg Total → Shows (7.5 Right + 7.5 Left)'}
+                              </span>
+                            </button>
+                          </div>
+
+                          {/* 1-Tap Quick Dumbbell Presets */}
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            <span className="text-[11px] font-bold text-muted-foreground me-1">
+                              {isAr ? 'اختيار سريع لكل المجموعات:' : 'Quick Set All:'}
+                            </span>
+                            {[5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25].map(perHandKg => (
+                              <button
+                                key={perHandKg}
+                                id={`btn-quick-db-${perHandKg}`}
+                                type="button"
+                                onClick={() => {
+                                  currentExercise.sets.forEach(s => {
+                                    if (!s.completed) {
+                                      handleUpdateSet(s.id, 'actualWeight', perHandKg);
+                                    }
+                                  });
+                                }}
+                                className="rounded-lg border border-amber-500/30 bg-card/90 px-2 py-1 text-[11px] font-mono font-bold text-foreground hover:border-amber-400 hover:bg-amber-500/15 transition-colors"
+                              >
+                                {dualWeightInputMode === 'per_hand'
+                                  ? isAr
+                                    ? `${perHandKg} كجم/يد (${perHandKg * 2} إجمالي)`
+                                    : `${perHandKg}kg/hand (${perHandKg * 2}kg)`
+                                  : isAr
+                                    ? `${perHandKg * 2} كجم إجمالي (${perHandKg}+${perHandKg})`
+                                    : `${perHandKg * 2}kg Total (${perHandKg}+${perHandKg})`}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <div className="grid grid-cols-12 gap-2 text-center text-xs font-bold text-muted-foreground px-2">
                   <div className="col-span-2 text-left">{t.workout.set}</div>
-                  <div className="col-span-3">{isAr ? 'الوزن (كجم)' : 'Weight (kg)'}</div>
+                  <div className="col-span-3">
+                    {(() => {
+                      const autoDual = detectDualHandExercise(currentExercise, fullExerciseData);
+                      const isDual =
+                        dualHandOverrideMap[currentExercise.exerciseId] !== undefined
+                          ? dualHandOverrideMap[currentExercise.exerciseId]
+                          : autoDual;
+                      if (!isDual) return isAr ? 'الوزن (كجم)' : 'Weight (kg)';
+                      return dualWeightInputMode === 'per_hand'
+                        ? (isAr ? 'وزن اليد (وإجمالي اليدين)' : 'Per Hand (& Total)')
+                        : (isAr ? 'إجمالي اليدين (يمين+شمال)' : 'Total (Right+Left)');
+                    })()}
+                  </div>
                   <div className="col-span-3">{isAr ? 'التكرار' : 'Reps'}</div>
                   <div className="col-span-3">{isAr ? 'معدل الجهد (RPE)' : 'RPE (Exertion)'}</div>
                   <div className="col-span-1">{t.common.done}</div>
@@ -1822,6 +2734,11 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                       const currentRpe = typeof setLog.rpe === 'number' ? setLog.rpe : 8;
                       const currentW = typeof setLog.actualWeight === 'number' ? setLog.actualWeight : 0;
                       const rirValue = Math.max(0, Math.round((10 - currentRpe) * 10) / 10);
+                      const autoDual = detectDualHandExercise(currentExercise, fullExerciseData);
+                      const isDualHand =
+                        dualHandOverrideMap[currentExercise.exerciseId] !== undefined
+                          ? dualHandOverrideMap[currentExercise.exerciseId]
+                          : autoDual;
 
                       // Dynamic next-session weight impact for this specific set based on logged RPE
                       const nextSetDeltaKg = currentW === 0
@@ -1878,23 +2795,110 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                             )}
                           </div>
 
-                          {/* Weight Drop-Down List (Select) */}
-                          <div className="col-span-3">
+                          {/* Weight Drop-Down List (Select) + Dual-Hand Right/Left Breakdown OR Per-Set Plate Breakdown */}
+                          <div className="col-span-3 flex flex-col items-center gap-1">
                             <select
                               id={`select-weight-${setLog.id}`}
                               value={setLog.actualWeight}
                               onChange={e => handleUpdateSet(setLog.id, 'actualWeight', parseFloat(e.target.value))}
-                              className="w-full rounded-xl border border-border bg-card py-2 px-1.5 text-center text-xs sm:text-sm font-bold text-foreground focus:border-primary focus:outline-none transition-colors cursor-pointer hover:border-primary/50"
+                              className="w-full rounded-xl border border-border bg-card py-2 px-1 text-center text-[11px] sm:text-xs font-bold font-mono tabular-nums text-foreground focus:border-primary focus:outline-none transition-colors cursor-pointer hover:border-primary/50"
                             >
                               {!WEIGHT_OPTIONS.includes(setLog.actualWeight) && setLog.actualWeight > 0 && (
-                                <option value={setLog.actualWeight}>{setLog.actualWeight} kg</option>
-                              )}
-                              {WEIGHT_OPTIONS.map(w => (
-                                <option key={w} value={w}>
-                                  {w === 0 ? (isAr ? 'وزن الجسم (0)' : 'BW (0 kg)') : `${w} kg`}
+                                <option value={setLog.actualWeight}>
+                                  {isDualHand
+                                    ? dualWeightInputMode === 'per_hand'
+                                      ? isAr
+                                        ? `${setLog.actualWeight} كجم/يد (إجمالي ${setLog.actualWeight * 2})`
+                                        : `${setLog.actualWeight}kg/hand (${setLog.actualWeight * 2}kg Total)`
+                                      : isAr
+                                        ? `${setLog.actualWeight * 2} كجم إجمالي (${setLog.actualWeight} يمين + ${setLog.actualWeight} شمال)`
+                                        : `${setLog.actualWeight * 2}kg Total (${setLog.actualWeight}R + ${setLog.actualWeight}L)`
+                                    : `${setLog.actualWeight} kg`}
                                 </option>
-                              ))}
+                              )}
+                              {WEIGHT_OPTIONS.map(w => {
+                                if (w === 0) {
+                                  return (
+                                    <option key={w} value={w}>
+                                      {isAr ? 'وزن الجسم (0)' : 'BW (0 kg)'}
+                                    </option>
+                                  );
+                                }
+                                if (isDualHand) {
+                                  return (
+                                    <option key={w} value={w}>
+                                      {dualWeightInputMode === 'per_hand'
+                                        ? isAr
+                                          ? `${w} كجم/يد (إجمالي ${w * 2} كجم)`
+                                          : `${w} kg/hand (${w * 2} kg Total)`
+                                        : isAr
+                                          ? `${w * 2} كجم إجمالي (${w} يمين + ${w} شمال)`
+                                          : `${w * 2} kg Total (${w} R + ${w} L)`}
+                                    </option>
+                                  );
+                                }
+                                return (
+                                  <option key={w} value={w}>
+                                    {`${w} kg`}
+                                  </option>
+                                );
+                              })}
                             </select>
+
+                            {setLog.actualWeight > 0 && isDualHand && (
+                              <span
+                                className="flex items-center justify-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-mono font-bold text-amber-300 max-w-full truncate"
+                                title={
+                                  isAr
+                                    ? `يد يمين ${setLog.actualWeight} كجم + يد شمال ${setLog.actualWeight} كجم = إجمالي ${setLog.actualWeight * 2} كجم`
+                                    : `Right ${setLog.actualWeight} kg + Left ${setLog.actualWeight} kg = ${setLog.actualWeight * 2} kg Total`
+                                }
+                              >
+                                {isAr
+                                  ? `يمين ${setLog.actualWeight} + شمال ${setLog.actualWeight} = ${setLog.actualWeight * 2} كجم`
+                                  : `R ${setLog.actualWeight} + L ${setLog.actualWeight} = ${setLog.actualWeight * 2}kg`}
+                              </span>
+                            )}
+
+                            {setLog.actualWeight > 0 && !isDualHand && (() => {
+                              const setPlates = calculatePlateBreakdown(setLog.actualWeight, selectedBarWeight);
+                              const setIdx = currentExercise.sets.findIndex(s => s.id === setLog.id);
+                              return (
+                                <button
+                                  id={`btn-set-plate-badge-${setLog.setNumber}`}
+                                  type="button"
+                                  onClick={() => {
+                                    setInspectedPlateSetIndex(setIdx >= 0 ? setIdx : 0);
+                                    setPlateVisualizerOpen(true);
+                                  }}
+                                  className="flex items-center justify-center gap-1 rounded-md border border-border/70 bg-card/70 px-1.5 py-0.5 text-[9px] font-mono font-bold text-muted-foreground hover:border-cyan-500/50 hover:text-cyan-300 transition-colors max-w-full truncate"
+                                  title={
+                                    isAr
+                                      ? 'اضغط لعرض مخطط الطارات التفصيلي لهذه المجموعة'
+                                      : 'Click to inspect barbell plate loading for this set'
+                                  }
+                                >
+                                  {setPlates.groupedPerSide.length > 0 ? (
+                                    <>
+                                      <span className="flex items-center gap-0.5 shrink-0">
+                                        {setPlates.groupedPerSide.slice(0, 3).map(g => (
+                                          <span
+                                            key={g.spec.weight}
+                                            className="h-1.5 w-1.5 rounded-full"
+                                            style={{ backgroundColor: g.spec.dotColor }}
+                                          />
+                                        ))}
+                                      </span>
+                                      <span className="truncate">
+                                        {setPlates.compactText}/{isAr ? 'جانب' : 'side'}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span>{isAr ? 'بار فقط' : 'Bar only'}</span>
+                                  )}
+                                </button>
+                              );
+                            })()}
                           </div>
 
                           {/* Reps Drop-Down List (Select) */}
@@ -2399,12 +3403,22 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
       {/* Smart Workout & Exercise Substitution Modal */}
       <WorkoutSubstitutionModal
         isOpen={substitutionModalOpen}
-        currentExercise={currentExercise}
+        activeWorkout={workout}
         currentSession={workout}
+        currentExerciseIndex={currentExerciseIndex}
+        currentExercise={currentExercise}
         profile={profile}
         onClose={() => setSubstitutionModalOpen(false)}
+        onConfirmExerciseSwap={(newEx, reason) => {
+          handleSubstituteExercise(currentExercise.exerciseId, newEx, reason);
+          setSubstitutionModalOpen(false);
+        }}
         onSubstituteExercise={(originalId, newEx, reason) => {
           handleSubstituteExercise(originalId, newEx, reason);
+          setSubstitutionModalOpen(false);
+        }}
+        onConfirmDaySwap={(newSession) => {
+          handleSubstituteWorkout(newSession);
           setSubstitutionModalOpen(false);
         }}
         onSubstituteWorkout={(newSession, reason) => {

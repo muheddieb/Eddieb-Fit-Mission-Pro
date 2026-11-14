@@ -2,6 +2,7 @@ import { AppTheme } from '../types';
 
 export interface ThemeOption {
   id: AppTheme;
+  category: 'pro_athlete' | 'performance';
   nameEn: string;
   nameAr: string;
   sloganEn: string;
@@ -9,6 +10,7 @@ export interface ThemeOption {
   vibeEn: string;
   vibeAr: string;
   primaryColor: string;
+  primaryForeground: '#000000' | '#ffffff';
   bgPreview: string;
   cardPreview: string;
   textColor: string;
@@ -19,8 +21,92 @@ export interface ThemeOption {
 }
 
 export const THEME_OPTIONS: ThemeOption[] = [
+  // ============================================================================
+  // PRO ATHLETE SIGNATURE SERIES (4 THEMES)
+  // ============================================================================
+  {
+    id: 'olympic_arena',
+    category: 'pro_athlete',
+    nameEn: 'Olympic Arena',
+    nameAr: 'الساحة الأولمبية (Olympic Gold)',
+    sloganEn: 'Brushed championship gold over stadium obsidian and warm ivory.',
+    sloganAr: 'ذهب البطولات المصقول فوق السواد الأولمبي والعاجي الفاخر.',
+    vibeEn: 'Podium Gold & Elite Composure',
+    vibeAr: 'منصة التتويج وانضباط النخبة',
+    primaryColor: '#d4af37',
+    primaryForeground: '#000000',
+    bgPreview: '#09090b',
+    cardPreview: '#121215',
+    textColor: '#fafaf9',
+    borderPreview: '#2e2918',
+    iconName: 'Crown',
+    badge: 'PRO ATHLETE',
+    badgeAr: 'نخبة الأبطال',
+  },
+  {
+    id: 'carbon_track',
+    category: 'pro_athlete',
+    nameEn: 'Carbon Track',
+    nameAr: 'مضمار الكربون (Carbon Crimson)',
+    sloganEn: 'Matte woven carbon fiber paired with sprint-track crimson.',
+    sloganAr: 'ألياف الكربون المطفية مع القرمزي السريع لمضمار ألعاب القوى.',
+    vibeEn: 'Sprint Velocity & Explosive Power',
+    vibeAr: 'سرعة المضمار والقوة الانفجارية',
+    primaryColor: '#e11d48',
+    primaryForeground: '#ffffff',
+    bgPreview: '#0b0c0e',
+    cardPreview: '#131519',
+    textColor: '#f8fafc',
+    borderPreview: '#2d1920',
+    iconName: 'Flame',
+    badge: 'PRO TRACK',
+    badgeAr: 'سرعة الكربون',
+  },
+  {
+    id: 'tactical_hybrid',
+    category: 'pro_athlete',
+    nameEn: 'Tactical Hybrid',
+    nameAr: 'الهجين التكتيكي (Tactical Olive)',
+    sloganEn: 'Military olive, tungsten steel, and desert sand for hybrid grit.',
+    sloganAr: 'الزيتوني التكتيكي والفولاذ للياقة القتالية والتحمل الهجين.',
+    vibeEn: 'Spec-Ops Conditioning & Grit',
+    vibeAr: 'تحمل تكتيكي وصلابة بدنية',
+    primaryColor: '#84a98c',
+    primaryForeground: '#000000',
+    bgPreview: '#0b0f0c',
+    cardPreview: '#131a14',
+    textColor: '#f5f5f4',
+    borderPreview: '#253328',
+    iconName: 'Shield',
+    badge: 'HYBRID OPS',
+    badgeAr: 'قوة تكتيكية',
+  },
+  {
+    id: 'iron_chalkhouse',
+    category: 'pro_athlete',
+    nameEn: 'Iron Chalkhouse',
+    nameAr: 'مصنع الحديد (Iron & Chalk)',
+    sloganEn: 'Raw cast iron, calibrated competition plates, and gym chalk.',
+    sloganAr: 'الحديد الخام، طارات الباورلفتنج المعايرة، وطباشير الرفع الثقيل.',
+    vibeEn: 'Raw Powerlifting & Heavy Iron',
+    vibeAr: 'باورلفتنج وأوزان حديدية ثقيلة',
+    primaryColor: '#ea580c',
+    primaryForeground: '#ffffff',
+    bgPreview: '#0f0c0a',
+    cardPreview: '#1a1412',
+    textColor: '#f5f5f4',
+    borderPreview: '#38251b',
+    iconName: 'Zap',
+    badge: 'RAW IRON',
+    badgeAr: 'حديد خام',
+  },
+
+  // ============================================================================
+  // PERFORMANCE & CLASSIC SERIES (12 THEMES)
+  // ============================================================================
   {
     id: 'fitness_dark',
+    category: 'performance',
     nameEn: 'Emerald Beast',
     nameAr: 'الزمرد الرياضي (Beast)',
     sloganEn: 'High-contrast neon emerald for ruthless consistency.',
@@ -28,6 +114,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
     vibeEn: 'Beast Mode & Hypertrophy',
     vibeAr: 'وضع الوحش وتضخيم العضلات',
     primaryColor: '#10b981',
+    primaryForeground: '#000000',
     bgPreview: '#080d0a',
     cardPreview: '#0f1813',
     textColor: '#f0fdf4',
@@ -38,6 +125,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
   },
   {
     id: 'volcanic_red',
+    category: 'performance',
     nameEn: 'Volcanic PR',
     nameAr: 'اللهب البركاني (PR Flame)',
     sloganEn: 'Explosive crimson blaze for heavy lifting PRs.',
@@ -45,6 +133,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
     vibeEn: 'Max Adrenaline & Power',
     vibeAr: 'أقصى أدرينالين وقوة انفجارية',
     primaryColor: '#f43f5e',
+    primaryForeground: '#ffffff',
     bgPreview: '#0d0708',
     cardPreview: '#170d10',
     textColor: '#fff1f2',
@@ -55,6 +144,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
   },
   {
     id: 'electric_cyan',
+    category: 'performance',
     nameEn: 'Cyber Cyan',
     nameAr: 'السايبر النيون (Cyber Cyan)',
     sloganEn: 'Futuristic electric cyan for high-tech athletic precision.',
@@ -62,6 +152,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
     vibeEn: 'Cyber Stealth & Biomechanics',
     vibeAr: 'سايبر وتكنيك بيوميكانيكي',
     primaryColor: '#06b6d4',
+    primaryForeground: '#000000',
     bgPreview: '#060e14',
     cardPreview: '#0b1824',
     textColor: '#ecfeff',
@@ -72,6 +163,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
   },
   {
     id: 'cyber_lime',
+    category: 'performance',
     nameEn: 'Kinetic Lime',
     nameAr: 'الليموني الحركي (Kinetic Fuel)',
     sloganEn: 'High-voltage acid lime for explosive stamina and drive.',
@@ -79,6 +171,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
     vibeEn: 'High Kinetic Fuel',
     vibeAr: 'وقود حركي عالي الكثافة',
     primaryColor: '#84cc16',
+    primaryForeground: '#000000',
     bgPreview: '#070e06',
     cardPreview: '#0e1d0d',
     textColor: '#f7fee7',
@@ -89,6 +182,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
   },
   {
     id: 'spartan_gold',
+    category: 'performance',
     nameEn: 'Spartan Gold',
     nameAr: 'الذهب الإسبارطي (Victory Arena)',
     sloganEn: 'Lustrous trophy gold inspired by championship discipline.',
@@ -96,6 +190,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
     vibeEn: 'Championship Victory Mindset',
     vibeAr: 'عقلية البطولة والمجد',
     primaryColor: '#eab308',
+    primaryForeground: '#000000',
     bgPreview: '#0d0a06',
     cardPreview: '#19140a',
     textColor: '#fefce8',
@@ -106,6 +201,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
   },
   {
     id: 'solar_orange',
+    category: 'performance',
     nameEn: 'Solar Blaze',
     nameAr: 'التوهج الشمسي (Solar Ignite)',
     sloganEn: 'Radiant solar energy to incinerate fat & accelerate metabolism.',
@@ -113,6 +209,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
     vibeEn: 'Metabolic Fat Incineration',
     vibeAr: 'حرق واستشفاء نشط',
     primaryColor: '#f97316',
+    primaryForeground: '#000000',
     bgPreview: '#0e0805',
     cardPreview: '#1a100a',
     textColor: '#fff7ed',
@@ -123,6 +220,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
   },
   {
     id: 'royal_violet',
+    category: 'performance',
     nameEn: 'Apex Violet',
     nameAr: 'قمة التركيز (Apex Flow)',
     sloganEn: 'Deep ultraviolet void for laser-focused flow state.',
@@ -130,6 +228,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
     vibeEn: 'Deep Focus & Flow State',
     vibeAr: 'تركيز عميق وصفاء ذهني',
     primaryColor: '#a855f7',
+    primaryForeground: '#ffffff',
     bgPreview: '#090611',
     cardPreview: '#140d24',
     textColor: '#faf5ff',
@@ -140,6 +239,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
   },
   {
     id: 'arctic_frost',
+    category: 'performance',
     nameEn: 'Arctic Frost',
     nameAr: 'الجليد التيتانيومي (Titanium Ice)',
     sloganEn: 'Glacial ice & titanium for cool composure and relentless reps.',
@@ -147,6 +247,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
     vibeEn: 'Stoic Discipline & Recovery',
     vibeAr: 'هدوء وانضباط ستويكي',
     primaryColor: '#38bdf8',
+    primaryForeground: '#000000',
     bgPreview: '#060b11',
     cardPreview: '#0c1622',
     textColor: '#f0f9ff',
@@ -157,6 +258,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
   },
   {
     id: 'warm_amber',
+    category: 'performance',
     nameEn: 'Warm Amber',
     nameAr: 'الجمر الدافئ (Core Fire)',
     sloganEn: 'Warm embers and mahogany for grounded intensity.',
@@ -164,6 +266,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
     vibeEn: 'Core Fire & Grounded Grit',
     vibeAr: 'قوة أساسية راسخة',
     primaryColor: '#f59e0b',
+    primaryForeground: '#000000',
     bgPreview: '#14100c',
     cardPreview: '#201a14',
     textColor: '#faf5f0',
@@ -174,6 +277,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
   },
   {
     id: 'elegant_dark',
+    category: 'performance',
     nameEn: 'Obsidian Indigo',
     nameAr: 'السواد الأنيق (Obsidian Indigo)',
     sloganEn: 'Sleek luxury dark mode with refined indigo accents.',
@@ -181,6 +285,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
     vibeEn: 'Luxury Stealth & Modern UI',
     vibeAr: 'أناقة وفخامة حديثة',
     primaryColor: '#6366f1',
+    primaryForeground: '#ffffff',
     bgPreview: '#0a0a0c',
     cardPreview: '#111115',
     textColor: '#e0e0e0',
@@ -191,6 +296,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
   },
   {
     id: 'dark',
+    category: 'performance',
     nameEn: 'Midnight Stealth',
     nameAr: 'منتصف الليل (Pure Carbon)',
     sloganEn: 'Minimalist stealth dark mode for nighttime training.',
@@ -198,6 +304,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
     vibeEn: 'Minimal Carbon Stealth',
     vibeAr: 'كربون نقي هادئ',
     primaryColor: '#6366f1',
+    primaryForeground: '#ffffff',
     bgPreview: '#0b0f17',
     cardPreview: '#111827',
     textColor: '#f3f4f6',
@@ -208,6 +315,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
   },
   {
     id: 'light',
+    category: 'performance',
     nameEn: 'Clean Light',
     nameAr: 'الضوء النقي (Daylight Focus)',
     sloganEn: 'High clarity daytime theme with crisp emerald contrast.',
@@ -215,6 +323,7 @@ export const THEME_OPTIONS: ThemeOption[] = [
     vibeEn: 'Daylight Clarity & Energy',
     vibeAr: 'وضوح وطاقة نهارية',
     primaryColor: '#059669',
+    primaryForeground: '#ffffff',
     bgPreview: '#f8fafc',
     cardPreview: '#ffffff',
     textColor: '#0f172a',

@@ -5,6 +5,10 @@ export type TrainingLocation = 'gym' | 'home' | 'both';
 export type FitnessLevel = 'beginner' | 'intermediate' | 'advanced';
 
 export type AppTheme = 
+  | 'olympic_arena'
+  | 'carbon_track'
+  | 'tactical_hybrid'
+  | 'iron_chalkhouse'
   | 'fitness_dark' 
   | 'volcanic_red' 
   | 'electric_cyan' 
@@ -159,7 +163,7 @@ export interface WorkoutSubstitutionRecord {
 
 export type WorkoutDifficultyLevel = 'easy' | 'standard' | 'hard';
 export type WorkoutTimeConstraint = '10min' | '20min' | '30min' | 'full';
-export type WorkoutEquipmentFilter = 'all' | 'gym' | 'home' | 'dumbbells' | 'bodyweight' | 'cables' | 'machines';
+export type WorkoutEquipmentFilter = 'all' | 'gym' | 'home' | 'dumbbells' | 'barbell' | 'bodyweight' | 'cables' | 'machines';
 
 export interface WorkoutSession {
   id: string;

@@ -41,11 +41,15 @@ interface WorkoutSubstitutionModalProps {
   isOpen: boolean;
   onClose: () => void;
   profile: UserProfile;
-  activeWorkout: WorkoutSession | null;
+  activeWorkout?: WorkoutSession | null;
+  currentSession?: WorkoutSession | null;
   currentExerciseIndex?: number;
+  currentExercise?: WorkoutExercise;
   mode?: 'day_swap' | 'exercise_swap' | 'adaptive_tune';
   onConfirmDaySwap?: (newSession: WorkoutSession) => void;
+  onSubstituteWorkout?: (newSession: WorkoutSession, reason?: string) => void;
   onConfirmExerciseSwap?: (newExercise: Exercise, reason?: string) => void;
+  onSubstituteExercise?: (originalExerciseId: string, newExercise: Exercise, reason?: string) => void;
 }
 
 export const WorkoutSubstitutionModal: React.FC<WorkoutSubstitutionModalProps> = ({
@@ -53,41 +57,61 @@ export const WorkoutSubstitutionModal: React.FC<WorkoutSubstitutionModalProps> =
   onClose,
   profile,
   activeWorkout,
+  currentSession,
   currentExerciseIndex = 0,
+  currentExercise: propCurrentExercise,
   mode = 'exercise_swap',
   onConfirmDaySwap,
+  onSubstituteWorkout,
   onConfirmExerciseSwap,
+  onSubstituteExercise,
 }) => {
   const isAr = profile?.language === 'ar';
+  const session = activeWorkout || currentSession || null;
   const history = useMemo(() => StorageService.getWorkoutHistory(), []);
 
   const [activeMode, setActiveMode] = useState<'day_swap' | 'exercise_swap' | 'adaptive_tune'>(
     mode === 'adaptive_tune' ? 'adaptive_tune' : mode
   );
-  
+
+  // Track which exercise index in the session is being swapped
+  const resolvedInitialIndex = useMemo(() => {
+    if (propCurrentExercise && session?.exercises) {
+      const idx = session.exercises.findIndex(e => e.exerciseId === propCurrentExercise.exerciseId);
+      if (idx >= 0) return idx;
+    }
+    return currentExerciseIndex;
+  }, [propCurrentExercise, session, currentExerciseIndex]);
+
+  const [targetExerciseIndex, setTargetExerciseIndex] = useState<number>(resolvedInitialIndex);
+
+  React.useEffect(() => {
+    setTargetExerciseIndex(resolvedInitialIndex);
+  }, [resolvedInitialIndex, isOpen]);
+
   // Adaptive Parameters
   const [selectedDifficulty, setSelectedDifficulty] = useState<WorkoutDifficultyLevel>(
-    activeWorkout?.difficultyLevel || 'standard'
+    session?.difficultyLevel || 'standard'
   );
   const [selectedTimeConstraint, setSelectedTimeConstraint] = useState<WorkoutTimeConstraint>(
-    activeWorkout?.timeConstraint || 'full'
+    session?.timeConstraint || 'full'
   );
   const [selectedEquipment, setSelectedEquipment] = useState<WorkoutEquipmentFilter>(
-    activeWorkout?.equipmentFocus || (profile?.preferredLocation === 'home' ? 'home' : 'all')
+    session?.equipmentFocus || (profile?.preferredLocation === 'home' ? 'home' : 'all')
   );
 
   // Exercise Swap State
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedMuscle, setSelectedMuscle] = useState<string>('all');
   const [lowFatigueOnly, setLowFatigueOnly] = useState<boolean>(false);
-  const [selectedReason, setSelectedReason] = useState<string>('fatigue');
-  const [customReasonText, setCustomReasonText] = useState<string>('');
+  const [selectedReason, setSelectedReason] = useState<string>('congestion');
+  const [customReasonText] = useState<string>('');
 
   // Day Swap State
-  const [selectedSplitId, setSelectedSplitId] = useState<string>(activeWorkout?.type || 'push');
-  const [daySwapReason, setDaySwapReason] = useState<string>('muscle_fatigue');
+  const [selectedSplitId, setSelectedSplitId] = useState<string>(session?.type || 'push');
+  const [daySwapReason] = useState<string>('muscle_fatigue');
 
-  const currentExercise = activeWorkout?.exercises?.[currentExerciseIndex];
+  const currentExercise = session?.exercises?.[targetExerciseIndex] || propCurrentExercise;
   const fullCurrentExercise = currentExercise 
     ? PPLEngine.getExerciseById(currentExercise.exerciseId) 
     : undefined;
@@ -112,7 +136,8 @@ export const WorkoutSubstitutionModal: React.FC<WorkoutSubstitutionModalProps> =
         item.exercise.name.toLowerCase().includes(q) || 
         (item.exercise.nameAr && item.exercise.nameAr.includes(q)) ||
         item.exercise.primaryMuscle.toLowerCase().includes(q) ||
-        (item.exercise.primaryMuscleAr && item.exercise.primaryMuscleAr.includes(q))
+        (item.exercise.primaryMuscleAr && item.exercise.primaryMuscleAr.includes(q)) ||
+        item.exercise.equipment.toLowerCase().includes(q)
       );
     }
 
@@ -122,31 +147,42 @@ export const WorkoutSubstitutionModal: React.FC<WorkoutSubstitutionModalProps> =
   if (!isOpen) return null;
 
   const handleApplyExerciseSwap = (substituteExercise: Exercise, matchReason?: string) => {
-    const reasonLabelEn = selectedReason === 'fatigue' ? 'Target muscle soreness / joint fatigue' :
-                          selectedReason === 'equipment' ? 'Equipment unavailable / gym crowded' :
-                          selectedReason === 'variety' ? 'Exercise variation & novelty' : customReasonText || matchReason || 'Custom substitution';
-    const reasonLabelAr = selectedReason === 'fatigue' ? 'إجهاد عضلي أو حماية المفاصل' :
-                          selectedReason === 'equipment' ? 'الجهاز غير متوفر في الصالة' :
-                          selectedReason === 'variety' ? 'تنويع الحوافز العضلية' : customReasonText || matchReason || 'تبديل مخصص';
+    const reasonLabelEn =
+      selectedReason === 'congestion' ? 'Gym congestion / machine occupied' :
+      selectedReason === 'equipment' ? 'Equipment unavailable' :
+      selectedReason === 'fatigue' ? 'Target muscle soreness / joint comfort' :
+      selectedReason === 'variety' ? 'Exercise variation & stimulus novelty' :
+      customReasonText || matchReason || 'Custom substitution';
 
-    // Record substitution in storage
-    StorageService.addWorkoutSubstitution({
-      id: 'sub_ex_' + Date.now(),
-      timestamp: Date.now(),
-      date: new Date().toISOString().split('T')[0],
-      type: 'exercise_swap',
-      originalItem: fullCurrentExercise?.name || currentExercise?.exerciseName || 'Original Exercise',
-      originalItemAr: fullCurrentExercise?.nameAr || currentExercise?.exerciseNameAr || 'التمرين الأصلي',
-      newItem: substituteExercise.name,
-      newItemAr: substituteExercise.nameAr,
-      reason: reasonLabelEn,
-      reasonAr: reasonLabelAr,
-      targetMuscleGroup: substituteExercise.primaryMuscle,
-      fatigueLevelReported: lowFatigueOnly ? 'Low fatigue preference' : selectedDifficulty,
-    });
+    const reasonLabelAr =
+      selectedReason === 'congestion' ? 'ازدحام الصالة / الجهاز مشغول حالياً' :
+      selectedReason === 'equipment' ? 'الأداة غير متوفرة حالياً' :
+      selectedReason === 'fatigue' ? 'إجهاد عضلي أو حماية المفاصل وأسفل الظهر' :
+      selectedReason === 'variety' ? 'تنويع الزوايا والحوافز العضلية' :
+      customReasonText || matchReason || 'تبديل مخصص';
 
-    if (onConfirmExerciseSwap) {
-      onConfirmExerciseSwap(substituteExercise, isAr ? reasonLabelAr : reasonLabelEn);
+    const finalReason = isAr ? reasonLabelAr : reasonLabelEn;
+    const origId = currentExercise?.exerciseId || fullCurrentExercise?.id || '';
+
+    if (onSubstituteExercise && origId) {
+      onSubstituteExercise(origId, substituteExercise, finalReason);
+    } else if (onConfirmExerciseSwap) {
+      // Record substitution in storage if parent doesn't handle it via onSubstituteExercise
+      StorageService.addWorkoutSubstitution({
+        id: 'sub_ex_' + Date.now(),
+        timestamp: Date.now(),
+        date: new Date().toISOString().split('T')[0],
+        type: 'exercise_swap',
+        originalItem: fullCurrentExercise?.name || currentExercise?.exerciseName || 'Original Exercise',
+        originalItemAr: fullCurrentExercise?.nameAr || currentExercise?.exerciseNameAr || 'التمرين الأصلي',
+        newItem: substituteExercise.name,
+        newItemAr: substituteExercise.nameAr,
+        reason: reasonLabelEn,
+        reasonAr: reasonLabelAr,
+        targetMuscleGroup: substituteExercise.primaryMuscle,
+        fatigueLevelReported: lowFatigueOnly ? 'Low fatigue preference' : selectedDifficulty,
+      });
+      onConfirmExerciseSwap(substituteExercise, finalReason);
     }
     onClose();
   };
@@ -166,9 +202,9 @@ export const WorkoutSubstitutionModal: React.FC<WorkoutSubstitutionModalProps> =
       timeConstraint: selectedTimeConstraint,
       equipment: selectedEquipment,
       location: selectedEquipment === 'home' ? 'home' : profile.preferredLocation,
-      originalType: activeWorkout?.type || 'push',
-      originalName: activeWorkout?.name || 'Scheduled Workout',
-      originalNameAr: activeWorkout?.nameAr || 'التمرينة المجدولة',
+      originalType: session?.type || 'push',
+      originalName: session?.name || 'Scheduled Workout',
+      originalNameAr: session?.nameAr || 'التمرينة المجدولة',
       reason: reasonLabelEn,
       reasonAr: reasonLabelAr,
     });
@@ -178,8 +214,8 @@ export const WorkoutSubstitutionModal: React.FC<WorkoutSubstitutionModalProps> =
       timestamp: Date.now(),
       date: new Date().toISOString().split('T')[0],
       type: 'day_swap',
-      originalItem: activeWorkout?.name || 'Scheduled Split',
-      originalItemAr: activeWorkout?.nameAr || 'جدول اليوم المجدول',
+      originalItem: session?.name || 'Scheduled Split',
+      originalItemAr: session?.nameAr || 'جدول اليوم المجدول',
       newItem: newSession.name,
       newItemAr: newSession.nameAr,
       reason: reasonLabelEn,
@@ -187,7 +223,9 @@ export const WorkoutSubstitutionModal: React.FC<WorkoutSubstitutionModalProps> =
       targetMuscleGroup: selectedSplitId,
     });
 
-    if (onConfirmDaySwap) {
+    if (onSubstituteWorkout) {
+      onSubstituteWorkout(newSession, isAr ? reasonLabelAr : reasonLabelEn);
+    } else if (onConfirmDaySwap) {
       onConfirmDaySwap(newSession);
     }
     onClose();
@@ -473,25 +511,51 @@ export const WorkoutSubstitutionModal: React.FC<WorkoutSubstitutionModalProps> =
           {/* ========================================================================= */}
           {activeMode === 'exercise_swap' && (
             <div className="space-y-4">
+              {/* Session Exercise Selector (Switch which exercise in the workout to swap) */}
+              {session?.exercises && session.exercises.length > 1 && (
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-bold text-muted-foreground block">
+                    {isAr ? 'اختر التمرين المراد استبداله من جلسة اليوم:' : 'Select Movement in Session to Swap:'}
+                  </span>
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 custom-scrollbar">
+                    {session.exercises.map((ex, idx) => (
+                      <button
+                        key={ex.exerciseId + idx}
+                        type="button"
+                        onClick={() => setTargetExerciseIndex(idx)}
+                        className={`shrink-0 flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold border transition-all ${
+                          idx === targetExerciseIndex
+                            ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                            : 'bg-card text-muted-foreground border-border hover:text-foreground hover:bg-secondary'
+                        }`}
+                      >
+                        <span>{idx + 1}.</span>
+                        <span className="truncate max-w-[140px]">
+                          {isAr && ex.exerciseNameAr ? ex.exerciseNameAr : ex.exerciseName}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Current Exercise Being Substituted Banner */}
               {fullCurrentExercise && (
                 <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-[11px] font-bold text-amber-400">
-                      <AlertCircle className="h-3.5 w-3.5" />
-                      <span>{isAr ? 'التمرين الحالي المراد تبديله:' : 'Currently Selected Exercise to Replace:'}</span>
+                      <ArrowLeftRight className="h-3.5 w-3.5" />
+                      <span>{isAr ? 'التمرين المبرمج المراد استبداله:' : 'Programmed Movement to Replace:'}</span>
                     </div>
                     <div className="text-sm font-black text-foreground">
                       {isAr && fullCurrentExercise.nameAr ? fullCurrentExercise.nameAr : fullCurrentExercise.name}
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-                      <span className="bg-muted px-2 py-0.5 rounded font-medium">
-                        {isAr && fullCurrentExercise.primaryMuscleAr ? fullCurrentExercise.primaryMuscleAr : fullCurrentExercise.primaryMuscle}
-                      </span>
-                      <span className="bg-muted px-2 py-0.5 rounded font-medium">
-                        {isAr && fullCurrentExercise.equipmentAr ? fullCurrentExercise.equipmentAr : fullCurrentExercise.equipment}
-                      </span>
-                      <span className="font-mono text-primary">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>{isAr && fullCurrentExercise.primaryMuscleAr ? fullCurrentExercise.primaryMuscleAr : fullCurrentExercise.primaryMuscle}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{isAr && fullCurrentExercise.equipmentAr ? fullCurrentExercise.equipmentAr : fullCurrentExercise.equipment}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="font-mono text-primary font-semibold">
                         {fullCurrentExercise.targetSets} sets × {fullCurrentExercise.targetRepRange}
                       </span>
                     </div>
@@ -507,48 +571,108 @@ export const WorkoutSubstitutionModal: React.FC<WorkoutSubstitutionModalProps> =
                     }`}
                   >
                     <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                    <span>{isAr ? 'كوابل وأجهزة فقط (حماية المفاصل)' : 'Joint-Friendly (Cables/Machines)'}</span>
+                    <span>{isAr ? 'حماية المفاصل وأسفل الظهر' : 'Joint-Friendly Focus'}</span>
                   </button>
                 </div>
               )}
 
-              {/* Filters & Search */}
-              <div className="space-y-2.5">
-                <div className="relative">
-                  <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground rtl:right-auto rtl:left-3" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={isAr ? 'بحث عن بديل ذكي بالاسم أو العضلة...' : 'Search smart substitute by name or muscle...'}
-                    className="w-full rounded-xl border border-border bg-card py-2 px-9 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
+              {/* Swap Reason Selector (Congestion, Unavailable Equipment, Joint Comfort, Variety) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="rounded-xl border border-border bg-card/70 p-3 space-y-2">
+                  <span className="text-[11px] font-bold text-foreground block">
+                    {isAr ? 'سبب تبديل التمرين:' : 'Reason for Swap:'}
+                  </span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { id: 'congestion', labelEn: 'Machine Busy / Crowded', labelAr: 'ازدحام / الجهاز مشغول' },
+                      { id: 'equipment', labelEn: 'Equipment Missing', labelAr: 'الأداة غير متوفرة' },
+                      { id: 'fatigue', labelEn: 'Joint / Back Comfort', labelAr: 'راحة المفاصل والظهر' },
+                      { id: 'variety', labelEn: 'Movement Variety', labelAr: 'تنويع الزوايا' },
+                    ].map(r => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setSelectedReason(r.id)}
+                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border text-center transition-colors ${
+                          selectedReason === r.id
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-secondary/50 text-muted-foreground border-border hover:text-foreground'
+                        }`}
+                      >
+                        {isAr ? r.labelAr : r.labelEn}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Available Equipment Filter Bar */}
+                <div className="rounded-xl border border-border bg-card/70 p-3 space-y-2">
+                  <span className="text-[11px] font-bold text-foreground block">
+                    {isAr ? 'الأداة المتاحة لك الآن:' : 'Filter by Available Equipment:'}
+                  </span>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[
+                      { id: 'all', labelEn: 'All Gear', labelAr: 'الكل' },
+                      { id: 'dumbbells', labelEn: 'Dumbbells', labelAr: 'دمبل' },
+                      { id: 'cables', labelEn: 'Cables', labelAr: 'كابلات' },
+                      { id: 'machines', labelEn: 'Machines', labelAr: 'أجهزة' },
+                      { id: 'barbell', labelEn: 'Barbell', labelAr: 'بار' },
+                      { id: 'bodyweight', labelEn: 'Bodyweight', labelAr: 'وزن الجسم' },
+                    ].map(eq => (
+                      <button
+                        key={eq.id}
+                        type="button"
+                        onClick={() => setSelectedEquipment(eq.id as WorkoutEquipmentFilter)}
+                        className={`px-2 py-1.5 rounded-lg text-[11px] font-bold border text-center transition-colors ${
+                          selectedEquipment === eq.id
+                            ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50'
+                            : 'bg-secondary/50 text-muted-foreground border-border hover:text-foreground'
+                        }`}
+                      >
+                        {isAr ? eq.labelAr : eq.labelEn}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Search Input */}
+              <div className="relative">
+                <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground rtl:right-auto rtl:left-3" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={isAr ? 'بحث عن تمرين بديل بالاسم أو العضلة أو الأداة...' : 'Search equivalent variation by name, muscle, or equipment...'}
+                  className="w-full rounded-xl border border-border bg-card py-2 px-9 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
               </div>
 
               {/* Ranked Alternatives List */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{isAr ? 'البدائل المتطابقة والمرتبة ميكانيكياً:' : 'Top Biomechanically Ranked Substitutes:'}</span>
-                  <span>{rankedSubstitutes.length} {isAr ? 'بدائل ذكية' : 'Smart Substitutes'}</span>
+                  <span>{isAr ? 'البدائل المكافئة والمرتبة ميكانيكياً:' : 'Biomechanically Equivalent Variations:'}</span>
+                  <span>{rankedSubstitutes.length} {isAr ? 'تمارين مكافئة' : 'Equivalent Options'}</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-1">
                   {rankedSubstitutes.map(item => {
                     const ex = item.exercise;
+                    const subAdvice = PPLEngine.calculateProgression(ex.id, history);
                     return (
-                      <div
+                      <button
                         key={ex.id}
+                        type="button"
                         onClick={() => handleApplyExerciseSwap(ex, isAr ? item.reasonAr : item.reason)}
-                        className="group cursor-pointer rounded-2xl border border-border bg-card p-3.5 hover:border-primary hover:bg-primary/5 transition-all flex flex-col justify-between"
+                        className="group text-left rtl:text-right cursor-pointer rounded-2xl border border-border bg-card p-3.5 hover:border-primary hover:bg-primary/5 transition-all flex flex-col justify-between"
                       >
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between">
+                        <div className="space-y-1.5 w-full">
+                          <div className="flex items-center justify-between gap-2">
                             <span className="text-xs font-black text-foreground group-hover:text-primary transition-colors">
                               {isAr && ex.nameAr ? ex.nameAr : ex.name}
                             </span>
-                            <span className="rounded-full bg-primary/15 text-primary text-[10px] font-bold px-2 py-0.5 border border-primary/20">
-                              {item.matchScore}% Match
+                            <span className="text-[11px] font-mono font-bold text-emerald-400 shrink-0">
+                              {item.matchScore}% {isAr ? 'تطابق' : 'Match'}
                             </span>
                           </div>
 
@@ -556,23 +680,31 @@ export const WorkoutSubstitutionModal: React.FC<WorkoutSubstitutionModalProps> =
                             {isAr ? item.reasonAr : item.reason}
                           </div>
 
-                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground pt-1">
-                            <span className="bg-secondary px-2 py-0.5 rounded">
+                          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground pt-1">
+                            <span className="text-foreground font-semibold">
                               {isAr && ex.primaryMuscleAr ? ex.primaryMuscleAr : ex.primaryMuscle}
                             </span>
-                            <span className="bg-secondary px-2 py-0.5 rounded">
-                              {ex.equipment}
+                            <span aria-hidden="true">·</span>
+                            <span>{isAr && ex.equipmentAr ? ex.equipmentAr : ex.equipment}</span>
+                            <span aria-hidden="true">·</span>
+                            <span className="font-mono text-primary font-bold">
+                              {subAdvice.recommendedWeight > 0
+                                ? (isAr ? `الوزن المقترح: ${subAdvice.recommendedWeight} كجم` : `Suggested: ${subAdvice.recommendedWeight} kg`)
+                                : (isAr ? 'وزن الجسم' : 'Bodyweight')}
                             </span>
                           </div>
                         </div>
 
-                        <div className="mt-3 flex items-center justify-end">
+                        <div className="mt-3 flex items-center justify-between w-full border-t border-border/50 pt-2">
+                          <span className="text-[10px] font-mono text-muted-foreground">
+                            {ex.targetSets} sets × {ex.targetRepRange}
+                          </span>
                           <span className="text-[11px] font-bold text-primary flex items-center gap-1 group-hover:underline">
-                            <span>{isAr ? 'اختيار هذا البديل' : 'Select Exercise'}</span>
-                            <ChevronRight className="h-3 w-3" />
+                            <span>{isAr ? 'استبدال فوراً' : 'Swap Exercise'}</span>
+                            <ChevronRight className="h-3 w-3 rtl:rotate-180" />
                           </span>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>

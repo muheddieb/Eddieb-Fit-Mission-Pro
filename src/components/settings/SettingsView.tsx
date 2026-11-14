@@ -53,6 +53,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [confirmReset, setConfirmReset] = useState<boolean>(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [pwaState, setPwaState] = useState<PWAState>(PWAService.getState());
+  const [themeCategoryFilter, setThemeCategoryFilter] = useState<'all' | 'pro_athlete' | 'performance'>('all');
 
   useEffect(() => {
     const unsub = PWAService.subscribe((state) => setPwaState(state));
@@ -144,18 +145,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* Motivational Theme Studio & Gallery */}
+      {/* Motivational & Pro Athlete Theme Studio */}
       <div className="rounded-2xl border border-border bg-card p-6 shadow-md space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border pb-4">
           <div className="flex items-center gap-2.5">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 text-primary">
               <Palette className="h-5 w-5" />
             </div>
             <div>
               <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                <span>{isAr ? 'استوديو السمات والألوان التحفيزية' : 'Motivational Theme & Color Studio'}</span>
-                <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-extrabold text-primary uppercase tracking-wider">
-                  12 Themes
+                <span>{isAr ? 'استوديو سمات الأبطال والألوان الرياضية' : 'Pro Athlete & Motivational Theme Studio'}</span>
+                <span className="text-xs font-mono font-normal text-muted-foreground">
+                  · {THEME_OPTIONS.length} {isAr ? 'سمة' : 'Themes'}
                 </span>
               </h3>
               <p className="text-xs text-muted-foreground">
@@ -164,7 +165,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
 
-          {/* Active Theme Badge */}
+          {/* Active Theme Status */}
           <div className="flex items-center gap-2 rounded-xl border border-border bg-secondary/60 px-3 py-1.5 self-start sm:self-auto">
             <span className="text-[11px] text-muted-foreground">{isAr ? 'السمة النشطة:' : 'Active:'}</span>
             <span className="text-xs font-extrabold text-primary">
@@ -173,9 +174,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
 
-        {/* Motivational Theme Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
-          {THEME_OPTIONS.map((themeOpt) => {
+        {/* Category Filter Segmented Control */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="inline-flex rounded-xl border border-border bg-secondary/50 p-1 gap-1">
+            {[
+              { id: 'all', labelEn: `All Themes (${THEME_OPTIONS.length})`, labelAr: `كل السمات (${THEME_OPTIONS.length})` },
+              { id: 'pro_athlete', labelEn: 'Pro Athlete Series (4)', labelAr: 'سلسلة نخبة الأبطال (4)' },
+              { id: 'performance', labelEn: 'Performance Classics (12)', labelAr: 'كلاسيكيات الأداء (12)' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setThemeCategoryFilter(tab.id as any)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors whitespace-nowrap ${
+                  themeCategoryFilter === tab.id
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {isAr ? tab.labelAr : tab.labelEn}
+              </button>
+            ))}
+          </div>
+
+          <span className="text-xs text-muted-foreground">
+            {isAr
+              ? 'مصممة بتوزيع لوني احترافي 60-30-10 لراحة العين وتباين عالي أثناء التدريب'
+              : 'Engineered with 60-30-10 athletic contrast for zero eye strain under gym lighting'}
+          </span>
+        </div>
+
+        {/* Theme Studio Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-1">
+          {THEME_OPTIONS.filter(th => themeCategoryFilter === 'all' || th.category === themeCategoryFilter).map((themeOpt) => {
             const isSelected = profile.theme === themeOpt.id;
             return (
               <button
@@ -189,33 +220,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     : 'border-border bg-card hover:border-primary/50 hover:bg-secondary/40'
                 }`}
               >
-                {/* Top: Name & Tag */}
+                {/* Top: Name & Category Text */}
                 <div className="flex items-start justify-between gap-2 mb-2.5 w-full">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <div 
                       className="h-4 w-4 rounded-full shadow-sm shrink-0 border border-white/20"
                       style={{ backgroundColor: themeOpt.primaryColor }}
                     />
-                    <div>
-                      <h4 className="text-xs font-black text-foreground group-hover:text-primary transition-colors">
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-black text-foreground group-hover:text-primary transition-colors truncate">
                         {isAr ? themeOpt.nameAr : themeOpt.nameEn}
                       </h4>
-                      <p className="text-[10px] text-muted-foreground font-medium">
-                        {isAr ? themeOpt.vibeAr : themeOpt.vibeEn}
+                      <p className="text-[10px] text-muted-foreground font-medium truncate">
+                        {isAr ? themeOpt.vibeAr : themeOpt.vibeEn} · {isAr ? themeOpt.badgeAr : themeOpt.badge}
                       </p>
                     </div>
                   </div>
-
-                  <span 
-                    className="rounded-full px-2 py-0.5 text-[9px] font-extrabold tracking-wider shrink-0"
-                    style={{
-                      backgroundColor: `${themeOpt.primaryColor}20`,
-                      color: themeOpt.primaryColor,
-                      border: `1px solid ${themeOpt.primaryColor}40`
-                    }}
-                  >
-                    {isAr ? themeOpt.badgeAr : themeOpt.badge}
-                  </span>
                 </div>
 
                 {/* Theme Visual Palette Mockup Preview */}
@@ -245,10 +265,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       />
                     </div>
                     <div 
-                      className="px-2 py-0.5 rounded text-[8px] font-bold"
+                      className="px-2 py-0.5 rounded text-[8px] font-bold font-mono"
                       style={{
                         backgroundColor: themeOpt.primaryColor,
-                        color: themeOpt.id === 'spartan_gold' || themeOpt.id === 'cyber_lime' || themeOpt.id === 'arctic_frost' || themeOpt.id === 'warm_amber' || themeOpt.id === 'solar_orange' || themeOpt.id === 'fitness_dark' || themeOpt.id === 'electric_cyan' ? '#000000' : '#ffffff'
+                        color: themeOpt.primaryForeground
                       }}
                     >
                       {isAr ? 'تمرين' : 'LIFT'}
@@ -268,6 +288,66 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </button>
             );
           })}
+        </div>
+
+        {/* World-Class Pro Athlete Capabilities & Roadmap Recommendations */}
+        <div className="border-t border-border pt-4 mt-2 space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold text-foreground">
+              {isAr
+                ? 'منظومة أدوات المستوى العالمي المفعلة (World-Class Athlete Suite)'
+                : 'World-Class Pro Athlete Suite — Active Capabilities'}
+            </h4>
+            <span className="text-[11px] text-muted-foreground font-mono">
+              100% Calibrated
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+            <div className="rounded-xl border border-border bg-secondary/30 p-3 space-y-1">
+              <div className="font-bold text-foreground">
+                {isAr ? '01. حساب وتحميل طارات البار' : '01. Barbell Plate Visualizer'}
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {isAr
+                  ? 'رسم تفاعلي لطارات الأولمبياد (25 إلى 1.25 كجم) لكل جانب في كل مجموعة تدريبية.'
+                  : 'Color-coded IWF/IPF competition plate sleeve diagram per set for 20kg, 15kg, and 10kg bars.'}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-border bg-secondary/30 p-3 space-y-1">
+              <div className="font-bold text-foreground">
+                {isAr ? '02. التعديل التلقائي للأوزان بـ RPE' : '02. RPE Auto-Regulation'}
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {isAr
+                  ? 'توقع حي لأوزان الجلسة القادمة (+2.5/+5 كجم أو تخفيف) بناءً على معدل الجهد المسجل.'
+                  : 'Dynamic next-session weight forecasting (+2.5kg/+5kg or deload) calibrated from set RPE.'}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-border bg-secondary/30 p-3 space-y-1">
+              <div className="font-bold text-foreground">
+                {isAr ? '03. التبديل الفوري عند ازدحام الجيم' : '03. Congestion Exercise Swap'}
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {isAr
+                  ? 'استبدال أي تمرين ببديل بيوميكانيكي مكافئ حسب الأداة المتاحة (دمبل، كابلات، أجهزة).'
+                  : '1-tap biomechanical variation replacement filtered by available equipment with auto load scaling.'}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-border bg-secondary/30 p-3 space-y-1">
+              <div className="font-bold text-foreground">
+                {isAr ? '04. تكييف الصعوبة والاستعداد اليومي' : '04. 3-Tier Readiness Scaling'}
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {isAr
+                  ? 'ثلاثة مستويات صعوبة لكل يوم تدريبي تتكيف مع جودة النوم وإجهاد العضلات وأسفل الظهر.'
+                  : 'Easy, Standard, and Advanced movement tiers tailored to sleep, soreness, and joint safety.'}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 

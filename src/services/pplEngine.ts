@@ -1166,51 +1166,88 @@ export const PPLEngine = {
     if (!current) return [];
 
     const candidates = exerciseSeedData.filter(e => e.id !== exerciseId);
+    const directAltIds = new Set(current.alternatives || []);
+
+    const matchesEquipmentFilter = (candEqRaw: string, eqFilter?: WorkoutEquipmentFilter): boolean => {
+      if (!eqFilter || eqFilter === 'all' || eqFilter === 'gym') return true;
+      const candEq = candEqRaw.toLowerCase();
+      if (eqFilter === 'home') {
+        return candEq.includes('dumbbell') || candEq.includes('bodyweight') || candEq.includes('band');
+      }
+      if (eqFilter === 'dumbbells') {
+        return candEq.includes('dumbbell');
+      }
+      if (eqFilter === 'barbell') {
+        return candEq.includes('barbell') || candEq.includes('ez-bar') || candEq.includes('ez bar');
+      }
+      if (eqFilter === 'bodyweight') {
+        return candEq.includes('bodyweight') || candEq.includes('pull-up') || candEq.includes('dip') || candEq.includes('floor');
+      }
+      if (eqFilter === 'cables') {
+        return candEq.includes('cable') || candEq.includes('pulldown');
+      }
+      if (eqFilter === 'machines') {
+        return candEq.includes('machine') || candEq.includes('smith') || candEq.includes('leg press') || candEq.includes('pec deck');
+      }
+      return true;
+    };
 
     const scored: SmartSubstituteItem[] = candidates.map(cand => {
       let score = 0;
-      let reasons: string[] = [];
-      let reasonsAr: string[] = [];
+      const reasons: string[] = [];
+      const reasonsAr: string[] = [];
 
-      // 1. Target Primary Muscle Match (+40 pts)
-      const samePrimaryMuscle = cand.primaryMuscle.toLowerCase().trim() === current.primaryMuscle.toLowerCase().trim();
+      // 1. Direct programmed alternative bonus (+15 pts)
+      if (directAltIds.has(cand.id)) {
+        score += 15;
+        reasons.push('Direct programmed variation');
+        reasonsAr.push('بديل مكافئ مباشر');
+      }
+
+      // 2. Target Primary Muscle Match (+45 pts) or Sub-region / Category Match
+      const curMuscle = current.primaryMuscle.toLowerCase().trim();
+      const candMuscle = cand.primaryMuscle.toLowerCase().trim();
+      const samePrimaryMuscle = candMuscle === curMuscle;
+      const sameRootMuscle = candMuscle.split(' ')[0] === curMuscle.split(' ')[0] ||
+        cand.secondaryMuscles.some(m => m.toLowerCase().includes(curMuscle.split(' ')[0]));
       const sameCategory = cand.category === current.category;
+
       if (samePrimaryMuscle) {
         score += 45;
         reasons.push('Exact muscle match');
-        reasonsAr.push('نفس العضلة المستهدفة الأساسية');
+        reasonsAr.push('نفس العضلة المستهدفة بدقة');
+      } else if (sameRootMuscle) {
+        score += 35;
+        reasons.push('Targets same muscle group');
+        reasonsAr.push('يستهدف نفس المجموعة العضلية');
       } else if (sameCategory) {
-        score += 25;
+        score += 20;
         reasons.push('Same kinetic chain');
         reasonsAr.push('نفس السلسلة الحركية');
       }
 
-      // 2. Movement Pattern Match (+25 pts)
+      // 3. Movement Pattern Match (+25 pts)
       if (cand.movementPattern && current.movementPattern && cand.movementPattern === current.movementPattern) {
         score += 25;
         reasons.push('Identical biomechanics');
         reasonsAr.push('نفس المسار الميكانيكي الحيوي');
+      } else if (cand.exerciseType === current.exerciseType) {
+        score += 10;
       }
 
-      // 3. Equipment Filter (+20 pts)
+      // 4. Equipment Filter (+20 pts) & Different Equipment Bonus for Congestion
       const candEq = cand.equipment.toLowerCase();
-      let equipmentMatch = true;
-      if (options?.equipment && options.equipment !== 'all') {
-        if (options.equipment === 'home') {
-          equipmentMatch = candEq.includes('dumbbell') || candEq.includes('bodyweight') || candEq.includes('band');
-        } else if (options.equipment === 'dumbbells') {
-          equipmentMatch = candEq.includes('dumbbell');
-        } else if (options.equipment === 'bodyweight') {
-          equipmentMatch = candEq.includes('bodyweight') || candEq.includes('pull-up') || candEq.includes('dip');
-        } else if (options.equipment === 'cables') {
-          equipmentMatch = candEq.includes('cable') || candEq.includes('pulldown');
-        } else if (options.equipment === 'machines') {
-          equipmentMatch = candEq.includes('machine') || candEq.includes('press');
-        }
+      const curEq = current.equipment.toLowerCase();
+      const equipmentMatch = matchesEquipmentFilter(cand.equipment, options?.equipment);
+      if (equipmentMatch) {
+        score += 20;
       }
-      if (equipmentMatch) score += 20;
+      if (candEq !== curEq) {
+        reasons.push(`Uses ${cand.equipment}`);
+        reasonsAr.push(`يستخدم ${cand.equipmentAr || cand.equipment}`);
+      }
 
-      // 4. Low Fatigue Filter Preference
+      // 5. Low Fatigue Filter Preference
       const isLowerFatigue = !candEq.includes('barbell') || cand.exerciseType === 'isolation';
       if (options?.lowFatigueOnly && isLowerFatigue) {
         score += 15;
@@ -1218,22 +1255,40 @@ export const PPLEngine = {
         reasonsAr.push('إجهاد أقل على المفاصل وأسفل الظهر');
       }
 
+      const normalizedScore = Math.min(99, Math.max(65, score));
+
       return {
         exercise: cand,
-        matchScore: score,
-        reason: reasons.join(' • ') || 'Good alternative movement',
-        reasonAr: reasonsAr.join(' • ') || 'بديل مناسب ومتناسق',
+        matchScore: normalizedScore,
+        reason: reasons.join(' · ') || 'Equivalent biomechanical movement',
+        reasonAr: reasonsAr.join(' · ') || 'بديل حركي متناسق لنفس العضلة',
         equipmentMatch,
-        targetMuscleMatch: samePrimaryMuscle || sameCategory,
+        targetMuscleMatch: samePrimaryMuscle || sameRootMuscle || directAltIds.has(cand.id),
         isLowerFatigue,
       };
     });
 
-    // Sort by score descending and return top 8
-    return scored
-      .filter(s => s.targetMuscleMatch && s.equipmentMatch)
+    // Primary filter: matches target muscle (or direct alt) AND matches equipment filter
+    let filtered = scored.filter(s => s.targetMuscleMatch && s.equipmentMatch);
+
+    // Fallback if user selected a specific equipment filter (e.g., 'machines' or 'cables') and few exact muscle matches exist:
+    // include same-category exercises that match the requested equipment
+    if (filtered.length < 3 && options?.equipment && options.equipment !== 'all') {
+      const categoryFallback = scored.filter(
+        s => s.equipmentMatch && s.exercise.category === current.category && !filtered.includes(s)
+      );
+      filtered = [...filtered, ...categoryFallback];
+    }
+
+    // Apply explicit muscle filter if provided
+    if (options?.filterMuscle && options.filterMuscle !== 'all') {
+      const mFilter = options.filterMuscle.toLowerCase();
+      filtered = filtered.filter(s => s.exercise.primaryMuscle.toLowerCase().includes(mFilter));
+    }
+
+    return filtered
       .sort((a, b) => b.matchScore - a.matchScore)
-      .slice(0, 8);
+      .slice(0, 10);
   },
 
   // Smart substitutes with muscle, equipment, and fatigue filters (Legacy + Adaptive compatibility)

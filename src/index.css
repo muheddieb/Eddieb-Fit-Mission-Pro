@@ -29,6 +29,66 @@
     --border: #222225;
   }
 
+  /* Pro Athlete 1: Olympic Arena (Obsidian, Championship Gold & Stadium Ivory) */
+  [data-theme="olympic_arena"] {
+    --background: #09090b;
+    --foreground: #fafaf9;
+    --card: #121215;
+    --card-foreground: #fafaf9;
+    --primary: #d4af37;
+    --primary-foreground: #09090b;
+    --secondary: #1c1b18;
+    --secondary-foreground: #fafaf9;
+    --muted: #161513;
+    --muted-foreground: #d6c792;
+    --border: #2e2918;
+  }
+
+  /* Pro Athlete 2: Carbon Track (Matte Woven Carbon, Sprint Track Crimson & Volt) */
+  [data-theme="carbon_track"] {
+    --background: #0b0c0e;
+    --foreground: #f8fafc;
+    --card: #131519;
+    --card-foreground: #f8fafc;
+    --primary: #e11d48;
+    --primary-foreground: #ffffff;
+    --secondary: #1d2026;
+    --secondary-foreground: #f8fafc;
+    --muted: #17191e;
+    --muted-foreground: #fda4af;
+    --border: #2d1920;
+  }
+
+  /* Pro Athlete 3: Tactical Hybrid (Spec-Ops Olive, Tungsten Steel & Desert Sand) */
+  [data-theme="tactical_hybrid"] {
+    --background: #0b0f0c;
+    --foreground: #f5f5f4;
+    --card: #131a14;
+    --card-foreground: #f5f5f4;
+    --primary: #84a98c;
+    --primary-foreground: #090d0a;
+    --secondary: #1c261e;
+    --secondary-foreground: #f5f5f4;
+    --muted: #172018;
+    --muted-foreground: #b7d1bc;
+    --border: #253328;
+  }
+
+  /* Pro Athlete 4: Iron Chalkhouse (Raw Cast Iron, Calibrated Powerlifting Rust & Chalk) */
+  [data-theme="iron_chalkhouse"] {
+    --background: #0f0c0a;
+    --foreground: #f5f5f4;
+    --card: #1a1412;
+    --card-foreground: #f5f5f4;
+    --primary: #ea580c;
+    --primary-foreground: #ffffff;
+    --secondary: #261d19;
+    --secondary-foreground: #f5f5f4;
+    --muted: #201815;
+    --muted-foreground: #fdba74;
+    --border: #38251b;
+  }
+
   /* 1. Fitness Dark (Emerald Neon / Beast Mode) */
   [data-theme="fitness_dark"] {
     --background: #080d0a;

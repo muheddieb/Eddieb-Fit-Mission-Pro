@@ -344,10 +344,12 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                     ? WeeklyScheduleService.buildWorkoutForDay(day, profile, history, difficultyLevel)
                     : null;
                   const dynamicExNames = previewSession
-                    ? previewSession.exercises.map((e) => (isAr && e.exerciseNameAr ? e.exerciseNameAr : e.exerciseName))
-                    : isAr
-                    ? day.exerciseNamesAr
-                    : day.exerciseNames;
+                    ? previewSession.exercises.map((e) =>
+                        e.exerciseNameAr ? `${e.exerciseNameAr} (${e.exerciseName})` : e.exerciseName
+                      )
+                    : day.exerciseNames.map((en, i) =>
+                        day.exerciseNamesAr?.[i] ? `${day.exerciseNamesAr[i]} (${en})` : en
+                      );
                   const dynamicMinutes = previewSession ? previewSession.durationMinutes : day.estimatedMinutes;
 
                   return (
@@ -476,29 +478,47 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                   )}
 
                   <span className="text-xs font-bold text-foreground block">
-                    {isAr ? 'تمارين الجلسة حسب المستوى المختار:' : 'Exercises for Selected Difficulty:'}
+                    {isAr ? 'تمارين الجلسة حسب المستوى المختار (عربي + English):' : 'Exercises for Selected Difficulty:'}
                   </span>
                   <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-                    {modalSession.exercises.map((ex, i) => (
-                      <div key={ex.exerciseId || i} className="flex items-center justify-between rounded-xl border border-border bg-secondary/30 p-2.5 text-xs">
-                        <div>
-                          <div className="font-bold text-foreground">
-                            {i + 1}. {isAr && ex.exerciseNameAr ? ex.exerciseNameAr : ex.exerciseName}
-                          </div>
-                          <div className="text-[10px] text-muted-foreground">{ex.primaryMuscle}</div>
-                        </div>
-                        <div className="text-end font-mono">
-                          <div className="text-[10px] text-primary font-bold">
-                            {ex.sets.length} {isAr ? 'مجموعات' : 'sets'} × {ex.sets[0]?.targetReps || '8-12'}
-                          </div>
-                          {ex.sets[0]?.targetWeight > 0 && (
-                            <div className="text-[10px] text-emerald-400 font-bold">
-                              {ex.sets[0]?.targetWeight} kg
+                    {modalSession.exercises.map((ex, i) => {
+                      const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${ex.exerciseName} proper form exercise tutorial`)}`;
+                      return (
+                        <div key={ex.exerciseId || i} className="flex items-center justify-between rounded-xl border border-border bg-secondary/30 p-2.5 text-xs">
+                          <div className="space-y-0.5">
+                            <div className="font-bold text-foreground">
+                              {i + 1}. {isAr && ex.exerciseNameAr ? ex.exerciseNameAr : ex.exerciseName}
                             </div>
-                          )}
+                            {ex.exerciseNameAr && (
+                              <div className="text-[10px] font-mono text-primary/90" dir="ltr">
+                                {isAr ? ex.exerciseName : ex.exerciseNameAr}
+                              </div>
+                            )}
+                            <div className="text-[10px] text-muted-foreground">{ex.primaryMuscle}</div>
+                          </div>
+                          <div className="text-end font-mono space-y-1">
+                            <div className="text-[10px] text-primary font-bold">
+                              {ex.sets.length} {isAr ? 'مجموعات' : 'sets'} × {ex.sets[0]?.targetReps || '8-12'}
+                            </div>
+                            {ex.sets[0]?.targetWeight > 0 && (
+                              <div className="text-[10px] text-emerald-400 font-bold">
+                                {ex.sets[0]?.targetWeight} kg
+                              </div>
+                            )}
+                            <a
+                              href={ytUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-bold text-red-400 hover:bg-red-500/20"
+                              title={`YouTube Search (EN): ${ex.exerciseName}`}
+                            >
+                              <Play className="h-2.5 w-2.5 fill-current" />
+                              <span>{isAr ? 'فيديو EN' : 'Video EN'}</span>
+                            </a>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );

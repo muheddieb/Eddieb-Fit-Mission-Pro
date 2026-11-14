@@ -426,8 +426,10 @@ export const ExerciseLibraryView: React.FC<ExerciseLibraryViewProps> = ({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredExercises.map(ex => {
             const title = isAr && ex.nameAr ? ex.nameAr : ex.name;
+            const secondaryTitle = isAr && ex.nameAr ? ex.name : (ex.nameAr || '');
             const muscle = isAr && ex.primaryMuscleAr ? ex.primaryMuscleAr : ex.primaryMuscle;
             const eqLabel = isAr && ex.equipmentAr ? ex.equipmentAr : ex.equipment;
+            const englishYtUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${ex.name} proper form exercise tutorial`)}`;
 
             return (
               <div
@@ -454,15 +456,20 @@ export const ExerciseLibraryView: React.FC<ExerciseLibraryViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Content */}
+                  {/* Content: Bilingual Exercise Title (Arabic + English) */}
                   <div className="p-4">
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-0.5">
                       <h3 className="text-base font-bold text-foreground group-hover:text-primary transition-colors">
                         {title}
                       </h3>
+                      {secondaryTitle && (
+                        <p className="text-xs font-mono font-semibold text-primary/90 truncate" dir="ltr">
+                          {secondaryTitle}
+                        </p>
+                      )}
                     </div>
 
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                       <span className="rounded bg-secondary px-2 py-0.5 font-medium text-foreground">{muscle}</span>
                       <span className="rounded bg-secondary/80 px-2 py-0.5 font-medium">{ex.difficulty}</span>
                       {ex.tags.includes('back_safe') && (
@@ -474,10 +481,24 @@ export const ExerciseLibraryView: React.FC<ExerciseLibraryViewProps> = ({
                   </div>
                 </div>
 
-                {/* Action footer */}
-                <div className="border-t border-border p-3 bg-secondary/20 flex items-center justify-between text-xs font-bold text-primary">
-                  <span>{t.common.viewDetails}</span>
-                  <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                {/* Action footer with Direct English YouTube Search */}
+                <div className="border-t border-border p-3 bg-secondary/20 flex items-center justify-between gap-2 text-xs font-bold">
+                  <a
+                    href={englishYtUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[11px] font-bold text-red-400 hover:bg-red-500/20 transition-colors"
+                    title={isAr ? `بحث فيديو على يوتيوب بالاسم الإنجليزي: ${ex.name}` : `Search YouTube in English: ${ex.name}`}
+                  >
+                    <Play className="h-3 w-3 fill-current" />
+                    <span>{isAr ? 'فيديو (EN)' : 'Video (EN)'}</span>
+                  </a>
+
+                  <div className="flex items-center gap-1 text-primary">
+                    <span>{t.common.viewDetails}</span>
+                    <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  </div>
                 </div>
               </div>
             );
