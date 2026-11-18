@@ -46,41 +46,39 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
   const [swapFeedback, setSwapFeedback] = useState<string | null>(null);
   const [activeDayDetailModal, setActiveDayDetailModal] = useState<WeeklyDayPlan | null>(null);
   const [editSplitDayIndex, setEditSplitDayIndex] = useState<number | null>(null);
+  const [confirmReset, setConfirmReset] = useState<boolean>(false);
 
   const todayIndex = WeeklyScheduleService.getTodayDayIndex();
 
   // Handler: Select day for swapping
   const handleDayClick = (dayIndex: number) => {
     if (!swapMode) {
-      // If not in swap mode, open details modal or prepare
       setActiveDayDetailModal(schedule[dayIndex]);
       return;
     }
 
     if (selectedDayIndexForSwap === null) {
-      // Pick first day
       setSelectedDayIndexForSwap(dayIndex);
     } else if (selectedDayIndexForSwap === dayIndex) {
-      // Deselect if clicked again
       setSelectedDayIndexForSwap(null);
     } else {
-      // Perform swap between selectedDayIndexForSwap and dayIndex!
       const firstDay = schedule[selectedDayIndexForSwap];
       const secondDay = schedule[dayIndex];
+      const evalResult = WeeklyScheduleService.evaluateMoveSafety(selectedDayIndexForSwap, dayIndex, schedule);
       const updated = WeeklyScheduleService.swapDays(selectedDayIndexForSwap, dayIndex, profile);
       setSchedule(updated);
 
-      const msg = isAr 
-        ? `تم تبديل (${firstDay.dayNameAr}: ${firstDay.titleAr}) مع (${secondDay.dayNameAr}: ${secondDay.titleAr}) بنجاح!`
-        : `Swapped (${firstDay.dayName}: ${firstDay.title}) with (${secondDay.dayName}: ${secondDay.title})!`;
-      
+      const msg = isAr
+        ? `تم تبديل (${firstDay.dayNameAr}) مع (${secondDay.dayNameAr}) — ${evalResult.reasonAr}`
+        : `Swapped (${firstDay.dayName}) with (${secondDay.dayName}) — ${evalResult.reasonEn}`;
+
       setSwapFeedback(msg);
       setSelectedDayIndexForSwap(null);
       setSwapMode(false);
 
       setTimeout(() => {
         setSwapFeedback(null);
-      }, 4500);
+      }, 5000);
     }
   };
 
@@ -91,6 +89,20 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
     setSelectedDayIndexForSwap(dayIndex);
   };
 
+  // Handler: Rest Today & Train Tomorrow
+  const handleRestTodayTrainTomorrow = () => {
+    const updated = WeeklyScheduleService.restTodayTrainTomorrow(todayIndex, profile);
+    setSchedule(updated);
+    setSwapMode(false);
+    setSelectedDayIndexForSwap(null);
+    setSwapFeedback(
+      isAr
+        ? 'تم جعل اليوم يوم راحة ونقل تمرين اليوم إلى الغد بنجاح.'
+        : 'Today set as Rest Day and workout cleanly moved to tomorrow.'
+    );
+    setTimeout(() => setSwapFeedback(null), 4500);
+  };
+
   // Handler: Start a day's workout with the selected difficulty level
   const handleStartDay = (e: React.MouseEvent, day: WeeklyDayPlan, levelOverride?: WorkoutDifficultyLevel) => {
     e.stopPropagation();
@@ -98,16 +110,20 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
     onStartSpecificWorkout(session);
   };
 
-  // Reset to default schedule
+  // Reset to default schedule (inline confirm without window.confirm)
   const handleReset = () => {
-    if (window.confirm(isAr ? 'هل تريد استعادة ترتيب جدول الأسبوع الافتراضي؟' : 'Reset weekly schedule back to default?')) {
-      const reset = WeeklyScheduleService.resetSchedule(profile);
-      setSchedule(reset);
-      setSelectedDayIndexForSwap(null);
-      setSwapMode(false);
-      setSwapFeedback(isAr ? 'تمت استعادة الجدول الافتراضي بنجاح.' : 'Weekly schedule reset to default.');
-      setTimeout(() => setSwapFeedback(null), 3000);
+    if (!confirmReset) {
+      setConfirmReset(true);
+      setTimeout(() => setConfirmReset(false), 4000);
+      return;
     }
+    const reset = WeeklyScheduleService.resetSchedule(profile);
+    setSchedule(reset);
+    setSelectedDayIndexForSwap(null);
+    setSwapMode(false);
+    setConfirmReset(false);
+    setSwapFeedback(isAr ? 'تمت استعادة الجدول الافتراضي بنجاح.' : 'Weekly schedule reset to default.');
+    setTimeout(() => setSwapFeedback(null), 3000);
   };
 
   // Change split for a specific day
@@ -147,6 +163,19 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Rest Today & Train Tomorrow Shortcut */}
+          {!schedule[todayIndex]?.isRestDay && (
+            <button
+              id="btn-rest-today-train-tomorrow"
+              type="button"
+              onClick={handleRestTodayTrainTomorrow}
+              className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              <span>{isAr ? 'راحة اليوم وتمرين غداً' : 'Rest Today & Train Tomorrow'}</span>
+            </button>
+          )}
+
           {/* Swap Mode Toggle Button */}
           <button
             id="btn-toggle-swap-mode"
@@ -168,11 +197,19 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
           <button
             id="btn-reset-weekly-schedule"
             onClick={handleReset}
-            className="flex items-center gap-1.5 rounded-xl border border-border bg-secondary/50 px-3 py-2 text-xs font-bold text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-all ${
+              confirmReset
+                ? 'border-rose-500 bg-rose-500/15 text-rose-400'
+                : 'border-border bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground'
+            }`}
             title={isAr ? 'إعادة ضبط الجدول الافتراضي' : 'Reset to default schedule'}
           >
             <RotateCcw className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{isAr ? 'إعادة ضبط' : 'Reset'}</span>
+            <span>
+              {confirmReset
+                ? (isAr ? 'اضغط للتأكيد' : 'Confirm Reset')
+                : (isAr ? 'إعادة ضبط' : 'Reset')}
+            </span>
           </button>
         </div>
       </div>
@@ -294,15 +331,32 @@ export const WeeklyScheduleView: React.FC<WeeklyScheduleViewProps> = ({
                   </div>
 
                   <div className="flex items-center gap-1.5">
+                    {swapMode && selectedDayIndexForSwap !== null && selectedDayIndexForSwap !== idx && (() => {
+                      const safety = WeeklyScheduleService.evaluateMoveSafety(selectedDayIndexForSwap, idx, schedule);
+                      const colorCls =
+                        safety.rating === 'green'
+                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                          : safety.rating === 'yellow'
+                            ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                            : 'bg-rose-500/20 text-rose-400 border-rose-500/40';
+                      return (
+                        <span
+                          className={`rounded-md border px-1.5 py-0.5 text-[10px] font-black ${colorCls}`}
+                          title={isAr ? safety.reasonAr : safety.reasonEn}
+                        >
+                          {isAr ? safety.labelAr : safety.labelEn}
+                        </span>
+                      );
+                    })()}
+
                     {isToday && (
-                      <span className="flex items-center gap-1 rounded-full bg-primary/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-primary border border-primary/30">
-                        <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                      <span className="rounded-md bg-primary/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-primary border border-primary/30">
                         {isAr ? 'اليوم' : 'Today'}
                       </span>
                     )}
 
                     {day.isSwapped && (
-                      <span className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-400 border border-amber-500/30">
+                      <span className="rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-400 border border-amber-500/30">
                         {isAr ? 'مُبدّل' : 'Swapped'}
                       </span>
                     )}

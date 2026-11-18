@@ -451,7 +451,7 @@ export const PPLEngine = {
       lower: { name: 'Lower Body & Posterior Chain', nameAr: 'تمرين جزء سفلي وسلسلة خلفية', type: 'lower' },
       full_body: { name: 'Full Body Functional & Hypertrophy', nameAr: 'تمرين شامل لكامل الجسم', type: 'full_body' },
       rest_active: { name: 'Active Recovery & Core Mobility', nameAr: 'استشفاء نشط، كور ومرونة', type: 'rest_active' },
-      cardio_conditioning: { name: 'Cardio & HIIT Conditioning', nameAr: 'كارديو وتحمل ولياقة بدنية', type: 'cardio' },
+      cardio_conditioning: { name: 'Low-Impact Zone 2 Cardio (Bike & Walk)', nameAr: 'كارديو منخفض الصدمات (دراجة ومشي)', type: 'cardio' },
     };
 
     const currentMeta = splitMeta[splitId] || splitMeta.push;
@@ -574,10 +574,10 @@ export const PPLEngine = {
         const e6 = this.getExerciseById('legs_standing_calf_raise');
         [e1, e2, e3, e4, e5, e6].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
       } else {
-        // Standard Level 2: Back-Supported Leg Press + Unilateral Split Squat + Isolation Machines
+        // Standard Level 2: Knee & Lower-Back Safe Sequence (Back-Supported Leg Press + Leg Curl + Controlled Goblet + Calf)
         const e1 = isHome ? this.getExerciseById('legs_dumbbell_goblet_squat') : this.getExerciseById('legs_leg_press');
-        const e2 = this.getExerciseById('legs_bulgarian_split_squat');
-        const e3 = this.getExerciseById('legs_leg_curl');
+        const e2 = this.getExerciseById('legs_leg_curl');
+        const e3 = this.getExerciseById('legs_dumbbell_goblet_squat');
         const e4 = this.getExerciseById('legs_leg_extension');
         const e5 = this.getExerciseById('legs_standing_calf_raise');
         [e1, e2, e3, e4, e5].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
@@ -650,9 +650,9 @@ export const PPLEngine = {
         [e1, e2, e3, e4, e5, e6].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
       } else {
         const e1 = this.getExerciseById('legs_leg_press');
-        const e2 = this.getExerciseById('legs_bulgarian_split_squat');
-        const e3 = this.getExerciseById('legs_glute_bridge');
-        const e4 = this.getExerciseById('legs_leg_curl');
+        const e2 = this.getExerciseById('legs_glute_bridge');
+        const e3 = this.getExerciseById('legs_leg_curl');
+        const e4 = this.getExerciseById('legs_leg_extension');
         const e5 = this.getExerciseById('legs_standing_calf_raise');
         [e1, e2, e3, e4, e5].forEach(e => { if (e && !rawExercises.some(r => r.id === e.id)) rawExercises.push(e); });
       }
@@ -957,10 +957,10 @@ export const PPLEngine = {
       },
       {
         id: 'cardio_conditioning',
-        name: 'Cardio, HIIT & Conditioning',
-        nameAr: 'كارديو وتحمل وحرق دهون مكثف',
-        description: 'Incline treadmill walks, stationary bike intervals, and metabolic conditioning.',
-        descriptionAr: 'مشي منحدر، دراجة ثابتة، وتمارين حرق دهون لرفع اللياقة وصحة القلب.',
+        name: 'Low-Impact Zone 2 Cardio (Bike & Walk)',
+        nameAr: 'كارديو منخفض الصدمات (دراجة ثابتة ومشي)',
+        description: 'Joint-friendly stationary bike and treadmill walking for steady fat loss.',
+        descriptionAr: 'دراجة ثابتة ومشي على السير لحرق الدهون بأمان للمفاصل والركبة.',
         targetCategory: 'cardio',
         icon: 'Gauge',
         color: 'from-pink-500/20 to-red-500/10 border-pink-500/30 text-pink-400',
@@ -1819,7 +1819,7 @@ export const PPLEngine = {
     return Math.round((sum / last7.length) * 10) / 10;
   },
 
-  // Fat Loss & Body Composition Trend Analyzer
+  // Fat Loss, Stall, Rapid Drop & Strength Trend Analyzer
   evaluateFatLossTrend(measurements: BodyMeasurement[], workouts: WorkoutSession[]) {
     if (measurements.length < 2) {
       return {
@@ -1827,7 +1827,7 @@ export const PPLEngine = {
         badge: 'Collecting Baseline Data',
         badgeAr: 'جاري تجميع البيانات المرجعية',
         explanation: 'Log at least 2-3 body weight and waist measurements to unlock trend analysis.',
-        explanationAr: 'سجل قياسين للوزن والخصر على الأقل لعرض التحليل البياني للنتائج.',
+        explanationAr: 'سجل قياسين للوزن والخصر على الأقل لعرض التحليل الدقيق للنتائج.',
         trendScore: 'neutral',
       };
     }
@@ -1835,52 +1835,99 @@ export const PPLEngine = {
     const sorted = [...measurements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const first = sorted[0];
     const latest = sorted[sorted.length - 1];
+    const spanDays = Math.max(1, daysBetween(first.date, latest.date));
 
     const weightDelta = latest.weight - first.weight;
-    const waistDelta = (latest.waistCm || 0) - (first.waistCm || 0);
+    const waistDelta = (latest.waistCm && first.waistCm) ? (latest.waistCm - first.waistCm) : 0;
 
-    // Recomposition: Waist down while weight is roughly stable
-    if (waistDelta < -0.5 && Math.abs(weightDelta) <= 1.0) {
+    // Evaluate recent strength trend across last 6 completed workouts (latest 3 vs prior 3)
+    const completedWorkouts = [...workouts]
+      .filter(w => w.completed && (w.totalVolumeKg || 0) > 0)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    let strengthFalling = false;
+    if (completedWorkouts.length >= 4) {
+      const recentAvgVol = completedWorkouts.slice(0, 2).reduce((s, w) => s + (w.totalVolumeKg || 0), 0) / 2;
+      const priorSlice = completedWorkouts.slice(2, 4);
+      const priorAvgVol = priorSlice.reduce((s, w) => s + (w.totalVolumeKg || 0), 0) / priorSlice.length;
+      if (priorAvgVol > 0 && recentAvgVol < priorAvgVol * 0.85) {
+        strengthFalling = true;
+      }
+    }
+
+    // Rule 3: Strength falling across recent sessions -> prioritize sleep/recovery check
+    if (strengthFalling) {
+      return {
+        status: 'strength_drop_recovery',
+        badge: 'Recovery & Sleep Check',
+        badgeAr: 'مراجعة الاستشفاء والنوم',
+        explanation: 'Recent training volume dipped >15%. Prioritize 7+ hours sleep, hit your 170g protein target, and consider an Easy joint-safe session before increasing calories slightly.',
+        explanationAr: 'لوحظ تراجع في حجم التمرين بأكثر من 15%. راجع جودة النوم (7+ ساعات) والتزم بـ 170 جم بروتين، واستخدم المستوى السهل (Easy) لاستعادة الاستشفاء.',
+        trendScore: 'warning',
+      };
+    }
+
+    // Rule 2: Rapid weight loss (> ~1.2 kg/week)
+    const weeklyRateKg = (weightDelta / spanDays) * 7;
+    if (weeklyRateKg < -1.2 && spanDays >= 5) {
+      return {
+        status: 'too_rapid',
+        badge: 'Rapid Weight Loss Warning',
+        badgeAr: 'تنبيه: نزول أسرع من المطلوب',
+        explanation: `Weight is dropping ~${Math.abs(weeklyRateKg).toFixed(1)} kg/week. Aim for 0.5–1.0 kg/week: verify 170g protein, add +150–200 kcal from clean carbs around training, and guard recovery.`,
+        explanationAr: `النزول بمعدل ~${Math.abs(weeklyRateKg).toFixed(1)} كجم/أسبوع أسرع من الحد المثالي (0.5–1.0 كجم). التزم بـ 170 جم بروتين وزد 150–200 سعرة حول التمرين لحماية العضلات.`,
+        trendScore: 'warning',
+      };
+    }
+
+    // Rule 4: Waist decreasing while weight is roughly stable -> Recomposition!
+    if (waistDelta <= -0.5 && Math.abs(weightDelta) <= 0.8) {
       return {
         status: 'optimal_recomp',
-        badge: 'Prime Muscle Recomposition',
-        badgeAr: 'إعادة تشكيل مثالية (حرق دهون + بناء عضلات)',
-        explanation: `Waist decreased by ${Math.abs(waistDelta).toFixed(1)} cm while weight remained stable at ${latest.weight} kg. This signifies direct visceral fat reduction coupled with lean tissue retention.`,
-        explanationAr: `نزل محيط الخصر بمقدار ${Math.abs(waistDelta).toFixed(1)} سم مع ثبات الوزن عند ${latest.weight} كجم. هذا مؤشر بيولوجي قاطع على حرق الدهون وبناء العضلات بالتزامن.`,
+        badge: 'Body Recomposition On Track',
+        badgeAr: 'إعادة تشكيل مثالية (الخصر ينقص والعضلات ثابتة)',
+        explanation: `Waist decreased by ${Math.abs(waistDelta).toFixed(1)} cm while weight remained stable at ${latest.weight} kg. Stay consistent—you are losing abdominal fat while keeping muscle.`,
+        explanationAr: `محيط الخصر نزل ${Math.abs(waistDelta).toFixed(1)} سم مع ثبات الوزن عند ${latest.weight} كجم. هذا دليل ممتاز على نزول دهون البطن والحفاظ على العضلات—استمر كما أنت.`,
         trendScore: 'positive',
       };
     }
 
+    // Rule 1: 2-week stall (weight and waist unchanged over >= 14 days)
+    const recent14 = sorted.filter(m => daysBetween(m.date, latest.date) <= 14);
+    if (spanDays >= 14 && recent14.length >= 2) {
+      const oldest14 = recent14[0];
+      const delta14W = Math.abs(latest.weight - oldest14.weight);
+      const delta14Waist = (latest.waistCm && oldest14.waistCm) ? Math.abs(latest.waistCm - oldest14.waistCm) : 0;
+      if (delta14W < 0.3 && delta14Waist < 0.4) {
+        return {
+          status: 'two_week_stall',
+          badge: '2-Week Plateau — Gentle Adjustment',
+          badgeAr: 'ثبات أسبوعين — تعديل بسيط متاح',
+          explanation: 'Scale and waist held steady for 14 days. Stay calm: audit hidden cooking oils/snacks first, or add +1,500 daily steps / +10 min Stationary Bike.',
+          explanationAr: 'ثبات الوزن والخصر لمدة 14 يوماً أمر طبيعي. راجع دقة السعرات (الزيوت والمشروبات) أو أضف +1,500 خطوة يومياً أو 10 دقائق دراجة ثابتة.',
+          trendScore: 'neutral',
+        };
+      }
+    }
+
     // Steady Fat Loss
-    if (weightDelta < -0.5 && waistDelta <= 0) {
+    if (weightDelta <= -0.4 && waistDelta <= 0) {
       return {
         status: 'steady_fat_loss',
         badge: 'Controlled Fat-Loss On Track',
         badgeAr: 'حرق دهون منضبط وناجح',
-        explanation: `Weight decreased by ${Math.abs(weightDelta).toFixed(1)} kg and waist reduced by ${Math.abs(waistDelta).toFixed(1)} cm. Training intensity and muscle mass are successfully preserved.`,
-        explanationAr: `نزل الوزن بمقدار ${Math.abs(weightDelta).toFixed(1)} كجم مع نزول محيط الخصر بـ ${Math.abs(waistDelta).toFixed(1)} سم مع الحفاظ على قوة التدريب.`,
+        explanation: `Weight changed by ${weightDelta.toFixed(1)} kg${waistDelta < 0 ? ` and waist dropped ${Math.abs(waistDelta).toFixed(1)} cm` : ''}. Training strength and muscle mass are being protected.`,
+        explanationAr: `نزل الوزن ${Math.abs(weightDelta).toFixed(1)} كجم${waistDelta < 0 ? ` والخصر ${Math.abs(waistDelta).toFixed(1)} سم` : ''}. الاستمرار الصباحي يسير في المسار الصحيح.`,
         trendScore: 'positive',
-      };
-    }
-
-    // Fast Drop Warning
-    if (weightDelta < -3.5 && daysBetween(first.date, latest.date) < 14) {
-      return {
-        status: 'too_rapid',
-        badge: 'Rapid Weight Loss Warning',
-        badgeAr: 'تنبيه: نزول سريع للوزن',
-        explanation: 'Weight is dropping faster than 1kg/week. Increase carbohydrate and protein intake slightly to prevent loss of skeletal muscle and strength.',
-        explanationAr: 'معدل النزول أسرع من 1 كجم أسبوعياً. ارفع الكربوهيدرات والبروتين قليلاً لحماية الكتلة العضلية من الهدم.',
-        trendScore: 'warning',
       };
     }
 
     return {
       status: 'steady_progress',
-      badge: 'Consistent Training Progress',
-      badgeAr: 'تقدم وتطور منتظم',
-      explanation: `Current weight: ${latest.weight} kg, Waist: ${latest.waistCm || 'N/A'} cm. Focus on progressive overload in every session.`,
-      explanationAr: `الوزن الحالي: ${latest.weight} كجم، والخصر: ${latest.waistCm || 'غير مسجل'} سم. ركز على زيادة الأوزان والتكرارات.`,
+      badge: 'Consistent Morning Progress',
+      badgeAr: 'التزام وتقدم منتظم',
+      explanation: `Current weight: ${latest.weight} kg, Waist: ${latest.waistCm || 'N/A'} cm. Focus on morning gym consistency, 170g protein, and Zone 2 cardio.`,
+      explanationAr: `الوزن الحالي: ${latest.weight} كجم، والخصر: ${latest.waistCm || 'غير مسجل'} سم. حافظ على التمرين الصباحي و170 جم بروتين والكارديو منخفض الصدمات.`,
       trendScore: 'neutral',
     };
   },

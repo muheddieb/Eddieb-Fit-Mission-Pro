@@ -1,42 +1,30 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { 
-  X, 
-  Check, 
-  Timer, 
-  RotateCcw, 
-  ChevronRight, 
-  ChevronLeft, 
-  Flame, 
-  Info, 
-  RefreshCw, 
-  Trophy, 
-  Plus, 
-  Trash2, 
-  TrendingUp, 
-  TrendingDown,
-  Equal,
-  Zap,
-  Volume2, 
+import {
+  X,
+  Check,
+  Timer,
+  RotateCcw,
+  ChevronRight,
+  ChevronLeft,
+  Flame,
+  Info,
+  RefreshCw,
+  Trophy,
+  Plus,
+  Trash2,
+  Volume2,
   VolumeX,
   Play,
   Pause,
-  ArrowRight,
-  Radio,
   Home,
   FastForward,
-  Music,
-  CheckCircle2,
-  Sparkles,
   Bell,
-  Award,
   Calculator,
-  Gauge,
-  Feather,
   Dumbbell,
-  SlidersHorizontal,
-  ShieldCheck,
+  BookOpen,
   ArrowLeftRight,
-  Search
+  ChevronDown,
+  ShieldAlert,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -73,6 +61,12 @@ const WEIGHT_OPTIONS: number[] = [
   115, 120, 125, 130, 135, 140, 145, 150, 160, 170, 180, 190, 200
 ];
 
+const PER_SIDE_WEIGHT_OPTIONS: number[] = [
+  0, 1, 1.25, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10,
+  11, 12, 12.5, 13.5, 14, 15, 16, 17.5, 18, 20, 22.5, 25, 27.5, 30, 32.5, 35, 37.5, 40,
+  45, 50, 55, 60, 65, 70, 75, 80, 90, 100
+];
+
 function detectDualHandExercise(exercise?: WorkoutExercise | null, fullEx?: Exercise | null): boolean {
   if (!exercise) return false;
   const combined = [
@@ -88,7 +82,7 @@ function detectDualHandExercise(exercise?: WorkoutExercise | null, fullEx?: Exer
     .toLowerCase();
 
   const isExplicitBarbellOnly =
-    (combined.includes('barbell') || combined.includes('ez-bar') || combined.includes('بار')) &&
+    (combined.includes('barbell') || combined.includes('ez-bar') || combined.includes('ez bar') || combined.includes('بار')) &&
     !combined.includes('dumbbell') &&
     !combined.includes('دمبل');
 
@@ -116,6 +110,70 @@ function detectDualHandExercise(exercise?: WorkoutExercise | null, fullEx?: Exer
     combined.includes('single arm') ||
     combined.includes('يد واحدة')
   );
+}
+
+function detectExerciseLoadConfig(exercise?: WorkoutExercise | null, fullEx?: Exercise | null) {
+  if (!exercise) {
+    return { isBarbell: false, isDumbbellDual: false, isBilateral: false, defaultBarWeight: 0 };
+  }
+  const combined = [
+    exercise.exerciseName || '',
+    exercise.exerciseNameAr || '',
+    fullEx?.name || '',
+    fullEx?.nameAr || '',
+    fullEx?.equipment || '',
+    fullEx?.equipmentAr || '',
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  const isDumbbellDual = detectDualHandExercise(exercise, fullEx);
+  const isEzBar = combined.includes('ez-bar') || combined.includes('ez bar') || combined.includes('زجزاج') || combined.includes('skull crusher');
+  const isBarbell =
+    !isDumbbellDual &&
+    (isEzBar ||
+      combined.includes('barbell') ||
+      combined.includes('بار') ||
+      combined.includes('deadlift') ||
+      combined.includes('squat') ||
+      combined.includes('bench press') ||
+      combined.includes('overhead press') ||
+      combined.includes('bent-over row') ||
+      combined.includes('bent row')) &&
+    !combined.includes('machine') &&
+    !combined.includes('cable') &&
+    !combined.includes('جهاز') &&
+    !combined.includes('كابل');
+
+  const isPlateLoadedMachine =
+    combined.includes('leg press') ||
+    combined.includes('hack squat') ||
+    combined.includes('smith') ||
+    combined.includes('هاك') ||
+    combined.includes('دفع أرجل');
+
+  const defaultBarWeight = isEzBar ? 10 : isBarbell ? 20 : 0;
+
+  return {
+    isBarbell,
+    isDumbbellDual,
+    isBilateral: isBarbell || isDumbbellDual || isPlateLoadedMachine,
+    defaultBarWeight,
+  };
+}
+
+function toPerSideWeight(totalKg: number, barKg: number): number {
+  if (totalKg <= 0) return 0;
+  if (barKg > 0) {
+    return Math.max(0, Math.round(((totalKg - barKg) / 2) * 100) / 100);
+  }
+  return Math.round((totalKg / 2) * 100) / 100;
+}
+
+function fromPerSideWeight(perSideKg: number, barKg: number): number {
+  const safeSide = Math.max(0, perSideKg);
+  if (safeSide === 0) return barKg > 0 ? barKg : 0;
+  return Math.round((barKg + safeSide * 2) * 100) / 100;
 }
 
 // Preset reps from 1 to 50
@@ -225,40 +283,28 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   const [timerActive, setTimerActive] = useState<boolean>(false);
   const [restCompleteToast, setRestCompleteToast] = useState<boolean>(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
-  const [selectedSound, setSelectedSound] = useState<RestSoundType>(profile.restSoundType || 'beep');
+  const [selectedSound] = useState<RestSoundType>(profile.restSoundType || 'beep');
   const [swapExerciseOpen, setSwapExerciseOpen] = useState<boolean>(false);
   const [swapEquipmentFilter, setSwapEquipmentFilter] = useState<WorkoutEquipmentFilter>('all');
-  const [swapReason, setSwapReason] = useState<'congestion' | 'unavailable' | 'joint_comfort' | 'preference'>('congestion');
-  const [swapSearchQuery, setSwapSearchQuery] = useState<string>('');
+  const [jointPainFilter, setJointPainFilter] = useState<boolean>(false);
   const [substitutionModalOpen, setSubstitutionModalOpen] = useState<boolean>(false);
-  const [soundPickerOpen, setSoundPickerOpen] = useState<boolean>(false);
   const [showRestPresets, setShowRestPresets] = useState<boolean>(false);
   const [smartWarmupOpen, setSmartWarmupOpen] = useState<boolean>(false);
-  const [warmupBannerDismissed, setWarmupBannerDismissed] = useState<boolean>(false);
-  
+
   // RPE Calculator & Auto-Regulation State
   const [rpeCalculatorOpen, setRpeCalculatorOpen] = useState<boolean>(false);
   const [rpeCalcInitialData, setRpeCalcInitialData] = useState<{ weight?: number; reps?: number; rpe?: number } | null>(null);
 
-  // Barbell Plate Loading Visualizer State
-  const [plateVisualizerOpen, setPlateVisualizerOpen] = useState<boolean>(false);
-  const [selectedBarWeight, setSelectedBarWeight] = useState<number>(20);
+  // Exercise Guidance Slide-Out Panel State
+  const [guidanceOpen, setGuidanceOpen] = useState<boolean>(false);
   const [inspectedPlateSetIndex, setInspectedPlateSetIndex] = useState<number>(0);
 
-  // Dual-Hand (Right + Left Dumbbell / Biceps) Weight Selection Mode State
-  const [dualWeightInputMode, setDualWeightInputMode] = useState<'per_hand' | 'total_both'>('per_hand');
-  const [dualHandOverrideMap, setDualHandOverrideMap] = useState<Record<string, boolean>>({});
+  // Weight Input Mode ('total' default | 'per_side') & Per-Exercise Bar Weight Override (inside Exercise Guidance)
+  const [weightInputMode, setWeightInputMode] = useState<'total' | 'per_side'>('total');
+  const [barWeightByExercise, setBarWeightByExercise] = useState<Record<string, number>>({});
 
   // Achievement Confetti & PR Celebration State
   const [activePRToast, setActivePRToast] = useState<PersonalRecordEvent | null>(null);
-
-  // Difficulty Toggle Live Feedback State
-  const [difficultyToast, setDifficultyToast] = useState<{
-    level: WorkoutDifficultyLevel;
-    title: string;
-    subtitle: string;
-    exercisesList: string[];
-  } | null>(null);
 
   const timerRef = useRef<any>(null);
   const hasTriggeredStartCue = useRef<boolean>(false);
@@ -580,35 +626,6 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     return PPLEngine.calculateNextSessionForecastFromCurrentSets(currentExercise);
   }, [currentExercise]);
 
-  // Handler: Apply RPE-adjusted suggested weights from previous session across all sets of current exercise
-  const handleApplyRpeProgressionAdvice = () => {
-    if (!currentExercise || !progressionAdvice) return;
-    const updatedExercises = workout.exercises.map((ex, idx) => {
-      if (idx !== currentExerciseIndex) return ex;
-      const updatedSets = ex.sets.map((s, sIdx) => {
-        const setSuggestion = progressionAdvice.setBySetSuggestions?.[sIdx] ||
-          (progressionAdvice.setBySetSuggestions && progressionAdvice.setBySetSuggestions.length > 0
-            ? progressionAdvice.setBySetSuggestions[progressionAdvice.setBySetSuggestions.length - 1]
-            : undefined);
-        const suggestedW = setSuggestion?.suggestedWeight ?? progressionAdvice.recommendedWeight;
-        const suggestedR = setSuggestion?.lastReps ?? (typeof s.actualReps === 'number' ? s.actualReps : 10);
-        return {
-          ...s,
-          targetWeight: suggestedW,
-          actualWeight: suggestedW,
-          targetReps: suggestedR,
-          actualReps: suggestedR,
-          rpe: 8,
-        };
-      });
-      return { ...ex, sets: updatedSets };
-    });
-    setWorkout({ ...workout, exercises: updatedExercises });
-    if (soundEnabled) {
-      AudioService.playBeep(880, 0.1, 0.2);
-    }
-  };
-
   // Handler: Apply preset sets from history comparison shortcuts
   const handleApplyPresetSets = (newSetsData: Partial<SetLog>[]) => {
     const updatedExercises = workout.exercises.map((ex, idx) => {
@@ -823,23 +840,8 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   };
 
   const handleSwapExercise = (newExercise: Exercise, matchReason?: string) => {
-    const reasonTextEn =
-      swapReason === 'congestion'
-        ? `Gym congestion / machine busy (${newExercise.equipment})`
-        : swapReason === 'unavailable'
-          ? `Equipment unavailable — switched to ${newExercise.equipment}`
-          : swapReason === 'joint_comfort'
-            ? 'Joint & lower-back friendly variation'
-            : matchReason || 'Equivalent movement variation';
-
-    const reasonTextAr =
-      swapReason === 'congestion'
-        ? `ازدحام الصالة / الجهاز مشغول (التحويل إلى ${newExercise.equipmentAr || newExercise.equipment})`
-        : swapReason === 'unavailable'
-          ? `الأداة غير متوفرة — التحويل إلى ${newExercise.equipmentAr || newExercise.equipment}`
-          : swapReason === 'joint_comfort'
-            ? 'بديل مريح للمفاصل وأسفل الظهر'
-            : matchReason || 'بديل حركي مكافئ';
+    const reasonTextEn = matchReason || `Switched to ${newExercise.equipment}`;
+    const reasonTextAr = matchReason || `تم التبديل إلى ${newExercise.equipmentAr || newExercise.equipment}`;
 
     handleSubstituteExercise(
       currentExercise.exerciseId,
@@ -888,8 +890,17 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
       notes: workout.notes || (isAllSetsCompleted ? 'Full workout completed with progressive overload.' : `Partial workout finished: ${completedSetsCount} sets completed.`),
     };
 
-    // Save to robust storage layer
+    // Save to robust storage layer & sync today's gym check-in
     StorageService.completeWorkout(finishedWorkout);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const existingCheckIn = StorageService.getTodayCheckIn(todayStr);
+    StorageService.saveTodayCheckIn({
+      ...existingCheckIn,
+      date: todayStr,
+      status: 'completed',
+      skipAction: null,
+      updatedAt: Date.now(),
+    });
 
     // Play victory finish fanfare audio cue
     if (soundEnabled) {
@@ -908,34 +919,21 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     onFinishWorkout(finishedWorkout);
   };
 
-  // Smart ranked equivalent variations filtered by available equipment & search query
+  // Smart ranked equivalent variations filtered by available equipment & joint safety
   const smartRankedSubstitutes = useMemo(() => {
     if (!currentExercise?.exerciseId) return [];
-    let list = PPLEngine.getSmartRankedSubstitutes(currentExercise.exerciseId, {
+    return PPLEngine.getSmartRankedSubstitutes(currentExercise.exerciseId, {
       equipment: swapEquipmentFilter,
       difficulty: workout.difficultyLevel || 'standard',
-      lowFatigueOnly: swapReason === 'joint_comfort',
+      lowFatigueOnly: jointPainFilter,
     });
-
-    if (swapSearchQuery.trim()) {
-      const q = swapSearchQuery.toLowerCase().trim();
-      list = list.filter(item =>
-        item.exercise.name.toLowerCase().includes(q) ||
-        (item.exercise.nameAr && item.exercise.nameAr.includes(q)) ||
-        item.exercise.equipment.toLowerCase().includes(q) ||
-        (item.exercise.equipmentAr && item.exercise.equipmentAr.includes(q)) ||
-        item.exercise.primaryMuscle.toLowerCase().includes(q)
-      );
-    }
-    return list;
-  }, [currentExercise?.exerciseId, swapEquipmentFilter, workout.difficultyLevel, swapReason, swapSearchQuery]);
+  }, [currentExercise?.exerciseId, swapEquipmentFilter, workout.difficultyLevel, jointPainFilter]);
 
   const comparisonData = PPLEngine.getExerciseComparison(currentExercise?.exerciseId, history);
 
   // Computed Rest Timer Variables
   const progressFraction = totalTimerDuration > 0 ? (timerSeconds / totalTimerDuration) : 0;
   const elapsedPercent = Math.min(100, Math.max(0, (1 - progressFraction) * 100));
-  const remainingPercent = Math.min(100, Math.max(0, progressFraction * 100));
 
   // Determine next upcoming set in this exercise or next exercise
   const uncompletedSets = currentExercise ? currentExercise.sets.filter(s => !s.completed) : [];
@@ -1090,2018 +1088,475 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
     if (soundEnabled) {
       AudioService.playBeep(newLevel === 'hard' ? 980 : newLevel === 'easy' ? 640 : 800, 0.12, 0.25);
     }
-
-    const exNames = updatedWorkout.exercises.map((e) => (isAr && e.exerciseNameAr ? e.exerciseNameAr : e.exerciseName));
-    const levelTitles: Record<WorkoutDifficultyLevel, { titleEn: string; titleAr: string; subEn: string; subAr: string }> = {
-      easy: {
-        titleEn: 'Switched to Easy (Level 1 • Joint, Shoulder & Lower-Back Safe)',
-        titleAr: 'تم التحويل إلى المستوى السهل (كابلات وأجهزة آمنة للكتف وأسفل الظهر)',
-        subEn: 'Exercises replaced with cable/supported movements • 2 sets × 12-15 reps • -15% lighter load • 60s rest',
-        subAr: 'تم استبدال التمارين بتمارين كابلات ودامبل مسنود • مجموعتان × 12-15 تكرار • تخفيف الوزن 15% • راحة 60 ثانية',
-      },
-      standard: {
-        titleEn: 'Switched to Standard (Level 2 • Balanced Dumbbells & Cables)',
-        titleAr: 'تم التحويل إلى المستوى القياسي (مزيج متوازن دامبل وكابلات)',
-        subEn: 'Exercises updated to balanced hypertrophy lineup • 3-4 sets × 8-12 reps • 100% target weight • 90s rest',
-        subAr: 'تم تحديث التمارين للوضع القياسي المتوازن • 3-4 مجموعات × 8-12 تكرار • الوزن المستهدف 100% • راحة 90 ثانية',
-      },
-      hard: {
-        titleEn: 'Switched to Advanced (Level 3 • Heavy Compound & Peak Volume)',
-        titleAr: 'تم التحويل إلى المستوى المتقدم (تمارين مركبة ثقيلة وحجم تدريبي مكثف)',
-        subEn: 'Exercises upgraded to heavy barbell & dumbbell compounds • 4-5 sets × 6-8 reps • +5-7.5% overload • 120s rest',
-        subAr: 'تم ترقية التمارين للمركبات الثقيلة بالبار والدامبل • 4-5 مجموعات × 6-8 تكرار • زيادة الوزن +5% • راحة 120 ثانية',
-      },
-    };
-
-    const meta = levelTitles[newLevel];
-    setDifficultyToast({
-      level: newLevel,
-      title: isAr ? meta.titleAr : meta.titleEn,
-      subtitle: isAr ? meta.subAr : meta.subEn,
-      exercisesList: exNames,
-    });
   };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-md" dir={isAr ? 'rtl' : 'ltr'}>
-      {/* Top Session Action Bar */}
-      <div className="flex h-16 items-center justify-between border-b border-border bg-card/80 px-4 sm:px-6">
-        <div className="flex items-center gap-3">
-          {/* Home Screen Navigation Button */}
+      {/* Clean Minimal Top Action Bar */}
+      <div className="flex h-14 sm:h-16 items-center justify-between border-b border-border bg-card px-3 sm:px-6 gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
           <button
             id="btn-workout-to-home"
             onClick={onClose}
-            className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-sm"
-            title={isAr ? 'العودة للصفحة الرئيسية (التمرين يظل نشطاً)' : 'Back to Home Dashboard (Workout stays active)'}
+            className="flex items-center gap-1.5 rounded-xl border border-border bg-secondary/60 px-3 py-1.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors shrink-0"
+            title={isAr ? 'العودة للصفحة الرئيسية' : 'Back to Home'}
           >
-            <Home className="h-4 w-4" />
-            <span>{isAr ? 'الرئيسية' : 'Home'}</span>
+            <Home className="h-4 w-4 text-primary" />
+            <span className="hidden sm:inline">{isAr ? 'الرئيسية' : 'Home'}</span>
           </button>
 
-          <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-xl bg-primary/20 text-primary">
-            <Flame className="h-5 w-5 fill-current" />
-          </div>
-
-          <div>
-            <h2 className="text-sm font-black text-foreground sm:text-base">
+          <div className="min-w-0">
+            <h2 className="text-sm sm:text-base font-black text-foreground truncate">
               {isAr ? workout.nameAr || workout.name : workout.name}
             </h2>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="capitalize">{workout.type}</span>
-              <span>•</span>
-              <span>{workout.exercises.filter(e => e.completed).length}/{workout.exercises.length} {t.common.completed}</span>
+            <div className="text-[11px] font-mono tabular-nums text-muted-foreground">
+              {workout.exercises.filter(e => e.completed).length}/{workout.exercises.length} {isAr ? 'تمارين مكتملة' : 'exercises done'}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Quick Adaptive Routine / Swap Trigger */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Exercise Guidance Slide-Out Trigger */}
           <button
-            id="btn-adaptive-tune-top"
-            onClick={() => setSubstitutionModalOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-sm"
-            title={isAr ? 'نظام التبديل المرن وتكييف التمرين أو الوقت' : 'Flexible Workout Substitution & Adaptive Tuning'}
+            id="btn-toggle-workout-tools"
+            type="button"
+            onClick={() => setGuidanceOpen(true)}
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors whitespace-nowrap shrink-0 ${
+              guidanceOpen
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-border bg-secondary/60 text-foreground hover:bg-secondary'
+            }`}
           >
-            <RefreshCw className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{isAr ? 'تبديل وتكييف' : 'Adaptive Swap'}</span>
-            <span className="sm:hidden">{isAr ? 'تكييف' : 'Adapt'}</span>
+            <BookOpen className="h-3.5 w-3.5" />
+            <span>{isAr ? 'إرشادات التمرين' : 'Exercise Guidance'}</span>
           </button>
 
-          {/* Sound & Tone Selector Dropdown Trigger */}
-          <button
-            id="btn-warmup-workout-top"
-            onClick={() => setSmartWarmupOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-amber-400 hover:bg-amber-500/20 transition-all shadow-sm"
-            title={isAr ? 'الإحماء الذكي الديناميكي (5 دقائق)' : '5-Minute Smart Warm-up'}
-          >
-            <Flame className="h-4 w-4 fill-current" />
-            <span className="hidden sm:inline">{isAr ? 'إحماء ذكي (5 د)' : 'Smart Warm-up (5m)'}</span>
-            <span className="sm:hidden">{isAr ? 'إحماء' : 'Warm-up'}</span>
-          </button>
-
-          <div className="relative">
-            <button
-              id="btn-sound-toggle-workout"
-              onClick={() => setSoundPickerOpen(!soundPickerOpen)}
-              className="flex items-center gap-1 rounded-lg border border-border bg-secondary/60 px-2.5 py-1.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors"
-              title={isAr ? 'تغيير صوت وتنبيهات التدريب (Start, End, Rest, Beep)' : 'Workout Audio Cues & Rest Sound Selector'}
-            >
-              {soundEnabled ? (
-                <Volume2 className="h-4 w-4 text-primary" />
-              ) : (
-                <VolumeX className="h-4 w-4 text-muted-foreground" />
-              )}
-              <span className="text-[11px] capitalize hidden sm:inline">{selectedSound}</span>
-            </button>
-
-            {soundPickerOpen && (
-              <div 
-                className="absolute right-0 top-full mt-2 w-52 rounded-2xl border border-border p-2 shadow-2xl z-50 space-y-1"
-                style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
-              >
-                <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
-                  <span>{isAr ? 'المؤثرات الصوتية للجلسة' : 'Workout Audio Cues'}</span>
-                  <Bell className="h-3 w-3 text-primary" />
-                </div>
-                {(['beep', 'whistle', 'chime', 'buzzer', 'bell'] as RestSoundType[]).map(st => (
-                  <button
-                    key={st}
-                    onClick={() => {
-                      setSelectedSound(st);
-                      AudioService.preview(st);
-                      setSoundPickerOpen(false);
-                    }}
-                    className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs font-semibold transition-colors ${
-                      selectedSound === st
-                        ? 'bg-primary text-primary-foreground font-bold'
-                        : 'text-foreground hover:bg-secondary'
-                    }`}
-                  >
-                    <span className="capitalize">
-                      {st === 'beep' ? 'Standard Beep (افتراضي)' :
-                       st === 'whistle' ? 'صافرة تدريب (Whistle)' :
-                       st === 'chime' ? 'جرس رقمي (Chime)' :
-                       st === 'buzzer' ? 'بوق الجيم (Buzzer)' : 'جرس حلبة (Bell)'}
-                    </span>
-                    {selectedSound === st && <Check className="h-3.5 w-3.5" />}
-                  </button>
-                ))}
-                <div className="border-t border-border pt-1">
-                  <button
-                    onClick={() => {
-                      setSoundEnabled(!soundEnabled);
-                      setSoundPickerOpen(false);
-                    }}
-                    className="flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-secondary"
-                  >
-                    <span>{soundEnabled ? (isAr ? 'كتم جميع الأصوات' : 'Mute All Audio') : (isAr ? 'تفعيل الأصوات' : 'Unmute Audio')}</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-          
           <button
             id="btn-finish-workout-top"
             onClick={handleFinish}
-            className="flex items-center gap-1 sm:gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs font-black text-white shadow-md shadow-emerald-600/20 transition-all shrink-0"
-            title={isAr ? 'إنهاء تمرين اليوم الآن (كامل أو جزئي)' : "Finish Today's Workout Now (Full or Partial)"}
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-3.5 py-1.5 text-xs font-black text-white transition-colors"
           >
-            <Trophy className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">{isAr ? 'إنهاء تمرين اليوم الآن' : "Finish Today's Workout"}</span>
-            <span className="sm:hidden">{isAr ? 'إنهاء التمرين' : 'Finish'}</span>
+            <Trophy className="h-3.5 w-3.5" />
+            <span>{isAr ? 'إنهاء التمرين' : 'Finish'}</span>
           </button>
 
           <button
             id="btn-close-active-workout"
             onClick={onClose}
-            className="rounded-lg p-2 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-            title={isAr ? 'إخفاء مؤقت والعودة للرئيسية' : 'Minimize workout'}
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+            title={isAr ? 'إغلاق' : 'Close'}
           >
             <X className="h-5 w-5" />
           </button>
         </div>
       </div>
 
-      {/* Main Active Workout Grid */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
-        <div className="mx-auto max-w-4xl space-y-5">
-          {/* Interactive 3-Tier Difficulty Toggle (Easy, Standard, Advanced) — Swaps Exercises, Sets & Weights */}
-          <div
-            id="active-workout-difficulty-toggle-card"
-            className="rounded-2xl border border-border bg-card/90 p-3.5 sm:p-4 shadow-md space-y-3"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary border border-primary/25">
-                  <SlidersHorizontal className="h-4 w-4" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-xs sm:text-sm font-black text-foreground">
-                      {isAr
-                        ? 'مستوى صعوبة التمرين ونوعية الأجهزة (يغيّر التمارين والأوزان فوراً)'
-                        : 'Session Difficulty & Exercise Lineup Toggle'}
-                    </h3>
-                    <span className="rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold text-emerald-400 flex items-center gap-1">
-                      <ShieldCheck className="h-3 w-3" />
-                      <span>{isAr ? 'مراعاة الكتف وأسفل الظهر' : 'Shoulder & Lower-Back Safe'}</span>
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    {isAr
-                      ? 'اختر المستوى المناسب لطاقتك اليوم ليتم فوراً تحويل تمارين اليوم والمجموعات والأوزان المقترحة:'
-                      : 'Switch anytime to dynamically replace exercises, sets, rest times, and weight suggestions:'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              {/* Easy Tier Button */}
-              <button
-                id="btn-modal-difficulty-easy"
-                type="button"
-                onClick={() => handleSelectDifficultyLevel('easy')}
-                className={`flex flex-col justify-between rounded-xl border p-3 text-start transition-all cursor-pointer ${
-                  activeDifficultyLevel === 'easy'
-                    ? 'border-emerald-500 bg-emerald-500/15 ring-2 ring-emerald-500/30 shadow-md'
-                    : 'border-border/80 bg-secondary/30 hover:bg-secondary/60'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2 w-full">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      <Feather className="h-3.5 w-3.5" />
-                    </div>
-                    <div>
-                      <div className={`text-xs font-black ${activeDifficultyLevel === 'easy' ? 'text-emerald-400' : 'text-foreground'}`}>
-                        {isAr ? 'سهل (كابلات وأجهزة آمنة)' : 'Easy (Cables & Safe DB)'}
-                      </div>
-                      <div className="text-[10px] font-mono text-muted-foreground">
-                        {isAr ? 'حماية للكتف والقطنية' : 'Shoulder & Spine Safe'}
-                      </div>
-                    </div>
-                  </div>
-                  {activeDifficultyLevel === 'easy' && (
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-black">
-                      <Check className="h-3 w-3 stroke-[3]" />
-                    </span>
-                  )}
-                </div>
-                <div className="mt-2 pt-1.5 border-t border-border/50 flex items-center justify-between text-[10px] font-mono text-muted-foreground w-full">
-                  <span>{isAr ? 'مجموعتان × 12-15' : '2 Sets × 12-15'}</span>
-                  <span className="text-emerald-400 font-bold">{isAr ? '-15% وزن • راحة 60ث' : '-15% Load • 60s'}</span>
-                </div>
-              </button>
-
-              {/* Standard Tier Button */}
-              <button
-                id="btn-modal-difficulty-standard"
-                type="button"
-                onClick={() => handleSelectDifficultyLevel('standard')}
-                className={`flex flex-col justify-between rounded-xl border p-3 text-start transition-all cursor-pointer ${
-                  activeDifficultyLevel === 'standard'
-                    ? 'border-primary bg-primary/15 ring-2 ring-primary/30 shadow-md'
-                    : 'border-border/80 bg-secondary/30 hover:bg-secondary/60'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2 w-full">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/20 text-primary border border-primary/30">
-                      <Dumbbell className="h-3.5 w-3.5" />
-                    </div>
-                    <div>
-                      <div className={`text-xs font-black ${activeDifficultyLevel === 'standard' ? 'text-primary' : 'text-foreground'}`}>
-                        {isAr ? 'قياسي (دامبل + كابلات)' : 'Standard (DB + Cables)'}
-                      </div>
-                      <div className="text-[10px] font-mono text-muted-foreground">
-                        {isAr ? 'توازن مثالي للبناء العضلي' : 'Balanced Hypertrophy'}
-                      </div>
-                    </div>
-                  </div>
-                  {activeDifficultyLevel === 'standard' && (
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                      <Check className="h-3 w-3 stroke-[3]" />
-                    </span>
-                  )}
-                </div>
-                <div className="mt-2 pt-1.5 border-t border-border/50 flex items-center justify-between text-[10px] font-mono text-muted-foreground w-full">
-                  <span>{isAr ? '3-4 مجموعات × 8-12' : '3-4 Sets × 8-12'}</span>
-                  <span className="text-primary font-bold">{isAr ? 'وزن 100% • راحة 90ث' : '100% Load • 90s'}</span>
-                </div>
-              </button>
-
-              {/* Advanced Tier Button */}
-              <button
-                id="btn-modal-difficulty-hard"
-                type="button"
-                onClick={() => handleSelectDifficultyLevel('hard')}
-                className={`flex flex-col justify-between rounded-xl border p-3 text-start transition-all cursor-pointer ${
-                  activeDifficultyLevel === 'hard'
-                    ? 'border-purple-500 bg-purple-500/15 ring-2 ring-purple-500/30 shadow-md'
-                    : 'border-border/80 bg-secondary/30 hover:bg-secondary/60'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2 w-full">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                      <Zap className="h-3.5 w-3.5" />
-                    </div>
-                    <div>
-                      <div className={`text-xs font-black ${activeDifficultyLevel === 'hard' ? 'text-purple-400' : 'text-foreground'}`}>
-                        {isAr ? 'متقدم (مركبات ثقيلة + بار)' : 'Advanced (Heavy Compound)'}
-                      </div>
-                      <div className="text-[10px] font-mono text-muted-foreground">
-                        {isAr ? 'أقصى قوة وحجم تدريبي' : 'Peak Strength & Volume'}
-                      </div>
-                    </div>
-                  </div>
-                  {activeDifficultyLevel === 'hard' && (
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-500 text-white">
-                      <Check className="h-3 w-3 stroke-[3]" />
-                    </span>
-                  )}
-                </div>
-                <div className="mt-2 pt-1.5 border-t border-border/50 flex items-center justify-between text-[10px] font-mono text-muted-foreground w-full">
-                  <span>{isAr ? '4-5 مجموعات × 6-8' : '4-5 Sets × 6-8'}</span>
-                  <span className="text-purple-400 font-bold">{isAr ? '+5% وزن • راحة 120ث' : '+5% Load • 120s'}</span>
-                </div>
-              </button>
-            </div>
-
-            {/* Live Confirmation Toast showing the newly replaced exercises when Difficulty changes */}
-            <AnimatePresence>
-              {difficultyToast && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0, y: -6 }}
-                  animate={{ opacity: 1, height: 'auto', y: 0 }}
-                  exit={{ opacity: 0, height: 0, y: -6 }}
-                  className={`rounded-xl border p-3 text-xs space-y-1.5 ${
-                    difficultyToast.level === 'easy'
-                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
-                      : difficultyToast.level === 'hard'
-                      ? 'border-purple-500/40 bg-purple-500/10 text-purple-200'
-                      : 'border-primary/40 bg-primary/10 text-foreground'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 font-black">
-                      <Sparkles className="h-4 w-4 shrink-0 text-primary" />
-                      <span>{difficultyToast.title}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setDifficultyToast(null)}
-                      className="text-muted-foreground hover:text-foreground p-0.5"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">{difficultyToast.subtitle}</p>
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {difficultyToast.exercisesList.map((exName, i) => (
-                      <span
-                        key={i}
-                        className="rounded-lg bg-card/80 border border-border px-2 py-0.5 text-[10px] font-bold text-foreground"
-                      >
-                        {i + 1}. {exName}
-                      </span>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* Dynamic Warm-up Suggestion Banner (Prior to First Set) */}
-          {!workout.exercises.some(ex => ex.sets.some(s => s.completed)) && !warmupBannerDismissed && (
-            <div className="relative overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent p-3.5 sm:p-4 shadow-sm flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-inner">
-                  <Flame className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-black text-foreground">
-                      {isAr ? 'إحماء حركي ذكي مخصص لعضلات جلستك اليوم' : 'Dynamic Warm-up Available'}
-                    </span>
-                    <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-400 uppercase">
-                      5 MIN
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    {isAr
-                      ? 'سلسلة تليين وإطالات ديناميكية مهيأة خصيصاً للمفاصل والعضلات المستهدفة في هذه الجلسة.'
-                      : 'Tailored mobility & stretching sequence calibrated for today’s target muscles.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  id="btn-launch-warmup-banner"
-                  onClick={() => setSmartWarmupOpen(true)}
-                  className="rounded-xl bg-amber-500 px-3 py-1.5 text-xs font-bold text-black hover:bg-amber-400 transition-transform active:scale-95 shadow-sm"
-                >
-                  {isAr ? 'بدء الإحماء' : 'Start Warm-up'}
-                </button>
-                <button
-                  onClick={() => setWarmupBannerDismissed(true)}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-                  title={isAr ? 'تخطي' : 'Dismiss'}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Exercise Selector Horizontal Pills (Bilingual Arabic + English) */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
+      {/* Main Concise Workout Area */}
+      <div className="flex-1 overflow-y-auto p-3 sm:p-5 custom-scrollbar">
+        <div className="mx-auto max-w-3xl space-y-4">
+          {/* Exercise Numbered Tabs (1, 2, 3...) */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
             {workout.exercises.map((ex, idx) => (
               <button
                 key={ex.exerciseId + idx}
                 id={`pill-ex-${idx}`}
                 onClick={() => setCurrentExerciseIndex(idx)}
-                className={`flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
+                className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${
                   idx === currentExerciseIndex
-                    ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20 scale-[1.02]'
+                    ? 'border-primary bg-primary text-primary-foreground'
                     : ex.completed
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    : 'bg-card text-muted-foreground border border-border hover:bg-secondary'
+                      ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
+                      : 'border-border bg-card text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <span>{idx + 1}.</span>
-                <span className="truncate max-w-[160px] sm:max-w-[230px]">
-                  {ex.exerciseNameAr
-                    ? `${ex.exerciseNameAr} (${ex.exerciseName})`
-                    : ex.exerciseName}
+                <span className="font-mono tabular-nums">{idx + 1}.</span>
+                <span className="truncate max-w-[140px] sm:max-w-[200px]">
+                  {isAr && ex.exerciseNameAr ? ex.exerciseNameAr : ex.exerciseName}
                 </span>
-                {ex.isSubstituted && (
-                  <ArrowLeftRight
-                    className="h-3 w-3 opacity-80 shrink-0"
-                    title={isAr ? 'تم استبدال هذا التمرين' : 'Swapped exercise'}
-                  />
-                )}
-                {ex.completed && <Check className="h-3.5 w-3.5" />}
+                {ex.completed && <Check className="h-3.5 w-3.5 shrink-0" />}
               </button>
             ))}
           </div>
 
-          {/* Current Exercise Card with Motion Transition */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentExerciseIndex}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="rounded-2xl border border-border bg-card p-5 shadow-lg space-y-5"
-            >
-              {/* Header info & quick action icons */}
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-4">
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-lg sm:text-xl font-black text-foreground">
-                      {isAr && currentExercise.exerciseNameAr ? currentExercise.exerciseNameAr : currentExercise.exerciseName}
-                    </h3>
-                    {currentExercise.exerciseNameAr && (
-                      <span
-                        className="rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-mono font-bold text-primary"
-                        dir="ltr"
-                      >
-                        {isAr ? currentExercise.exerciseName : currentExercise.exerciseNameAr}
-                      </span>
-                    )}
-                    <span className="text-xs text-muted-foreground font-semibold">
-                      · {isAr && fullExerciseData?.primaryMuscleAr ? fullExerciseData.primaryMuscleAr : currentExercise.primaryMuscle}
-                      {fullExerciseData?.equipment ? ` · ${isAr && fullExerciseData.equipmentAr ? fullExerciseData.equipmentAr : fullExerciseData.equipment}` : ''}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {t.workout.targetReps}: <span className="font-bold text-foreground">{fullExerciseData?.targetRepRange || '8-10'}</span> · {t.workout.rpe}: <span className="font-bold text-foreground">{currentExercise.targetRpe}</span> · {t.workout.rest}: <span className="font-bold text-foreground">{currentExercise.restSeconds}s</span>
+          {/* Main Minimal Active Exercise Card: Essential Exercise Name, Previous Performance & Current Target */}
+          <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 space-y-4">
+            {/* Essential Header: Exercise Name + Video + Swap + Specific Exercise Guidance */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3.5">
+              <div className="min-w-0">
+                <h3 className="text-base sm:text-lg font-black text-foreground">
+                  {currentExerciseIndex + 1}. {isAr && currentExercise.exerciseNameAr ? currentExercise.exerciseNameAr : currentExercise.exerciseName}
+                </h3>
+                {currentExercise.exerciseNameAr && (
+                  <p className="text-xs font-mono text-muted-foreground mt-0.5 truncate" dir="ltr">
+                    {isAr ? currentExercise.exerciseName : currentExercise.exerciseNameAr}
                   </p>
-                </div>
-
-                <div className="flex items-center flex-wrap gap-2">
-                  {/* Direct YouTube Video Search using English Exercise Name */}
-                  <a
-                    id="btn-youtube-english-search"
-                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${currentExercise.exerciseName} proper form exercise tutorial`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 rounded-xl border border-red-500/40 bg-red-500/15 px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-500/25 transition-all shadow-sm"
-                    title={
-                      isAr
-                        ? `بحث فيديو التمرين على يوتيوب بالاسم الإنجليزي: ${currentExercise.exerciseName}`
-                        : `Search exercise tutorial on YouTube in English: ${currentExercise.exerciseName}`
-                    }
-                  >
-                    <Play className="h-3.5 w-3.5 fill-current text-red-400" />
-                    <span>{isAr ? `فيديو التمرين (EN)` : `Video (EN)`}</span>
-                  </a>
-
-                  {/* Instant In-Session Swap Exercise Toggle Button (Equipment / Congestion) */}
-                  <button
-                    id="btn-quick-swap-exercise"
-                    type="button"
-                    onClick={() => setSwapExerciseOpen(prev => !prev)}
-                    className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold transition-all shadow-sm ${
-                      swapExerciseOpen
-                        ? 'border-amber-500 bg-amber-500 text-black shadow-amber-500/20'
-                        : 'border-amber-500/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25'
-                    }`}
-                    title={
-                      isAr
-                        ? 'تبديل فوري للتمرين ببديل مكافئ حسب الأداة المتاحة أو ازدحام الصالة'
-                        : 'Instantly swap exercise with an equivalent variation based on available equipment or gym congestion'
-                    }
-                  >
-                    <ArrowLeftRight className="h-3.5 w-3.5" />
-                    <span>{isAr ? 'تبديل التمرين (بديل مكافئ)' : 'Swap Exercise'}</span>
-                  </button>
-
-                  {/* RPE Auto-Regulation & Load Calculator Button */}
-                  <button
-                    id="btn-open-rpe-calculator"
-                    type="button"
-                    onClick={() => handleOpenRPECalculator()}
-                    className="flex items-center gap-1.5 rounded-xl border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-sm"
-                    title={t.workout.rpeCalculatorSubtitle}
-                  >
-                    <Calculator className="h-3.5 w-3.5" />
-                    <span>{t.workout.rpeCalculatorBtn}</span>
-                  </button>
-
-                  {/* Barbell Plate Loading Visualizer Button */}
-                  <button
-                    id="btn-toggle-plate-visualizer"
-                    type="button"
-                    onClick={() => setPlateVisualizerOpen(prev => !prev)}
-                    className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-all shadow-sm ${
-                      plateVisualizerOpen
-                        ? 'border-cyan-400 bg-cyan-500 text-black shadow-cyan-500/20'
-                        : 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20'
-                    }`}
-                    title={
-                      isAr
-                        ? 'حاسبة ومخطط تركيب طارات البار لكل مجموعة'
-                        : 'Interactive Barbell Plate Loading Visualizer per set'
-                    }
-                  >
-                    <Dumbbell className="h-3.5 w-3.5" />
-                    <span>{isAr ? 'حساب الطارات' : 'Plate Loader'}</span>
-                  </button>
-
-                  {fullExerciseData && (
-                    <button
-                      id="btn-view-exercise-guide"
-                      onClick={() => onOpenExerciseDetails(fullExerciseData)}
-                      className="flex items-center gap-1.5 rounded-xl border border-border bg-secondary/60 px-3 py-2 text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
-                    >
-                      <Info className="h-4 w-4 text-primary" />
-                      <span>{t.common.guideAndVideo}</span>
-                    </button>
-                  )}
-
-                  <button
-                    id="btn-swap-exercise-toggle"
-                    onClick={() => setSubstitutionModalOpen(true)}
-                    className="flex items-center gap-1.5 rounded-xl border border-border bg-secondary/60 px-3 py-2 text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-secondary transition-all"
-                    title={isAr ? 'تخصيص شامل للجدول أو استعراض استشفاء العضلات' : 'Open full workout & split customization'}
-                  >
-                    <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
-                    <span className="hidden sm:inline">{isAr ? 'خيارات متقدمة' : 'Advanced Swap'}</span>
-                  </button>
-                </div>
+                )}
               </div>
 
-              {/* Active Substitution Status Banner with 1-Click Revert */}
-              {currentExercise.isSubstituted && (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-2 text-foreground">
-                    <ArrowLeftRight className="h-4 w-4 text-amber-400 shrink-0" />
-                    <div>
-                      <span className="font-bold text-amber-300">
-                        {isAr ? 'تم استبدال التمرين:' : 'Swapped Movement:'}{' '}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {isAr
-                          ? `كان في الأصل (${currentExercise.originalExerciseNameAr || currentExercise.originalExerciseName || 'التمرين المبرمج'})`
-                          : `Originally programmed as ${currentExercise.originalExerciseName || 'Scheduled Movement'}`}
-                        {currentExercise.substitutionReason ? ` · ${currentExercise.substitutionReason}` : ''}
-                      </span>
-                    </div>
-                  </div>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <a
+                  id="btn-youtube-english-search"
+                  href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${currentExercise.exerciseName} proper form exercise tutorial`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 rounded-xl border border-border bg-secondary/60 px-3 py-1.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors whitespace-nowrap"
+                >
+                  <Play className="h-3 w-3 fill-current text-red-400" />
+                  <span>{isAr ? 'فيديو' : 'Video'}</span>
+                </a>
 
-                  {currentExercise.originalExerciseId && (
-                    <button
-                      id="btn-revert-original-exercise"
-                      type="button"
-                      onClick={handleRevertToOriginalExercise}
-                      className="flex items-center gap-1 rounded-lg border border-amber-500/40 bg-card/80 px-2.5 py-1 text-[11px] font-bold text-amber-300 hover:bg-amber-500/20 transition-colors"
-                    >
-                      <RotateCcw className="h-3 w-3" />
-                      <span>{isAr ? 'استعادة التمرين الأصلي' : 'Revert to Original'}</span>
-                    </button>
-                  )}
-                </div>
-              )}
+                <button
+                  id="btn-quick-swap-exercise"
+                  type="button"
+                  onClick={() => setSwapExerciseOpen(prev => !prev)}
+                  className={`flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors whitespace-nowrap ${
+                    swapExerciseOpen
+                      ? 'border-amber-500 bg-amber-500 text-black'
+                      : 'border-border bg-secondary/60 text-foreground hover:bg-secondary'
+                  }`}
+                >
+                  <ArrowLeftRight className="h-3.5 w-3.5" />
+                  <span>{isAr ? 'تبديل' : 'Swap'}</span>
+                </button>
 
-              {/* Progressive Overload & RPE Dynamic Future Session Weight Advisor Banner */}
-              {progressionAdvice && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                  {/* Card 1: Today's Suggested Weight (Based on Previous Session's RPE) */}
-                  <div className={`rounded-2xl border p-3.5 flex flex-col justify-between gap-2.5 transition-all ${
-                    progressionAdvice.status === 'increase'
-                      ? 'border-emerald-500/35 bg-gradient-to-br from-emerald-500/15 via-card to-card'
-                      : progressionAdvice.status === 'deload'
-                        ? 'border-rose-500/35 bg-gradient-to-br from-rose-500/15 via-card to-card'
-                        : 'border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card'
-                  }`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
-                          progressionAdvice.status === 'increase'
-                            ? 'bg-emerald-500/20 text-emerald-400'
-                            : progressionAdvice.status === 'deload'
-                              ? 'bg-rose-500/20 text-rose-400'
-                              : 'bg-primary/20 text-primary'
-                        }`}>
-                          {progressionAdvice.status === 'increase' ? (
-                            <TrendingUp className="h-4 w-4" />
-                          ) : progressionAdvice.status === 'deload' ? (
-                            <TrendingDown className="h-4 w-4" />
-                          ) : (
-                            <Gauge className="h-4 w-4" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
-                              {isAr ? 'الوزن المقترح لليوم (بناءً على RPE السابق)' : "Today's RPE-Adjusted Weight"}
-                            </span>
-                            {progressionAdvice.lastAvgRpe !== undefined && (
-                              <span className="rounded-md bg-secondary/90 px-1.5 py-0.5 text-[10px] font-mono font-bold text-foreground border border-border">
-                                {isAr ? `السابق: RPE ${progressionAdvice.lastAvgRpe}` : `Last: RPE ${progressionAdvice.lastAvgRpe}`}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-baseline gap-2 mt-0.5">
-                            <span className="text-lg font-black font-mono text-foreground">
-                              {progressionAdvice.recommendedWeight} kg
-                            </span>
-                            {progressionAdvice.weightDeltaKg !== undefined && progressionAdvice.weightDeltaKg !== 0 && (
-                              <span className={`text-xs font-extrabold font-mono ${
-                                progressionAdvice.weightDeltaKg > 0 ? 'text-emerald-400' : 'text-rose-400'
-                              }`}>
-                                ({progressionAdvice.weightDeltaKg > 0 ? `+${progressionAdvice.weightDeltaKg}` : progressionAdvice.weightDeltaKg} kg)
-                              </span>
-                            )}
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${
-                              progressionAdvice.status === 'increase'
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                : progressionAdvice.status === 'deload'
-                                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                                  : 'bg-primary/20 text-primary border border-primary/30'
-                            }`}>
-                              {progressionAdvice.status === 'increase'
-                                ? (isAr ? 'زيادة تدريجية' : 'Overload')
-                                : progressionAdvice.status === 'deload'
-                                  ? (isAr ? 'تخفيف ذكي' : 'RPE Deload')
-                                  : (isAr ? 'تثبيت الوزن' : 'Maintain')}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+                <button
+                  id="btn-open-exercise-guidance"
+                  type="button"
+                  onClick={() => setGuidanceOpen(true)}
+                  className="flex items-center gap-1 rounded-xl border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 transition-colors whitespace-nowrap"
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  <span>{isAr ? 'إرشادات' : 'Guidance'}</span>
+                </button>
+              </div>
+            </div>
 
-                      <button
-                        id="btn-apply-rpe-progression-advice"
-                        type="button"
-                        onClick={handleApplyRpeProgressionAdvice}
-                        className="shrink-0 flex items-center gap-1 rounded-xl bg-primary px-2.5 py-1.5 text-[11px] font-bold text-primary-foreground shadow-sm hover:bg-primary/90 active:scale-95 transition-all"
-                        title={isAr ? 'تطبيق الأوزان المقترحة حسب RPE على جميع المجموعات' : 'Apply RPE-calibrated suggested weights to all sets'}
-                      >
-                        <Zap className="h-3 w-3" />
-                        <span>{isAr ? 'تطبيق المقترح' : 'Apply Weight'}</span>
-                      </button>
-                    </div>
-
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {isAr && progressionAdvice.reasonAr ? progressionAdvice.reasonAr : progressionAdvice.reason}
-                    </p>
-                  </div>
-
-                  {/* Card 2: Live Next-Session Weight Forecast (Based on Today's Logged Set RPEs) */}
-                  {nextSessionForecast && (
-                    <div className={`rounded-2xl border p-3.5 flex flex-col justify-between gap-2.5 transition-all ${
-                      nextSessionForecast.status === 'increase'
-                        ? 'border-emerald-500/35 bg-gradient-to-br from-emerald-500/10 via-card to-card'
-                        : nextSessionForecast.status === 'deload'
-                          ? 'border-rose-500/35 bg-gradient-to-br from-rose-500/10 via-card to-card'
-                          : 'border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-card to-card'
-                    }`}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
-                            nextSessionForecast.status === 'increase'
-                              ? 'bg-emerald-500/20 text-emerald-400'
-                              : nextSessionForecast.status === 'deload'
-                                ? 'bg-rose-500/20 text-rose-400'
-                                : 'bg-amber-500/20 text-amber-400'
-                          }`}>
-                            <Sparkles className="h-4 w-4" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
-                                {isAr ? 'توقع وزن الجلسة القادمة (حسب RPE اليوم)' : 'Next Session Weight Forecast (Live RPE)'}
-                              </span>
-                              {nextSessionForecast.lastAvgRpe !== undefined && (
-                                <span className="rounded-md bg-secondary/90 px-1.5 py-0.5 text-[10px] font-mono font-bold text-foreground border border-border">
-                                  {isAr ? `متوسط اليوم: RPE ${nextSessionForecast.lastAvgRpe}` : `Today Avg: RPE ${nextSessionForecast.lastAvgRpe}`}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-baseline gap-2 mt-0.5">
-                              <span className="text-lg font-black font-mono text-foreground">
-                                {nextSessionForecast.recommendedWeight} kg
-                              </span>
-                              {nextSessionForecast.weightDeltaKg !== undefined && (
-                                <span className={`text-xs font-extrabold font-mono ${
-                                  nextSessionForecast.weightDeltaKg > 0
-                                    ? 'text-emerald-400'
-                                    : nextSessionForecast.weightDeltaKg < 0
-                                      ? 'text-rose-400'
-                                      : 'text-amber-400'
-                                }`}>
-                                  ({nextSessionForecast.weightDeltaKg > 0 ? `+${nextSessionForecast.weightDeltaKg} kg` : nextSessionForecast.weightDeltaKg === 0 ? (isAr ? 'ثبات' : '0 kg') : `${nextSessionForecast.weightDeltaKg} kg`})
-                                </span>
-                              )}
-                              <span className="text-[10px] text-muted-foreground font-mono">
-                                {isAr ? `للجلسة القادمة` : `Next Session`}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        {isAr && nextSessionForecast.reasonAr ? nextSessionForecast.reasonAr : nextSessionForecast.reason}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Historical Performance Comparison & Overload Progression Tracker */}
-              <ExerciseHistoryComparison
-                currentExercise={currentExercise}
-                history={history}
-                profile={profile}
-                isAr={isAr}
-                onApplyPreset={handleApplyPresetSets}
-              />
-
-              {/* Instant In-Session Exercise Swap Drawer (Equipment Availability & Gym Congestion) */}
-              <AnimatePresence>
-                {swapExerciseOpen && (
-                  <motion.div
-                    id="panel-instant-exercise-swap"
-                    initial={{ opacity: 0, height: 0, y: -6 }}
-                    animate={{ opacity: 1, height: 'auto', y: 0 }}
-                    exit={{ opacity: 0, height: 0, y: -6 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-card to-card p-4 space-y-4 shadow-lg"
-                  >
-                    {/* Top Row: Title + Close / Open Full Modal */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
-                          <ArrowLeftRight className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-black text-foreground">
-                            {isAr
-                              ? 'تبديل فوري للتمرين (حسب الأداة المتاحة أو ازدحام الصالة)'
-                              : 'Instant Exercise Swap — Equivalent Variations'}
-                          </h4>
-                          <p className="text-xs text-muted-foreground">
-                            {isAr
-                              ? `اختر بديلاً مكافئاً لعضلة (${fullExerciseData?.primaryMuscleAr || currentExercise.primaryMuscle}) وسيتم ضبط الأوزان تلقائياً.`
-                              : `Select an equivalent movement targeting ${currentExercise.primaryMuscle}; weights calibrate automatically.`}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSwapExerciseOpen(false);
-                            setSubstitutionModalOpen(true);
-                          }}
-                          className="rounded-lg border border-border bg-secondary/70 px-2.5 py-1.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors"
-                        >
-                          {isAr ? 'تبديل جدول اليوم بالكامل' : 'Swap Full Split'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSwapExerciseOpen(false)}
-                          className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          {t.common.cancel}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Controls Row: Reason Selector & Available Equipment Filter */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-                      {/* Reason for Swap (4 cols) */}
-                      <div className="lg:col-span-5 rounded-xl border border-border bg-card/70 p-2.5 space-y-1.5">
-                        <span className="text-[11px] font-bold text-muted-foreground block">
-                          {isAr ? 'سبب التبديل السريع:' : 'Why are you swapping?'}
-                        </span>
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {[
-                            { id: 'congestion', labelEn: 'Machine Busy / Crowded', labelAr: 'الجهاز مشغول / ازدحام' },
-                            { id: 'unavailable', labelEn: 'Equipment Missing', labelAr: 'الأداة غير متوفرة' },
-                            { id: 'joint_comfort', labelEn: 'Joint / Back Comfort', labelAr: 'راحة المفاصل والظهر' },
-                            { id: 'preference', labelEn: 'Movement Variety', labelAr: 'تفضيل / تنويع' },
-                          ].map(r => (
-                            <button
-                              key={r.id}
-                              type="button"
-                              onClick={() => setSwapReason(r.id as any)}
-                              className={`px-2 py-1.5 rounded-lg text-[11px] font-bold border text-center transition-colors ${
-                                swapReason === r.id
-                                  ? 'bg-amber-500 text-black border-amber-500'
-                                  : 'bg-secondary/40 text-muted-foreground border-border hover:text-foreground'
-                              }`}
-                            >
-                              {isAr ? r.labelAr : r.labelEn}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Equipment Filter Bar (7 cols) */}
-                      <div className="lg:col-span-7 rounded-xl border border-border bg-card/70 p-2.5 space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-muted-foreground">
-                            {isAr ? 'تصفية حسب الأداة المتاحة لك الآن:' : 'Filter by Available Equipment Right Now:'}
-                          </span>
-                          <span className="text-[10px] font-mono text-muted-foreground">
-                            {smartRankedSubstitutes.length} {isAr ? 'بدائل متاحة' : 'matches'}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-                          {[
-                            { id: 'all', labelEn: 'All Gear', labelAr: 'الكل' },
-                            { id: 'dumbbells', labelEn: 'Dumbbells', labelAr: 'دمبل' },
-                            { id: 'cables', labelEn: 'Cables', labelAr: 'كابلات' },
-                            { id: 'machines', labelEn: 'Machines', labelAr: 'أجهزة' },
-                            { id: 'barbell', labelEn: 'Barbell', labelAr: 'بار' },
-                            { id: 'bodyweight', labelEn: 'Bodyweight', labelAr: 'وزن الجسم' },
-                          ].map(eq => (
-                            <button
-                              key={eq.id}
-                              id={`btn-swap-filter-${eq.id}`}
-                              type="button"
-                              onClick={() => setSwapEquipmentFilter(eq.id as WorkoutEquipmentFilter)}
-                              className={`px-2 py-1.5 rounded-lg text-[11px] font-bold border text-center transition-colors ${
-                                swapEquipmentFilter === eq.id
-                                  ? 'bg-primary text-primary-foreground border-primary shadow-xs'
-                                  : 'bg-secondary/40 text-muted-foreground border-border hover:text-foreground'
-                              }`}
-                            >
-                              {isAr ? eq.labelAr : eq.labelEn}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Quick Search Input */}
-                    <div className="relative">
-                      <Search className="absolute right-3 top-2.5 h-3.5 w-3.5 text-muted-foreground rtl:right-auto rtl:left-3" />
-                      <input
-                        type="text"
-                        value={swapSearchQuery}
-                        onChange={e => setSwapSearchQuery(e.target.value)}
-                        placeholder={
-                          isAr
-                            ? 'ابحث عن التمرين البديل بالاسم أو الأداة (مثل: دمبل، كابل، جهاز)...'
-                            : 'Search alternative exercise by name or equipment (e.g., Dumbbell, Cable, Machine)...'
-                        }
-                        className="w-full rounded-xl border border-border bg-card py-2 px-9 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-                      />
-                    </div>
-
-                    {/* Ranked Equivalent Exercises Grid */}
-                    {smartRankedSubstitutes.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[320px] overflow-y-auto pr-1">
-                        {smartRankedSubstitutes.map(item => {
-                          const sub = item.exercise;
-                          const subAdvice = PPLEngine.calculateProgression(sub.id, history);
-                          return (
-                            <button
-                              key={sub.id}
-                              id={`btn-select-substitute-${sub.id}`}
-                              type="button"
-                              onClick={() => handleSwapExercise(sub, isAr ? item.reasonAr : item.reason)}
-                              className="group flex flex-col justify-between rounded-xl border border-border bg-card p-3 text-left rtl:text-right hover:border-amber-500/60 hover:bg-amber-500/5 transition-all"
-                            >
-                              <div className="space-y-1 w-full">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div>
-                                    <span className="text-xs font-black text-foreground group-hover:text-amber-400 transition-colors block">
-                                      {isAr && sub.nameAr ? sub.nameAr : sub.name}
-                                    </span>
-                                    {sub.nameAr && (
-                                      <span className="text-[10px] font-mono text-primary/90 block" dir="ltr">
-                                        {isAr ? sub.name : sub.nameAr}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className="text-[11px] font-mono font-bold text-emerald-400 shrink-0">
-                                    {item.matchScore}% {isAr ? 'تطابق' : 'Match'}
-                                  </span>
-                                </div>
-
-                                <p className="text-[11px] text-muted-foreground line-clamp-1">
-                                  {isAr ? item.reasonAr : item.reason}
-                                </p>
-
-                                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground pt-1">
-                                  <span className="font-semibold text-foreground">
-                                    {isAr && sub.equipmentAr ? sub.equipmentAr : sub.equipment}
-                                  </span>
-                                  <span aria-hidden="true">·</span>
-                                  <span>{isAr && sub.primaryMuscleAr ? sub.primaryMuscleAr : sub.primaryMuscle}</span>
-                                  <span aria-hidden="true">·</span>
-                                  <span className="font-mono font-bold text-primary">
-                                    {subAdvice.recommendedWeight > 0
-                                      ? (isAr ? `المقترح: ${subAdvice.recommendedWeight} كجم` : `Suggested: ${subAdvice.recommendedWeight} kg`)
-                                      : (isAr ? 'وزن الجسم' : 'Bodyweight')}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="mt-2.5 pt-2 border-t border-border/50 flex items-center justify-between w-full text-[11px]">
-                                <span className="font-mono text-muted-foreground">
-                                  {sub.targetSets} sets × {sub.targetRepRange}
-                                </span>
-                                <span className="font-bold text-amber-400 flex items-center gap-1 group-hover:underline">
-                                  <span>{isAr ? 'استبدال فوراً' : 'Swap Now'}</span>
-                                  <ArrowLeftRight className="h-3 w-3" />
-                                </span>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-border bg-card/60 p-4 text-center space-y-2">
-                        <p className="text-xs text-muted-foreground">
-                          {isAr
-                            ? 'لا توجد تمارين مطابقة لهذا الفلتر المحدد. جرب عرض جميع الأدوات.'
-                            : 'No variations match this exact filter. Try switching to All Gear.'}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSwapEquipmentFilter('all');
-                            setSwapSearchQuery('');
-                          }}
-                          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"
-                        >
-                          {isAr ? 'عرض جميع البدائل المكافئة' : 'Show All Equivalent Variations'}
-                        </button>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Interactive Barbell Plate Loading Visualizer Drawer */}
-              <AnimatePresence>
-                {plateVisualizerOpen && (() => {
-                  const safeSetIdx = Math.min(inspectedPlateSetIndex, Math.max(0, currentExercise.sets.length - 1));
-                  const inspectedSet = currentExercise.sets[safeSetIdx] || currentExercise.sets[0];
-                  const inspectedWeight = inspectedSet?.actualWeight || 0;
-                  const breakdown = calculatePlateBreakdown(inspectedWeight, selectedBarWeight);
-
-                  return (
-                    <motion.div
-                      id="panel-barbell-plate-visualizer"
-                      initial={{ opacity: 0, height: 0, y: -6 }}
-                      animate={{ opacity: 1, height: 'auto', y: 0 }}
-                      exit={{ opacity: 0, height: 0, y: -6 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden rounded-2xl border border-cyan-500/40 bg-gradient-to-br from-cyan-500/10 via-card to-card p-4 space-y-4 shadow-lg"
-                    >
-                      {/* Top Bar: Title + Barbell Selector + Close */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-400">
-                            <Dumbbell className="h-4 w-4" />
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-black text-foreground">
-                              {isAr
-                                ? 'مخطط تركيب طارات البار الأولمبي لكل مجموعة'
-                                : 'Barbell Plate Loading Visualizer — IWF/IPF Spec'}
-                            </h4>
-                            <p className="text-xs text-muted-foreground">
-                              {isAr
-                                ? 'توزيع دقيق للطارات الملونة على كل جانب من البار حسب وزن المجموعة المختارة.'
-                                : 'Color-coded competition plate breakdown per side of the barbell sleeve.'}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {[
-                            { kg: 20, labelEn: '20kg Olympic', labelAr: 'بار أولمبي 20 كجم' },
-                            { kg: 15, labelEn: '15kg Tech', labelAr: 'بار 15 كجم' },
-                            { kg: 10, labelEn: '10kg EZ-Bar', labelAr: 'بار زجزاج 10 كجم' },
-                            { kg: 0, labelEn: '0kg Sled/Plate', labelAr: 'جهاز / بدون بار (0)' },
-                          ].map(bar => (
-                            <button
-                              key={bar.kg}
-                              id={`btn-bar-weight-${bar.kg}`}
-                              type="button"
-                              onClick={() => setSelectedBarWeight(bar.kg)}
-                              className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold font-mono transition-colors ${
-                                selectedBarWeight === bar.kg
-                                  ? 'border-cyan-400 bg-cyan-500 text-black'
-                                  : 'border-border bg-card/80 text-muted-foreground hover:text-foreground'
-                              }`}
-                            >
-                              {isAr ? bar.labelAr : bar.labelEn}
-                            </button>
-                          ))}
-
-                          <button
-                            type="button"
-                            onClick={() => setPlateVisualizerOpen(false)}
-                            className="rounded-lg border border-border bg-card px-2 py-1 text-xs font-bold text-muted-foreground hover:text-foreground"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Set Selector Tabs + Quick Micro-Load Controls */}
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {currentExercise.sets.map((s, idx) => (
-                            <button
-                              key={s.id}
-                              id={`btn-plate-inspect-set-${s.setNumber}`}
-                              type="button"
-                              onClick={() => setInspectedPlateSetIndex(idx)}
-                              className={`rounded-xl border px-3 py-1.5 text-xs font-bold font-mono tabular-nums transition-all ${
-                                safeSetIdx === idx
-                                  ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300 shadow-xs'
-                                  : 'border-border bg-secondary/50 text-muted-foreground hover:text-foreground'
-                              }`}
-                            >
-                              {isAr ? `مجموعة ${s.setNumber}` : `Set ${s.setNumber}`} · {s.actualWeight} kg
-                            </button>
-                          ))}
-                        </div>
-
-                        {inspectedSet && (
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleUpdateSet(
-                                  inspectedSet.id,
-                                  'actualWeight',
-                                  Math.max(0, Math.round((inspectedWeight - 2.5) * 2) / 2)
-                                )
-                              }
-                              className="rounded-lg border border-border bg-secondary/70 px-2.5 py-1 text-xs font-mono font-bold text-foreground hover:bg-secondary"
-                            >
-                              -2.5 kg
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleUpdateSet(
-                                  inspectedSet.id,
-                                  'actualWeight',
-                                  Math.min(300, Math.round((inspectedWeight + 2.5) * 2) / 2)
-                                )
-                              }
-                              className="rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-2.5 py-1 text-xs font-mono font-bold text-cyan-300 hover:bg-cyan-500/25"
-                            >
-                              +2.5 kg
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Graphical Barbell Sleeve Diagram & Math Readout */}
-                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center rounded-xl border border-border bg-card/90 p-4">
-                        {/* Left 7 Cols: Visual Barbell Sleeve */}
-                        <div className="lg:col-span-7 flex items-center justify-center overflow-x-auto py-3">
-                          <div className="flex items-center min-w-[280px]" dir="ltr">
-                            {/* Inner Knurled Barbell Shaft */}
-                            <div className="h-3.5 w-16 sm:w-24 rounded-l-md bg-gradient-to-b from-zinc-300 via-zinc-500 to-zinc-700 border-y border-l border-zinc-400 flex items-center justify-center">
-                              <span className="text-[9px] font-mono font-black text-zinc-950 tracking-tighter">
-                                {selectedBarWeight}KG BAR
-                              </span>
-                            </div>
-
-                            {/* Inner Sleeve Collar Flange */}
-                            <div className="h-9 w-3 bg-gradient-to-b from-zinc-200 via-zinc-400 to-zinc-600 border border-zinc-300 rounded-xs shadow-md" />
-
-                            {/* Loaded Competition Plates (Innermost Heaviest -> Outermost Lightest) */}
-                            <div className="flex items-center gap-0.5 px-0.5">
-                              {breakdown.flatPlatesPerSide.length > 0 ? (
-                                breakdown.flatPlatesPerSide.map((plate, pIdx) => (
-                                  <motion.div
-                                    key={`${plate.weight}-${pIdx}`}
-                                    initial={{ scaleY: 0.5, opacity: 0 }}
-                                    animate={{ scaleY: 1, opacity: 1 }}
-                                    transition={{ duration: 0.15, delay: pIdx * 0.03 }}
-                                    className={`${plate.heightClass} ${plate.widthClass} ${plate.bgClass} ${plate.borderClass} ${plate.textClass} rounded-xs border flex flex-col items-center justify-center shadow-md shrink-0`}
-                                    title={isAr ? plate.nameAr : plate.nameEn}
-                                  >
-                                    <span className="text-[9px] font-mono font-black leading-none -rotate-90 whitespace-nowrap">
-                                      {plate.weight}
-                                    </span>
-                                  </motion.div>
-                                ))
-                              ) : (
-                                <div className="px-3 py-1 text-[11px] font-mono text-muted-foreground">
-                                  {breakdown.isBodyweight
-                                    ? isAr ? 'وزن الجسم (بدون طارات)' : 'Bodyweight (0 kg)'
-                                    : isAr ? 'البار فارغ بدون طارات' : 'Empty Bar Sleeve'}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Competition Lock Collar (if plates loaded) */}
-                            {breakdown.flatPlatesPerSide.length > 0 && (
-                              <div
-                                className="h-7 w-2.5 bg-gradient-to-b from-rose-500 to-rose-700 border border-rose-300 rounded-xs shadow-sm"
-                                title={isAr ? 'قفل أمان البار' : 'Competition Lock Collar'}
-                              />
-                            )}
-
-                            {/* Outer Barbell Sleeve Tip */}
-                            <div className="h-5 w-10 sm:w-14 rounded-r-sm bg-gradient-to-b from-zinc-300 via-zinc-400 to-zinc-600 border-y border-r border-zinc-400" />
-                          </div>
-                        </div>
-
-                        {/* Right 5 Cols: Per-Side Breakdown Telemetry */}
-                        <div className="lg:col-span-5 space-y-2.5 border-t lg:border-t-0 lg:border-s border-border pt-3 lg:pt-0 lg:ps-4">
-                          <div className="flex items-baseline justify-between">
-                            <span className="text-xs font-bold text-muted-foreground">
-                              {isAr ? `إجمالي وزن المجموعة ${inspectedSet?.setNumber || 1}:` : `Set ${inspectedSet?.setNumber || 1} Total Load:`}
-                            </span>
-                            <span className="text-xl font-black font-mono tabular-nums text-foreground">
-                              {inspectedWeight} kg
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-between text-xs text-muted-foreground font-mono tabular-nums">
-                            <span>{isAr ? 'وزن البار:' : 'Barbell:'} {selectedBarWeight} kg</span>
-                            <span>·</span>
-                            <span className="text-cyan-400 font-bold">
-                              {isAr ? 'لكل جانب:' : 'Per Side:'} {breakdown.perSideKg} kg
-                            </span>
-                          </div>
-
-                          {breakdown.groupedPerSide.length > 0 ? (
-                            <div className="flex flex-wrap gap-1.5 pt-1">
-                              {breakdown.groupedPerSide.map(item => (
-                                <span
-                                  key={item.spec.weight}
-                                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/70 px-2.5 py-1 text-xs font-mono font-bold text-foreground"
-                                >
-                                  <span
-                                    className="h-2.5 w-2.5 rounded-full shrink-0 border border-white/20"
-                                    style={{ backgroundColor: item.spec.dotColor }}
-                                  />
-                                  <span>
-                                    {item.count} × {item.spec.weight} kg
-                                  </span>
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">
-                              {breakdown.isBodyweight
-                                ? isAr
-                                  ? 'اختر وزناً أعلى من 0 كجم لعرض تقسيم الطارات.'
-                                  : 'Select a weight above 0 kg to see plate loading.'
-                                : isAr
-                                  ? `الوزن يساوي أو أقل من وزن البار (${selectedBarWeight} كجم).`
-                                  : `Weight is at or below bar weight (${selectedBarWeight} kg).`}
-                            </p>
-                          )}
-
-                          {breakdown.remainderPerSideKg > 0 && (
-                            <p className="text-[11px] text-amber-400 font-mono">
-                              {isAr
-                                ? `* متبقي ${breakdown.remainderPerSideKg} كجم لكل جانب (يتطلب طارات مايكرو صغيرة).`
-                                : `* +${breakdown.remainderPerSideKg} kg/side micro-plates required.`}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                })()}
-              </AnimatePresence>
-
-              {/* Sets Logging Table with Dropdown Lists for Weight & Reps */}
-              <div className="space-y-3">
-                {/* Auto-Prefill Status Indicator with Quick Re-sync Action */}
-                {comparisonData.lastSession && comparisonData.lastSession.sets.length > 0 && (
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/25 bg-primary/10 px-3.5 py-2 text-xs">
-                    <div className="flex items-center gap-2 text-foreground font-semibold">
-                      <Sparkles className="h-4 w-4 text-primary shrink-0" />
-                      <span>{t.workout.autoPrefillBadge}</span>
-                      <span className="text-[11px] font-mono text-muted-foreground">
-                        ({isAr ? 'السابق' : 'Last'}: {comparisonData.lastSession.sets[0]?.weight} kg × {comparisonData.lastSession.sets[0]?.reps} @ RPE {comparisonData.lastSession.sets[0]?.rpe ?? 8} → {isAr ? 'مقترح اليوم' : 'Today'}: {progressionAdvice?.recommendedWeight ?? comparisonData.lastSession.sets[0]?.weight} kg)
-                      </span>
-                    </div>
+            {/* Instant Exercise Swap Drawer (only when Swap clicked) */}
+            <AnimatePresence>
+              {swapExerciseOpen && (
+                <motion.div
+                  id="panel-instant-exercise-swap"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden rounded-xl border border-amber-500/40 bg-secondary/30 p-3.5 space-y-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-black text-foreground">
+                      {isAr ? 'اختر بديلاً مكافئاً حسب المتاح:' : 'Choose Equivalent Movement:'}
+                    </span>
                     <div className="flex items-center gap-3">
-                      <button
-                        id="btn-reapply-rpe-prefill"
-                        type="button"
-                        onClick={() => prefillExerciseWithLastSession(currentExerciseIndex, true, true)}
-                        className="text-xs font-bold text-emerald-400 hover:underline transition-colors"
-                        title={isAr ? 'تعبئة الأوزان المعدلة حسب RPE الجلسة السابقة' : 'Fill RPE-adjusted weights from last session'}
-                      >
-                        {isAr ? 'تعبئة مقترح RPE' : 'Fill RPE Suggested'}
-                      </button>
-                      <button
-                        id="btn-reapply-last-prefill"
-                        type="button"
-                        onClick={() => prefillExerciseWithLastSession(currentExerciseIndex, true, false)}
-                        className="text-xs font-bold text-primary hover:underline hover:text-primary/80 transition-colors"
-                        title={t.workout.autoPrefilledNote}
-                      >
-                        {t.workout.quickFillLast}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Live In-Exercise Active Rest Banner with Visual Progress Gauge */}
-                <AnimatePresence>
-                  {timerActive && timerSeconds > 0 && (
-                    <motion.div
-                      id="banner-in-exercise-rest-timer"
-                      initial={{ opacity: 0, height: 0, y: -8 }}
-                      animate={{ opacity: 1, height: 'auto', y: 0 }}
-                      exit={{ opacity: 0, height: 0, y: -8 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden rounded-2xl border border-primary/40 bg-gradient-to-r from-primary/15 via-card to-primary/10 p-3.5 shadow-md shadow-primary/10"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center">
-                            {/* Circular SVG Gauge */}
-                            <svg className="h-11 w-11 -rotate-90" viewBox="0 0 44 44">
-                              <circle
-                                cx="22"
-                                cy="22"
-                                r="17"
-                                className="stroke-muted/30"
-                                strokeWidth="3.5"
-                                fill="transparent"
-                              />
-                              <circle
-                                cx="22"
-                                cy="22"
-                                r="17"
-                                className={`transition-all duration-300 ease-linear ${
-                                  timerSeconds <= 5
-                                    ? 'stroke-amber-400'
-                                    : timerSeconds <= 15
-                                      ? 'stroke-cyan-400'
-                                      : 'stroke-primary'
-                                }`}
-                                strokeWidth="3.5"
-                                strokeDasharray={106.8}
-                                strokeDashoffset={106.8 * (1 - (timerSeconds / (totalTimerDuration || 1)))}
-                                strokeLinecap="round"
-                                fill="transparent"
-                              />
-                            </svg>
-                            <span className="absolute text-[11px] font-black font-mono text-foreground">
-                              {timerSeconds}s
-                            </span>
-                          </div>
-
-                          <div>
-                            <div className="flex items-center gap-1.5 text-xs font-black text-foreground">
-                              <span>{isAr ? '⏳ استراحة نشطة بين المجموعات' : '⏳ Active Rest Countdown'}</span>
-                              {timerSeconds <= 5 && (
-                                <span className="rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-400 border border-amber-500/40 animate-pulse">
-                                  {isAr ? '🔔 استعد للمجموعة!' : '🔔 Get Ready!'}
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[11px] text-muted-foreground mt-0.5">
-                              {nextSet ? (
-                                <span>
-                                  {isAr
-                                    ? `المجموعة القادمة: ${nextSet.setNumber} (${nextSet.actualWeight} كجم × ${nextSet.actualReps} تكرار)`
-                                    : `Up Next: Set ${nextSet.setNumber} (${nextSet.actualWeight} kg × ${nextSet.actualReps} reps)`}
-                                </span>
-                              ) : nextExercise ? (
-                                <span>
-                                  {isAr ? `التالي: ${nextExercise.exerciseNameAr || nextExercise.exerciseName}` : `Next Exercise: ${nextExercise.exerciseName}`}
-                                </span>
-                              ) : (
-                                <span>{isAr ? 'تم إكمال جميع مجموعات هذا التمرين!' : 'All sets for this exercise finished!'}</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            id="btn-in-banner-add-30"
-                            type="button"
-                            onClick={() => adjustTimer(30)}
-                            className="rounded-xl border border-border bg-secondary/80 px-2.5 py-1.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors"
-                          >
-                            +30s
-                          </button>
-                          <button
-                            id="btn-in-banner-skip-rest"
-                            type="button"
-                            onClick={endRestImmediately}
-                            className="flex items-center gap-1 rounded-xl bg-amber-500/20 px-3 py-1.5 text-xs font-bold text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 transition-colors shadow-sm"
-                            title={isAr ? 'إنهاء الراحة والبدء بالمجموعة' : 'Skip rest and start next set'}
-                          >
-                            <FastForward className="h-3.5 w-3.5" />
-                            <span>{isAr ? 'تخطي الراحة' : 'Skip Rest'}</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Live Animated Linear Progress Bar */}
-                      <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-secondary/70">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ease-linear ${
-                            timerSeconds <= 5
-                              ? 'bg-amber-400'
-                              : timerSeconds <= 15
-                                ? 'bg-cyan-400'
-                                : 'bg-primary'
-                          }`}
-                          style={{ width: `${elapsedPercent}%` }}
-                        />
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* Live Smart RPE Auto-Regulation Suggestion Banner */}
-                <AnimatePresence>
-                  {liveRpeSuggestion && lastCompletedSet && (
-                    <motion.div
-                      id="card-live-rpe-suggestion"
-                      initial={{ opacity: 0, y: -6, height: 0 }}
-                      animate={{ opacity: 1, y: 0, height: 'auto' }}
-                      exit={{ opacity: 0, y: -6, height: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className={`overflow-hidden rounded-2xl border p-4 shadow-lg transition-all ${
-                        liveRpeSuggestion.action === 'increase'
-                          ? 'border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-card to-card'
-                          : liveRpeSuggestion.action === 'decrease'
-                            ? 'border-rose-500/40 bg-gradient-to-r from-rose-500/15 via-card to-card'
-                            : 'border-primary/40 bg-gradient-to-r from-primary/15 via-card to-card'
-                      }`}
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="flex items-center gap-1 text-[11px] font-black uppercase tracking-wider text-muted-foreground">
-                              <Sparkles className="h-3.5 w-3.5 text-primary" />
-                              <span>{t.workout.rpeSmartAdviceBadge}</span>
-                            </span>
-                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black ${
-                              liveRpeSuggestion.action === 'increase'
-                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                : liveRpeSuggestion.action === 'decrease'
-                                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                                  : 'bg-primary/20 text-primary border border-primary/30'
-                            }`}>
-                              {liveRpeSuggestion.action === 'increase' && <TrendingUp className="h-3 w-3" />}
-                              {liveRpeSuggestion.action === 'decrease' && <TrendingDown className="h-3 w-3" />}
-                              {liveRpeSuggestion.action === 'maintain' && <Equal className="h-3 w-3" />}
-                              <span>
-                                {liveRpeSuggestion.action === 'increase'
-                                  ? (isAr ? `توصية بزيادة الوزن (+${liveRpeSuggestion.weightDelta} kg)` : `Suggested Increase (+${liveRpeSuggestion.weightDelta} kg)`)
-                                  : liveRpeSuggestion.action === 'decrease'
-                                    ? (isAr ? `توصية بخفض الوزن (${liveRpeSuggestion.weightDelta} kg)` : `Suggested Decrease (${liveRpeSuggestion.weightDelta} kg)`)
-                                    : (isAr ? 'الوزن الحالي مثالي' : 'Current Weight Optimal')}
-                              </span>
-                            </span>
-                            <span className="text-[10px] font-mono text-muted-foreground">
-                              {isAr
-                                ? `المجموعة ${lastCompletedSet.setNumber}: ${lastCompletedSet.actualWeight} كجم @ RPE ${lastCompletedSet.rpe || 8}`
-                                : `Set ${lastCompletedSet.setNumber}: ${lastCompletedSet.actualWeight} kg @ RPE ${lastCompletedSet.rpe || 8}`}
-                            </span>
-                          </div>
-
-                          <div className="flex items-baseline gap-2 pt-0.5">
-                            <span className="text-xl sm:text-2xl font-black font-mono text-foreground">
-                              {liveRpeSuggestion.suggestedWeight} kg
-                            </span>
-                            <span className="text-xs text-muted-foreground font-semibold">
-                              {isAr ? `للمجموعة ${nextSet?.setNumber || 'القادمة'} (هدف RPE ${liveRpeSuggestion.targetRpe})` : `for Set ${nextSet?.setNumber || 'Next'} (target RPE ${liveRpeSuggestion.targetRpe})`}
-                            </span>
-                          </div>
-
-                          <p className="text-xs text-muted-foreground leading-relaxed max-w-xl">
-                            {isAr ? liveRpeSuggestion.reasonAr : liveRpeSuggestion.reasonEn}
-                          </p>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex sm:flex-col items-stretch justify-end gap-2 shrink-0 pt-1 sm:pt-0">
-                          {nextSet && (
-                            <button
-                              id="btn-apply-live-rpe-next"
-                              type="button"
-                              onClick={() => handleApplyRPEWeightToNextSet(liveRpeSuggestion.suggestedWeight, liveRpeSuggestion.targetReps, liveRpeSuggestion.targetRpe)}
-                              className="flex items-center justify-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground shadow-md hover:bg-primary/90 active:scale-[0.98] transition-all"
-                            >
-                              <Check className="h-3.5 w-3.5" />
-                              <span>{isAr ? `تطبيق على المجموعة ${nextSet.setNumber}` : `Apply to Set ${nextSet.setNumber}`}</span>
-                            </button>
-                          )}
-
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              id="btn-apply-live-rpe-all"
-                              type="button"
-                              onClick={() => handleApplyRPEWeightToAllRemaining(liveRpeSuggestion.suggestedWeight, liveRpeSuggestion.targetReps, liveRpeSuggestion.targetRpe)}
-                              className="w-full flex items-center justify-center gap-1 rounded-xl border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-[11px] font-bold text-primary hover:bg-primary/20 transition-colors"
-                              title={t.workout.rpeApplyToAllRemaining}
-                            >
-                              <Zap className="h-3 w-3" />
-                              <span>{isAr ? 'تطبيق على الكل' : 'Apply All'}</span>
-                            </button>
-
-                            <button
-                              id="btn-open-rpe-from-banner"
-                              type="button"
-                              onClick={() => handleOpenRPECalculator(lastCompletedSet.actualWeight, lastCompletedSet.actualReps, lastCompletedSet.rpe)}
-                              className="flex items-center justify-center gap-1 rounded-xl border border-border bg-secondary/80 px-2.5 py-1.5 text-[11px] font-bold text-foreground hover:bg-secondary transition-colors"
-                              title={t.workout.rpeCalculatorTitle}
-                            >
-                              <Calculator className="h-3 w-3 text-primary" />
-                              <span>{isAr ? 'حاسبة RPE' : 'Calculator'}</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* Smart Dual-Hand / Dumbbell / Biceps Weight Entry Guide & Mode Selector */}
-                {(() => {
-                  const autoDetectedDual = detectDualHandExercise(currentExercise, fullExerciseData);
-                  const isDualHand =
-                    dualHandOverrideMap[currentExercise.exerciseId] !== undefined
-                      ? dualHandOverrideMap[currentExercise.exerciseId]
-                      : autoDetectedDual;
-
-                  return (
-                    <div
-                      id="banner-dual-hand-weight-helper"
-                      className={`rounded-2xl border p-3.5 space-y-3 transition-all ${
-                        isDualHand
-                          ? 'border-amber-500/40 bg-gradient-to-br from-amber-500/15 via-card to-card shadow-md'
-                          : 'border-border bg-secondary/20'
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
-                            isDualHand ? 'bg-amber-500/20 text-amber-400' : 'bg-secondary text-muted-foreground'
-                          }`}>
-                            <Dumbbell className="h-4 w-4" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="text-xs sm:text-sm font-black text-foreground">
-                                {isAr
-                                  ? 'طريقة حساب واختيار الوزن (تمارين الدامبلز / البايسبس / يمين وشمال)'
-                                  : 'Dumbbell & Dual-Hand Weight Mode (Right + Left)'}
-                              </h4>
-                              <span className={`rounded-md px-2 py-0.5 text-[10px] font-black ${
-                                isDualHand
-                                  ? 'bg-amber-500 text-black'
-                                  : 'bg-secondary text-muted-foreground'
-                              }`}>
-                                {isDualHand
-                                  ? (isAr ? 'نشط: وزن يمين + شمال' : 'Active: Right + Left')
-                                  : (isAr ? 'وزن موحد (بار / جهاز)' : 'Single Load (Bar / Machine)')}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
-                              {isAr
-                                ? 'مثال عملي: لو بترفع 15 كجم مجموع اليدين (7.5 يمين + 7.5 شمال) أو 25 كجم (12.5 يمين + 12.5 شمال)، اختر الطريقة الأسهل لك بالأسفل وستظهر لك الحسبة كاملة تلقائياً!'
-                                : 'Example: Lifting 15 kg total (7.5 kg Right + 7.5 kg Left)? Pick either Single-Hand (7.5 kg) or Total (15 kg) mode below—both numbers are shown side-by-side!'}
-                            </p>
-                          </div>
-                        </div>
-
+                      {currentExercise.isSubstituted && currentExercise.originalExerciseId && (
                         <button
-                          id="btn-toggle-dual-hand-override"
                           type="button"
-                          onClick={() =>
-                            setDualHandOverrideMap(prev => ({
-                              ...prev,
-                              [currentExercise.exerciseId]: !isDualHand,
-                            }))
-                          }
-                          className="rounded-xl border border-border bg-card px-2.5 py-1.5 text-[11px] font-bold text-foreground hover:bg-secondary transition-colors shrink-0"
+                          onClick={handleRevertToOriginalExercise}
+                          className="text-xs font-bold text-primary hover:underline"
                         >
-                          {isDualHand
-                            ? (isAr ? 'تحويل إلى وزن موحد (بار)' : 'Switch to Single Barbell Mode')
-                            : (isAr ? 'تفعيل حساب يمين وشمال (دمبل)' : 'Enable Right + Left Dumbbell Mode')}
+                          {isAr ? 'استعادة التمرين الأصلي' : 'Revert Original'}
                         </button>
-                      </div>
-
-                      {isDualHand && (
-                        <>
-                          {/* 2-Way Mode Toggle: Pick by Single Hand (7.5 kg) OR Pick by Total Combined (15 kg) */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            <button
-                              id="btn-weight-mode-per-hand"
-                              type="button"
-                              onClick={() => setDualWeightInputMode('per_hand')}
-                              className={`flex flex-col items-start rounded-xl border p-2.5 text-start transition-all ${
-                                dualWeightInputMode === 'per_hand'
-                                  ? 'border-amber-400 bg-amber-500/20 text-foreground ring-1 ring-amber-400/50'
-                                  : 'border-border bg-card/70 text-muted-foreground hover:text-foreground'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between w-full">
-                                <span className="text-xs font-black text-amber-300">
-                                  {isAr ? '✋ الطريقة 1 (الأسهل): أختار وزن اليد الواحدة' : '✋ Option 1: Select Weight Per Hand'}
-                                </span>
-                                {dualWeightInputMode === 'per_hand' && <Check className="h-3.5 w-3.5 text-amber-400" />}
-                              </div>
-                              <span className="text-[11px] text-muted-foreground mt-0.5 font-mono">
-                                {isAr
-                                  ? 'تختار (7.5 كجم لكل يد) ← يظهر بجانبها (إجمالي 15 كجم)'
-                                  : 'Pick 7.5 kg/hand → Shows (15 kg Total)'}
-                              </span>
-                            </button>
-
-                            <button
-                              id="btn-weight-mode-total-both"
-                              type="button"
-                              onClick={() => setDualWeightInputMode('total_both')}
-                              className={`flex flex-col items-start rounded-xl border p-2.5 text-start transition-all ${
-                                dualWeightInputMode === 'total_both'
-                                  ? 'border-emerald-400 bg-emerald-500/20 text-foreground ring-1 ring-emerald-400/50'
-                                  : 'border-border bg-card/70 text-muted-foreground hover:text-foreground'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between w-full">
-                                <span className="text-xs font-black text-emerald-300">
-                                  {isAr ? '🙌 الطريقة 2: أختار الوزن الإجمالي لليدين معاً' : '🙌 Option 2: Select Total Combined Weight'}
-                                </span>
-                                {dualWeightInputMode === 'total_both' && <Check className="h-3.5 w-3.5 text-emerald-400" />}
-                              </div>
-                              <span className="text-[11px] text-muted-foreground mt-0.5 font-mono">
-                                {isAr
-                                  ? 'تختار (15 كجم إجمالي) ← يظهر بجانبها (7.5 يمين + 7.5 شمال)'
-                                  : 'Pick 15 kg Total → Shows (7.5 Right + 7.5 Left)'}
-                              </span>
-                            </button>
-                          </div>
-
-                          {/* 1-Tap Quick Dumbbell Presets */}
-                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                            <span className="text-[11px] font-bold text-muted-foreground me-1">
-                              {isAr ? 'اختيار سريع لكل المجموعات:' : 'Quick Set All:'}
-                            </span>
-                            {[5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25].map(perHandKg => (
-                              <button
-                                key={perHandKg}
-                                id={`btn-quick-db-${perHandKg}`}
-                                type="button"
-                                onClick={() => {
-                                  currentExercise.sets.forEach(s => {
-                                    if (!s.completed) {
-                                      handleUpdateSet(s.id, 'actualWeight', perHandKg);
-                                    }
-                                  });
-                                }}
-                                className="rounded-lg border border-amber-500/30 bg-card/90 px-2 py-1 text-[11px] font-mono font-bold text-foreground hover:border-amber-400 hover:bg-amber-500/15 transition-colors"
-                              >
-                                {dualWeightInputMode === 'per_hand'
-                                  ? isAr
-                                    ? `${perHandKg} كجم/يد (${perHandKg * 2} إجمالي)`
-                                    : `${perHandKg}kg/hand (${perHandKg * 2}kg)`
-                                  : isAr
-                                    ? `${perHandKg * 2} كجم إجمالي (${perHandKg}+${perHandKg})`
-                                    : `${perHandKg * 2}kg Total (${perHandKg}+${perHandKg})`}
-                              </button>
-                            ))}
-                          </div>
-                        </>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => setSwapExerciseOpen(false)}
+                        className="text-xs font-bold text-muted-foreground hover:text-foreground"
+                      >
+                        {t.common.cancel}
+                      </button>
                     </div>
-                  );
-                })()}
-
-                <div className="grid grid-cols-12 gap-2 text-center text-xs font-bold text-muted-foreground px-2">
-                  <div className="col-span-2 text-left">{t.workout.set}</div>
-                  <div className="col-span-3">
-                    {(() => {
-                      const autoDual = detectDualHandExercise(currentExercise, fullExerciseData);
-                      const isDual =
-                        dualHandOverrideMap[currentExercise.exerciseId] !== undefined
-                          ? dualHandOverrideMap[currentExercise.exerciseId]
-                          : autoDual;
-                      if (!isDual) return isAr ? 'الوزن (كجم)' : 'Weight (kg)';
-                      return dualWeightInputMode === 'per_hand'
-                        ? (isAr ? 'وزن اليد (وإجمالي اليدين)' : 'Per Hand (& Total)')
-                        : (isAr ? 'إجمالي اليدين (يمين+شمال)' : 'Total (Right+Left)');
-                    })()}
                   </div>
-                  <div className="col-span-3">{isAr ? 'التكرار' : 'Reps'}</div>
-                  <div className="col-span-3">{isAr ? 'معدل الجهد (RPE)' : 'RPE (Exertion)'}</div>
-                  <div className="col-span-1">{t.common.done}</div>
-                </div>
 
-                <div className="space-y-2.5">
-                  <AnimatePresence initial={false}>
-                    {currentExercise.sets.map((setLog) => {
-                      const currentRpe = typeof setLog.rpe === 'number' ? setLog.rpe : 8;
-                      const currentW = typeof setLog.actualWeight === 'number' ? setLog.actualWeight : 0;
-                      const rirValue = Math.max(0, Math.round((10 - currentRpe) * 10) / 10);
-                      const autoDual = detectDualHandExercise(currentExercise, fullExerciseData);
-                      const isDualHand =
-                        dualHandOverrideMap[currentExercise.exerciseId] !== undefined
-                          ? dualHandOverrideMap[currentExercise.exerciseId]
-                          : autoDual;
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { id: 'all', labelEn: 'All', labelAr: 'الكل' },
+                      { id: 'dumbbells', labelEn: 'Dumbbells', labelAr: 'دمبل' },
+                      { id: 'cables', labelEn: 'Cables', labelAr: 'كابلات' },
+                      { id: 'machines', labelEn: 'Machines', labelAr: 'أجهزة' },
+                      { id: 'barbell', labelEn: 'Barbell', labelAr: 'بار' },
+                    ].map(eq => (
+                      <button
+                        key={eq.id}
+                        id={`btn-swap-filter-${eq.id}`}
+                        type="button"
+                        onClick={() => setSwapEquipmentFilter(eq.id as WorkoutEquipmentFilter)}
+                        className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold ${
+                          swapEquipmentFilter === eq.id
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border bg-card text-muted-foreground'
+                        }`}
+                      >
+                        {isAr ? eq.labelAr : eq.labelEn}
+                      </button>
+                    ))}
+                    <button
+                      id="btn-swap-filter-joint-safe"
+                      type="button"
+                      onClick={() => setJointPainFilter(prev => !prev)}
+                      className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold flex items-center gap-1 ${
+                        jointPainFilter
+                          ? 'border-amber-500/60 bg-amber-500/20 text-amber-400'
+                          : 'border-border bg-card text-muted-foreground'
+                      }`}
+                    >
+                      <ShieldAlert className="h-3 w-3" />
+                      <span>{isAr ? 'آمن للمفاصل فقط' : 'Joint-Safe Only'}</span>
+                    </button>
+                  </div>
 
-                      // Dynamic next-session weight impact for this specific set based on logged RPE
-                      const nextSetDeltaKg = currentW === 0
-                        ? 0
-                        : currentRpe <= 7.0
-                          ? 5
-                          : currentRpe <= 8.0
-                            ? 2.5
-                            : currentRpe <= 9.0
-                              ? 0
-                              : -2.5;
-                      const nextSessionSetWeight = Math.max(0, Math.round((currentW + nextSetDeltaKg) * 2) / 2);
-
-                      const rpeColorClasses =
-                        currentRpe <= 7.0
-                          ? 'border-sky-500/40 bg-sky-500/10 text-sky-300'
-                          : currentRpe <= 8.5
-                            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                            : currentRpe <= 9.0
-                              ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-                              : 'border-rose-500/40 bg-rose-500/10 text-rose-300';
-
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                    {smartRankedSubstitutes.map(item => {
+                      const sub = item.exercise;
                       return (
-                        <motion.div
-                          key={setLog.id}
-                          layout
-                          initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                          animate={{ opacity: 1, scale: 1, y: 0 }}
-                          exit={{ opacity: 0, scale: 0.94, height: 0 }}
-                          transition={{ duration: 0.16 }}
-                          className={`grid grid-cols-12 items-center gap-2 rounded-xl border p-2.5 transition-all ${
-                            setLog.isPR
-                              ? 'border-amber-400/60 bg-amber-400/10 shadow-sm shadow-amber-500/15 ring-1 ring-amber-400/30'
-                              : setLog.completed
-                                ? 'border-emerald-500/40 bg-emerald-500/10'
-                                : 'border-border bg-secondary/30'
-                          }`}
+                        <button
+                          key={sub.id}
+                          id={`btn-select-substitute-${sub.id}`}
+                          type="button"
+                          onClick={() => handleSwapExercise(sub, isAr ? item.reasonAr : item.reason)}
+                          className="flex items-center justify-between rounded-xl border border-border bg-card p-2.5 text-start hover:border-amber-500/60 transition-colors"
                         >
-                          {/* Set Number & PR Badge */}
-                          <div className="col-span-2 flex items-center gap-1.5 font-bold text-foreground text-sm">
-                            <span className={`flex h-7 w-7 items-center justify-center rounded-xl text-xs font-black shadow-inner ${
-                              setLog.isPR ? 'bg-amber-400 text-black shadow-amber-400/30' : 'bg-secondary'
-                            }`}>
-                              {setLog.setNumber}
-                            </span>
-                            {setLog.isPR && (
-                              <span 
-                                className="hidden sm:inline-flex items-center gap-0.5 rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-black text-amber-400 border border-amber-500/30 animate-pulse"
-                                title={setLog.prType === 'weight' ? (isAr ? 'رقم قياسي في الوزن' : 'Weight PR') : (isAr ? 'رقم قياسي في الحجم' : 'Volume PR')}
-                              >
-                                <Trophy className="h-2.5 w-2.5" />
-                                <span>{isAr ? 'رقم قياسي' : 'PR'}</span>
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Weight Drop-Down List (Select) + Dual-Hand Right/Left Breakdown OR Per-Set Plate Breakdown */}
-                          <div className="col-span-3 flex flex-col items-center gap-1">
-                            <select
-                              id={`select-weight-${setLog.id}`}
-                              value={setLog.actualWeight}
-                              onChange={e => handleUpdateSet(setLog.id, 'actualWeight', parseFloat(e.target.value))}
-                              className="w-full rounded-xl border border-border bg-card py-2 px-1 text-center text-[11px] sm:text-xs font-bold font-mono tabular-nums text-foreground focus:border-primary focus:outline-none transition-colors cursor-pointer hover:border-primary/50"
-                            >
-                              {!WEIGHT_OPTIONS.includes(setLog.actualWeight) && setLog.actualWeight > 0 && (
-                                <option value={setLog.actualWeight}>
-                                  {isDualHand
-                                    ? dualWeightInputMode === 'per_hand'
-                                      ? isAr
-                                        ? `${setLog.actualWeight} كجم/يد (إجمالي ${setLog.actualWeight * 2})`
-                                        : `${setLog.actualWeight}kg/hand (${setLog.actualWeight * 2}kg Total)`
-                                      : isAr
-                                        ? `${setLog.actualWeight * 2} كجم إجمالي (${setLog.actualWeight} يمين + ${setLog.actualWeight} شمال)`
-                                        : `${setLog.actualWeight * 2}kg Total (${setLog.actualWeight}R + ${setLog.actualWeight}L)`
-                                    : `${setLog.actualWeight} kg`}
-                                </option>
-                              )}
-                              {WEIGHT_OPTIONS.map(w => {
-                                if (w === 0) {
-                                  return (
-                                    <option key={w} value={w}>
-                                      {isAr ? 'وزن الجسم (0)' : 'BW (0 kg)'}
-                                    </option>
-                                  );
-                                }
-                                if (isDualHand) {
-                                  return (
-                                    <option key={w} value={w}>
-                                      {dualWeightInputMode === 'per_hand'
-                                        ? isAr
-                                          ? `${w} كجم/يد (إجمالي ${w * 2} كجم)`
-                                          : `${w} kg/hand (${w * 2} kg Total)`
-                                        : isAr
-                                          ? `${w * 2} كجم إجمالي (${w} يمين + ${w} شمال)`
-                                          : `${w * 2} kg Total (${w} R + ${w} L)`}
-                                    </option>
-                                  );
-                                }
-                                return (
-                                  <option key={w} value={w}>
-                                    {`${w} kg`}
-                                  </option>
-                                );
-                              })}
-                            </select>
-
-                            {setLog.actualWeight > 0 && isDualHand && (
-                              <span
-                                className="flex items-center justify-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-mono font-bold text-amber-300 max-w-full truncate"
-                                title={
-                                  isAr
-                                    ? `يد يمين ${setLog.actualWeight} كجم + يد شمال ${setLog.actualWeight} كجم = إجمالي ${setLog.actualWeight * 2} كجم`
-                                    : `Right ${setLog.actualWeight} kg + Left ${setLog.actualWeight} kg = ${setLog.actualWeight * 2} kg Total`
-                                }
-                              >
-                                {isAr
-                                  ? `يمين ${setLog.actualWeight} + شمال ${setLog.actualWeight} = ${setLog.actualWeight * 2} كجم`
-                                  : `R ${setLog.actualWeight} + L ${setLog.actualWeight} = ${setLog.actualWeight * 2}kg`}
-                              </span>
-                            )}
-
-                            {setLog.actualWeight > 0 && !isDualHand && (() => {
-                              const setPlates = calculatePlateBreakdown(setLog.actualWeight, selectedBarWeight);
-                              const setIdx = currentExercise.sets.findIndex(s => s.id === setLog.id);
-                              return (
-                                <button
-                                  id={`btn-set-plate-badge-${setLog.setNumber}`}
-                                  type="button"
-                                  onClick={() => {
-                                    setInspectedPlateSetIndex(setIdx >= 0 ? setIdx : 0);
-                                    setPlateVisualizerOpen(true);
-                                  }}
-                                  className="flex items-center justify-center gap-1 rounded-md border border-border/70 bg-card/70 px-1.5 py-0.5 text-[9px] font-mono font-bold text-muted-foreground hover:border-cyan-500/50 hover:text-cyan-300 transition-colors max-w-full truncate"
-                                  title={
-                                    isAr
-                                      ? 'اضغط لعرض مخطط الطارات التفصيلي لهذه المجموعة'
-                                      : 'Click to inspect barbell plate loading for this set'
-                                  }
-                                >
-                                  {setPlates.groupedPerSide.length > 0 ? (
-                                    <>
-                                      <span className="flex items-center gap-0.5 shrink-0">
-                                        {setPlates.groupedPerSide.slice(0, 3).map(g => (
-                                          <span
-                                            key={g.spec.weight}
-                                            className="h-1.5 w-1.5 rounded-full"
-                                            style={{ backgroundColor: g.spec.dotColor }}
-                                          />
-                                        ))}
-                                      </span>
-                                      <span className="truncate">
-                                        {setPlates.compactText}/{isAr ? 'جانب' : 'side'}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <span>{isAr ? 'بار فقط' : 'Bar only'}</span>
-                                  )}
-                                </button>
-                              );
-                            })()}
-                          </div>
-
-                          {/* Reps Drop-Down List (Select) */}
-                          <div className="col-span-3">
-                            <select
-                              id={`select-reps-${setLog.id}`}
-                              value={setLog.actualReps}
-                              onChange={e => handleUpdateSet(setLog.id, 'actualReps', parseInt(e.target.value, 10))}
-                              className="w-full rounded-xl border border-border bg-card py-2 px-1.5 text-center text-xs sm:text-sm font-bold text-foreground focus:border-primary focus:outline-none transition-colors cursor-pointer hover:border-primary/50"
-                            >
-                              {!REPS_OPTIONS.includes(setLog.actualReps) && setLog.actualReps > 0 && (
-                                <option value={setLog.actualReps}>{setLog.actualReps} Reps</option>
-                              )}
-                              {REPS_OPTIONS.map(r => (
-                                <option key={r} value={r}>
-                                  {r} {isAr ? 'تكرار' : 'reps'}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Interactive RPE Input Control (Stepper + Selector + RIR & Next-Session Weight Adjustment Badge) */}
-                          <div className="col-span-3 flex flex-col items-center gap-1">
-                            <div className="flex w-full items-center gap-0.5">
-                              <button
-                                id={`btn-rpe-minus-${setLog.id}`}
-                                type="button"
-                                onClick={() => handleUpdateSet(setLog.id, 'rpe', Math.max(6, Math.round((currentRpe - 0.5) * 2) / 2))}
-                                disabled={currentRpe <= 6}
-                                className="hidden sm:flex h-8 w-6 shrink-0 items-center justify-center rounded-l-lg border border-border bg-card text-xs font-black text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-30 transition-colors"
-                                title={isAr ? 'تقليل RPE بمقدار 0.5' : 'Decrease RPE by 0.5'}
-                              >
-                                -
-                              </button>
-                              <select
-                                id={`select-rpe-${setLog.id}`}
-                                value={currentRpe}
-                                onChange={e => handleUpdateSet(setLog.id, 'rpe', parseFloat(e.target.value))}
-                                className={`w-full rounded-xl sm:rounded-none border py-1.5 px-1 text-center text-xs font-black focus:border-primary focus:outline-none cursor-pointer transition-colors ${rpeColorClasses}`}
-                              >
-                                <option value="6" className="bg-card text-foreground">RPE 6 (4 RIR)</option>
-                                <option value="6.5" className="bg-card text-foreground">RPE 6.5 (3.5 RIR)</option>
-                                <option value="7" className="bg-card text-foreground">RPE 7 (3 RIR)</option>
-                                <option value="7.5" className="bg-card text-foreground">RPE 7.5 (2.5 RIR)</option>
-                                <option value="8" className="bg-card text-foreground">RPE 8 (2 RIR)</option>
-                                <option value="8.5" className="bg-card text-foreground">RPE 8.5 (1.5 RIR)</option>
-                                <option value="9" className="bg-card text-foreground">RPE 9 (1 RIR)</option>
-                                <option value="9.5" className="bg-card text-foreground">RPE 9.5 (0.5 RIR)</option>
-                                <option value="10" className="bg-card text-foreground">RPE 10 (Max)</option>
-                              </select>
-                              <button
-                                id={`btn-rpe-plus-${setLog.id}`}
-                                type="button"
-                                onClick={() => handleUpdateSet(setLog.id, 'rpe', Math.min(10, Math.round((currentRpe + 0.5) * 2) / 2))}
-                                disabled={currentRpe >= 10}
-                                className="hidden sm:flex h-8 w-6 shrink-0 items-center justify-center rounded-r-lg border border-border bg-card text-xs font-black text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-30 transition-colors"
-                                title={isAr ? 'زيادة RPE بمقدار 0.5' : 'Increase RPE by 0.5'}
-                              >
-                                +
-                              </button>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-foreground truncate">
+                              {isAr && sub.nameAr ? sub.nameAr : sub.name}
                             </div>
-
-                            {/* Live RIR + Next-Session Weight Adjustment Pill */}
-                            <div className="flex flex-wrap items-center justify-center gap-1 w-full">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenRPECalculator(setLog.actualWeight, setLog.actualReps, currentRpe)}
-                                className="text-[9px] font-bold text-muted-foreground hover:text-primary transition-colors flex items-center gap-0.5"
-                                title={isAr ? 'فتح حاسبة RPE' : 'Open RPE Calculator'}
-                              >
-                                <Calculator className="h-2.5 w-2.5" />
-                                <span>{rirValue} RIR</span>
-                              </button>
-                              {currentW > 0 && (
-                                <span
-                                  className={`rounded px-1 py-0.2 text-[9px] font-mono font-extrabold ${
-                                    nextSetDeltaKg > 0
-                                      ? 'bg-emerald-500/20 text-emerald-400'
-                                      : nextSetDeltaKg < 0
-                                        ? 'bg-rose-500/20 text-rose-400'
-                                        : 'bg-secondary text-muted-foreground'
-                                  }`}
-                                  title={
-                                    isAr
-                                      ? `الوزن المقترح للجلسة القادمة لهذه المجموعة: ${nextSessionSetWeight} كجم`
-                                      : `Suggested weight for this set in next session: ${nextSessionSetWeight} kg`
-                                  }
-                                >
-                                  {nextSetDeltaKg > 0
-                                    ? `+${nextSetDeltaKg}kg ${isAr ? 'القادم' : 'next'}`
-                                    : nextSetDeltaKg < 0
-                                      ? `${nextSetDeltaKg}kg ${isAr ? 'القادم' : 'next'}`
-                                      : isAr ? 'تثبيت القادم' : 'Hold next'}
-                                </span>
-                              )}
+                            <div className="text-[10px] text-muted-foreground truncate">
+                              {isAr && sub.equipmentAr ? sub.equipmentAr : sub.equipment}
                             </div>
                           </div>
-
-                          {/* Completed Checkbox Button */}
-                          <div className="col-span-1 flex justify-center">
-                            <button
-                              id={`btn-toggle-set-${setLog.id}`}
-                              onClick={() => handleToggleSetCompletion(setLog)}
-                              className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all ${
-                                setLog.completed
-                                  ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30 scale-105'
-                                  : 'border border-border bg-card text-muted-foreground hover:bg-secondary'
-                              }`}
-                              title={isAr ? 'تأكيد إكمال المجموعة وبدء الراحة' : 'Log set and start rest timer'}
-                            >
-                              <Check className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </motion.div>
+                          <ArrowLeftRight className="h-3.5 w-3.5 text-amber-400 shrink-0 ms-2" />
+                        </button>
                       );
                     })}
-                  </AnimatePresence>
-                </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-                {/* Set management buttons */}
-                <div className="flex items-center justify-between pt-2">
-                  <button
-                    id="btn-add-extra-set"
-                    onClick={handleAddSet}
-                    className="flex items-center gap-1.5 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 transition-colors"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>{t.workout.addSet}</span>
-                  </button>
+            {/* Concise Target Line (Essential Target Only) */}
+            <div className="flex flex-wrap items-center gap-3 text-xs font-mono tabular-nums text-muted-foreground">
+              <span>
+                {isAr ? 'الهدف اليوم:' : 'Target:'}{' '}
+                <strong className="text-foreground">
+                  {currentExercise.sets.length} × {fullExerciseData?.targetRepRange || currentExercise.sets[0]?.targetReps || '8-12'}
+                </strong>
+              </span>
+              {progressionAdvice && progressionAdvice.recommendedWeight > 0 && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>
+                    {isAr ? 'المقترح:' : 'Suggested:'}{' '}
+                    <strong className="text-primary">{progressionAdvice.recommendedWeight} kg</strong>
+                  </span>
+                </>
+              )}
+            </div>
 
-                  {currentExercise.sets.length > 1 && (
-                    <button
-                      id="btn-remove-last-set"
-                      onClick={() => handleRemoveSet(currentExercise.sets[currentExercise.sets.length - 1].id)}
-                      className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      <span>{t.common.delete}</span>
-                    </button>
-                  )}
+            {/* Minimal Sets Table: # | Prev | Weight | Reps | RPE | Done */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-12 gap-1.5 text-center text-[11px] font-bold text-muted-foreground px-2">
+                <div className="col-span-1">#</div>
+                <div className="col-span-3">{isAr ? 'السابق' : 'Prev'}</div>
+                <div className="col-span-3">
+                  {weightInputMode === 'total' ? (isAr ? 'الوزن (kg)' : 'Weight') : (isAr ? 'جانب (kg)' : 'Per Side')}
                 </div>
+                <div className="col-span-2">{isAr ? 'العدات' : 'Reps'}</div>
+                <div className="col-span-2">RPE</div>
+                <div className="col-span-1">{isAr ? 'تم' : '✓'}</div>
               </div>
-            </motion.div>
-          </AnimatePresence>
 
-          {/* Navigation between exercises */}
-          <div className="flex items-center justify-between">
+              {currentExercise.sets.map((setLog, sIdx) => {
+                const currentRpe = typeof setLog.rpe === 'number' ? setLog.rpe : 8;
+                const currentW = typeof setLog.actualWeight === 'number' ? setLog.actualWeight : 0;
+                const loadCfg = detectExerciseLoadConfig(currentExercise, fullExerciseData);
+                const activeBarWeight = barWeightByExercise[currentExercise.exerciseId] ?? loadCfg.defaultBarWeight;
+                const perSideVal = toPerSideWeight(currentW, activeBarWeight);
+                const displayedInputVal = weightInputMode === 'total' ? currentW : perSideVal;
+
+                const prevSet =
+                  comparisonData.lastSession?.sets?.[sIdx] ||
+                  comparisonData.lastSession?.sets?.[comparisonData.lastSession.sets.length - 1];
+
+                return (
+                  <div
+                    key={setLog.id}
+                    className={`grid grid-cols-12 items-center gap-1.5 rounded-xl border p-2 transition-colors ${
+                      setLog.completed
+                        ? 'border-emerald-500/40 bg-emerald-500/10'
+                        : 'border-border bg-secondary/20'
+                    }`}
+                  >
+                    {/* Set # */}
+                    <div className="col-span-1 text-center text-xs font-black font-mono tabular-nums text-foreground">
+                      {setLog.setNumber}
+                    </div>
+
+                    {/* Previous Performance Inline */}
+                    <div className="col-span-3 text-center text-[11px] font-mono tabular-nums text-muted-foreground">
+                      {prevSet ? `${prevSet.weight}×${prevSet.reps}` : '—'}
+                    </div>
+
+                    {/* Weight Input + Preset Selector */}
+                    <div className="col-span-3 flex items-center rounded-lg border border-border bg-card overflow-hidden">
+                      <input
+                        id={`input-weight-${setLog.id}`}
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step={0.5}
+                        value={displayedInputVal}
+                        onFocus={e => e.currentTarget.select()}
+                        onChange={e => {
+                          const raw = parseFloat(e.target.value);
+                          const numericVal = Number.isNaN(raw) ? 0 : Math.max(0, raw);
+                          const nextTotal =
+                            weightInputMode === 'total'
+                              ? numericVal
+                              : fromPerSideWeight(numericVal, activeBarWeight);
+                          handleUpdateSet(setLog.id, 'actualWeight', nextTotal);
+                        }}
+                        className="w-full min-w-0 bg-transparent py-1.5 px-1 text-center text-xs sm:text-sm font-bold font-mono tabular-nums text-foreground focus:outline-none"
+                      />
+                      <div className="relative flex h-8 w-5 shrink-0 items-center justify-center border-s border-border bg-secondary/40">
+                        <ChevronDown className="h-3 w-3 text-muted-foreground pointer-events-none" />
+                        <select
+                          id={`select-weight-${setLog.id}`}
+                          value={displayedInputVal}
+                          onChange={e => {
+                            const picked = parseFloat(e.target.value);
+                            const nextTotal =
+                              weightInputMode === 'total'
+                                ? picked
+                                : fromPerSideWeight(picked, activeBarWeight);
+                            handleUpdateSet(setLog.id, 'actualWeight', nextTotal);
+                          }}
+                          className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
+                        >
+                          {weightInputMode === 'total'
+                            ? WEIGHT_OPTIONS.map(w => (
+                                <option key={w} value={w}>
+                                  {w} kg
+                                </option>
+                              ))
+                            : PER_SIDE_WEIGHT_OPTIONS.map(sw => (
+                                <option key={sw} value={sw}>
+                                  {sw} kg/side
+                                </option>
+                              ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Reps Selector */}
+                    <div className="col-span-2">
+                      <select
+                        id={`select-reps-${setLog.id}`}
+                        value={setLog.actualReps}
+                        onChange={e => handleUpdateSet(setLog.id, 'actualReps', parseInt(e.target.value, 10))}
+                        className="w-full rounded-lg border border-border bg-card py-1.5 px-1 text-center text-xs font-bold font-mono tabular-nums text-foreground focus:outline-none"
+                      >
+                        {!REPS_OPTIONS.includes(setLog.actualReps) && setLog.actualReps > 0 && (
+                          <option value={setLog.actualReps}>{setLog.actualReps}</option>
+                        )}
+                        {REPS_OPTIONS.map(r => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Compact RPE Selector */}
+                    <div className="col-span-2">
+                      <select
+                        id={`select-rpe-${setLog.id}`}
+                        value={currentRpe}
+                        onChange={e => handleUpdateSet(setLog.id, 'rpe', parseFloat(e.target.value))}
+                        className="w-full rounded-lg border border-border bg-card py-1.5 px-1 text-center text-xs font-bold font-mono tabular-nums text-foreground focus:outline-none"
+                      >
+                        {[6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10].map(val => (
+                          <option key={val} value={val}>
+                            {val}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Complete Set Check Button */}
+                    <div className="col-span-1 flex justify-center">
+                      <button
+                        id={`btn-toggle-set-${setLog.id}`}
+                        onClick={() => handleToggleSetCompletion(setLog)}
+                        className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                          setLog.completed
+                            ? 'bg-emerald-500 text-white'
+                            : 'border border-border bg-card text-muted-foreground hover:bg-secondary'
+                        }`}
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Add / Remove Set Row */}
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  id="btn-add-extra-set"
+                  onClick={handleAddSet}
+                  className="flex items-center gap-1 rounded-lg border border-border bg-secondary/40 px-3 py-1.5 text-xs font-bold text-primary hover:bg-secondary"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>{t.workout.addSet}</span>
+                </button>
+
+                {currentExercise.sets.length > 1 && (
+                  <button
+                    id="btn-remove-last-set"
+                    onClick={() => handleRemoveSet(currentExercise.sets[currentExercise.sets.length - 1].id)}
+                    className="flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-rose-400"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>{t.common.delete}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Prev / Next Exercise Navigation */}
+          <div className="flex items-center justify-between gap-2">
             <button
               id="btn-prev-exercise"
               onClick={() => setCurrentExerciseIndex(prev => Math.max(0, prev - 1))}
               disabled={currentExerciseIndex === 0}
-              className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-4 py-2.5 text-xs font-bold text-foreground disabled:opacity-40 hover:bg-secondary transition-colors"
+              className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-4 py-2.5 text-xs font-bold text-foreground disabled:opacity-40 hover:bg-secondary"
             >
               {isAr ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
               <span>{t.workout.prevExercise}</span>
             </button>
 
-            <span className="text-xs text-muted-foreground font-bold">
+            <span className="text-xs font-mono tabular-nums font-bold text-muted-foreground">
               {currentExerciseIndex + 1} / {workout.exercises.length}
             </span>
 
-            <button
-              id="btn-next-exercise"
-              onClick={() => setCurrentExerciseIndex(prev => Math.min(workout.exercises.length - 1, prev + 1))}
-              disabled={currentExerciseIndex === workout.exercises.length - 1}
-              className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground disabled:opacity-40 hover:bg-primary/90 transition-colors"
-            >
-              <span>{t.workout.nextExercise}</span>
-              {isAr ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            </button>
-          </div>
-
-          {/* Prominent Finish Today's Workout Button Card (Complete or Partial) */}
-          <div className="rounded-2xl border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-transparent p-4 sm:p-5 shadow-lg space-y-3 mt-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Trophy className="h-5 w-5 text-emerald-400" />
-                  <h3 className="text-sm sm:text-base font-black text-foreground">
-                    {isAr ? 'إنهاء تمرين اليوم الآن' : "Finish Today's Workout Now"}
-                  </h3>
-                  <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-extrabold text-emerald-300 border border-emerald-500/30">
-                    {isAllSetsCompleted
-                      ? (isAr ? 'مكتمل 100%' : '100% Done')
-                      : (isAr ? `إنجاز جزئي (${completedSetsCount}/${totalSetsCount} مجموعة)` : `Partial (${completedSetsCount}/${totalSetsCount} sets)`)}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {isAr
-                    ? `أنجزت ${completedSetsCount} من أصل ${totalSetsCount} مجموعة. اضغط هنا لإنهاء الجلسة وحفظ النتائج فوراً، وعرض رسم بياني للسعرات المحروقة والحجم التدريبي ونصائح الاستشفاء والتمرين القادم.`
-                    : `You completed ${completedSetsCount} of ${totalSetsCount} sets. Finish now to save your results, view your calorie burn chart, and see recovery advice for your next workout.`}
-                </p>
-              </div>
-
+            {currentExerciseIndex < workout.exercises.length - 1 ? (
+              <button
+                id="btn-next-exercise"
+                onClick={() => setCurrentExerciseIndex(prev => Math.min(workout.exercises.length - 1, prev + 1))}
+                className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground hover:bg-primary/90"
+              >
+                <span>{t.workout.nextExercise}</span>
+                {isAr ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </button>
+            ) : (
               <button
                 id="btn-finish-workout-bottom-prominent"
                 onClick={handleFinish}
-                className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white px-5 py-3 text-xs sm:text-sm font-black shadow-lg shadow-emerald-600/30 transition-all shrink-0"
+                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-xs font-black text-white"
               >
                 <Trophy className="h-4 w-4" />
-                <span>{isAr ? 'إنهاء تمرين اليوم الآن' : "Finish Today's Workout Now"}</span>
+                <span>{isAr ? 'إنهاء وحفظ التمرين' : 'Finish Workout'}</span>
               </button>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -3159,12 +1614,9 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
             <div>
               <div className="text-[10px] uppercase font-black text-muted-foreground tracking-wider flex items-center gap-1.5">
                 <span>{t.workout.restTimer}</span>
-                {timerActive && timerSeconds > 5 && (
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
-                )}
                 {timerActive && timerSeconds <= 5 && timerSeconds > 0 && (
-                  <span className="rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-400 border border-amber-500/30 animate-pulse">
-                    {isAr ? '🔔 استعد للمجموعة!' : '🔔 Prepare for Set!'}
+                  <span className="rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-400 border border-amber-500/30">
+                    {isAr ? 'استعد للمجموعة' : 'Prepare for Set'}
                   </span>
                 )}
               </div>
@@ -3333,8 +1785,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                 </div>
                 <div>
                   <div className="text-sm font-black text-foreground flex items-center gap-1.5">
-                    <span>{isAr ? '🔔 انتهت فترة الراحة!' : '🔔 Rest Complete!'}</span>
-                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span>{isAr ? 'انتهت فترة الراحة' : 'Rest Complete'}</span>
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
                     {nextSet ? (
@@ -3426,6 +1877,373 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
           setSubstitutionModalOpen(false);
         }}
       />
+
+      {/* Exercise Guidance Slide-Out Panel (Per-Side Weight, Plate Calculator, Detailed History & Tools) */}
+      <AnimatePresence>
+        {guidanceOpen && (
+          <div className="fixed inset-0 z-[60] flex justify-end" dir={isAr ? 'rtl' : 'ltr'}>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setGuidanceOpen(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            />
+            <motion.aside
+              id="panel-exercise-guidance-drawer"
+              aria-label={isAr ? 'إرشادات التمرين' : 'Exercise Guidance'}
+              initial={{ x: isAr ? '-100%' : '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: isAr ? '-100%' : '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              className={`fixed inset-y-0 ${isAr ? 'left-0 border-r' : 'right-0 border-l'} z-[61] flex w-full max-w-md flex-col border-border bg-card shadow-2xl`}
+            >
+              {/* Slide-Out Header */}
+              <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-primary">
+                    {isAr ? 'إرشادات التمرين' : 'Exercise Guidance'}
+                  </div>
+                  <h4 className="text-sm sm:text-base font-black text-foreground truncate">
+                    {isAr && currentExercise.exerciseNameAr ? currentExercise.exerciseNameAr : currentExercise.exerciseName}
+                  </h4>
+                </div>
+                <button
+                  id="btn-close-exercise-guidance"
+                  type="button"
+                  onClick={() => setGuidanceOpen(false)}
+                  className="rounded-xl border border-border bg-secondary/60 p-2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Slide-Out Scrollable Content */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
+                {/* 1. Per-Side Weight & Plate Calculator */}
+                {(() => {
+                  const loadCfg = detectExerciseLoadConfig(currentExercise, fullExerciseData);
+                  const activeBarWeight = barWeightByExercise[currentExercise.exerciseId] ?? loadCfg.defaultBarWeight;
+                  const safeSetIdx = Math.min(inspectedPlateSetIndex, Math.max(0, currentExercise.sets.length - 1));
+                  const inspectedSet = currentExercise.sets[safeSetIdx] || currentExercise.sets[0];
+                  const inspectedWeight = inspectedSet?.actualWeight || 0;
+                  const perSideWeight = toPerSideWeight(inspectedWeight, activeBarWeight);
+                  const breakdown = calculatePlateBreakdown(inspectedWeight, activeBarWeight);
+
+                  return (
+                    <section className="space-y-3 border-b border-border pb-5">
+                      <div className="flex items-center justify-between gap-2">
+                        <h5 className="text-xs sm:text-sm font-black text-foreground">
+                          {isAr ? '1. حساب الوزن (يمين/شمال) والطارات' : '1. Per-Side Weight & Plate Calculator'}
+                        </h5>
+
+                        {/* Toggle Input Mode (Total vs Per Side) */}
+                        <div className="inline-flex rounded-lg border border-border bg-secondary/50 p-0.5 text-[11px] font-bold">
+                          <button
+                            id="btn-weight-mode-total"
+                            type="button"
+                            onClick={() => setWeightInputMode('total')}
+                            className={`rounded-md px-2.5 py-1 transition-colors ${
+                              weightInputMode === 'total'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            {isAr ? 'إجمالي' : 'Total'}
+                          </button>
+                          <button
+                            id="btn-weight-mode-per-side"
+                            type="button"
+                            onClick={() => setWeightInputMode('per_side')}
+                            className={`rounded-md px-2.5 py-1 transition-colors ${
+                              weightInputMode === 'per_side'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            {isAr ? 'لكل جانب' : 'Per Side'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Set Selector for Plate & Per-Side Inspection */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {currentExercise.sets.map((s, idx) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => setInspectedPlateSetIndex(idx)}
+                            className={`rounded-lg border px-2.5 py-1 text-xs font-bold font-mono tabular-nums ${
+                              safeSetIdx === idx
+                                ? 'border-primary bg-primary/15 text-primary'
+                                : 'border-border bg-secondary/40 text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            {isAr ? `م${s.setNumber}` : `S${s.setNumber}`} ({s.actualWeight}kg)
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Bar Weight Selector */}
+                      <div className="space-y-1.5">
+                        <div className="text-[11px] font-bold text-muted-foreground">
+                          {isAr ? 'وزن البار المستخدم:' : 'Bar Weight:'}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { kg: 0, labelEn: 'No Bar (0)', labelAr: 'بدون بار (0)' },
+                            { kg: 10, labelEn: '10kg EZ', labelAr: 'بار 10' },
+                            { kg: 15, labelEn: '15kg Bar', labelAr: 'بار 15' },
+                            { kg: 20, labelEn: '20kg Bar', labelAr: 'بار 20' },
+                          ].map(bar => (
+                            <button
+                              key={bar.kg}
+                              type="button"
+                              onClick={() =>
+                                setBarWeightByExercise(prev => ({
+                                  ...prev,
+                                  [currentExercise.exerciseId]: bar.kg,
+                                }))
+                              }
+                              className={`rounded-lg border px-2.5 py-1 text-xs font-bold font-mono ${
+                                activeBarWeight === bar.kg
+                                  ? 'border-primary bg-primary/15 text-primary'
+                                  : 'border-border bg-secondary/40 text-muted-foreground'
+                              }`}
+                            >
+                              {isAr ? bar.labelAr : bar.labelEn}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Calculated Per-Side Split & Plate Breakdown */}
+                      <div className="rounded-xl bg-secondary/40 p-3.5 space-y-2.5 text-xs font-mono tabular-nums">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground font-sans">
+                            {isAr ? `المجموعة ${inspectedSet?.setNumber || 1} — الإجمالي:` : `Set ${inspectedSet?.setNumber || 1} Total:`}
+                          </span>
+                          <span className="font-black text-foreground">{inspectedWeight} kg</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground font-sans">
+                            {isAr ? 'الوزن لكل جانب (يمين / شمال):' : 'Per Side (Right / Left):'}
+                          </span>
+                          <span className="font-black text-primary">{perSideWeight} kg</span>
+                        </div>
+
+                        {activeBarWeight > 0 && (
+                          <div className="pt-2 border-t border-border/60 space-y-1.5">
+                            <div className="text-[11px] font-sans text-muted-foreground">
+                              {isAr ? 'طارات البار المطلوبة على كل جانب:' : 'Plates per bar sleeve:'}
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {breakdown.groupedPerSide.length > 0 ? (
+                                breakdown.groupedPerSide.map(item => (
+                                  <span
+                                    key={item.spec.weight}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-bold"
+                                  >
+                                    <span>{item.count} × {item.spec.weight} kg</span>
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-xs text-muted-foreground font-sans">
+                                  {isAr ? 'البار فارغ فقط' : 'Empty bar only'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  );
+                })()}
+
+                {/* 2. Detailed History & RPE Progression */}
+                <section className="space-y-3 border-b border-border pb-5">
+                  <h5 className="text-xs sm:text-sm font-black text-foreground">
+                    {isAr ? '2. السجل التفصيلي وتوصية الـ RPE' : '2. Detailed History & RPE Progression'}
+                  </h5>
+
+                  {liveRpeSuggestion && nextSet && (
+                    <div className="rounded-xl border border-primary/30 bg-primary/10 p-3 text-xs flex items-center justify-between gap-2">
+                      <span className="text-foreground font-semibold">
+                        {isAr
+                          ? `اقتراح الـ RPE للمجموعة ${nextSet.setNumber}: ${liveRpeSuggestion.suggestedWeight} كجم`
+                          : `RPE suggestion for Set ${nextSet.setNumber}: ${liveRpeSuggestion.suggestedWeight} kg`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleApplyRPEWeightToNextSet(liveRpeSuggestion.suggestedWeight)}
+                        className="rounded-lg bg-primary px-3 py-1 font-bold text-primary-foreground shrink-0"
+                      >
+                        {isAr ? 'تطبيق' : 'Apply'}
+                      </button>
+                    </div>
+                  )}
+
+                  {nextSessionForecast && (
+                    <div className="flex items-center justify-between text-xs py-1">
+                      <span className="text-muted-foreground">
+                        {isAr ? 'توقع الجلسة القادمة:' : 'Next session forecast:'}
+                      </span>
+                      <span className="font-mono tabular-nums font-black text-primary">
+                        {nextSessionForecast.recommendedWeight} kg ({nextSessionForecast.weightDeltaKg && nextSessionForecast.weightDeltaKg > 0 ? `+${nextSessionForecast.weightDeltaKg}` : nextSessionForecast.weightDeltaKg || 0} kg)
+                      </span>
+                    </div>
+                  )}
+
+                  <ExerciseHistoryComparison
+                    currentExercise={currentExercise}
+                    history={history}
+                    profile={profile}
+                    isAr={isAr}
+                    onApplyPreset={handleApplyPresetSets}
+                  />
+                </section>
+
+                {/* 3. Technique Guide, Difficulty & Session Tools */}
+                <section className="space-y-3">
+                  <h5 className="text-xs sm:text-sm font-black text-foreground">
+                    {isAr ? '3. أدوات التمرين والصعوبة' : '3. Technique & Session Controls'}
+                  </h5>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-muted-foreground">
+                      {isAr ? 'مستوى الصعوبة:' : 'Difficulty:'}
+                    </span>
+                    <div className="inline-flex rounded-xl border border-border bg-secondary/50 p-1">
+                      {(
+                        [
+                          { id: 'easy', labelAr: 'سهل', labelEn: 'Easy' },
+                          { id: 'standard', labelAr: 'قياسي', labelEn: 'Standard' },
+                          { id: 'hard', labelAr: 'متقدم', labelEn: 'Hard' },
+                        ] as const
+                      ).map(lvl => (
+                        <button
+                          key={lvl.id}
+                          id={`btn-modal-difficulty-${lvl.id}`}
+                          type="button"
+                          onClick={() => handleSelectDifficultyLevel(lvl.id)}
+                          className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-colors ${
+                            activeDifficultyLevel === lvl.id
+                              ? 'bg-primary text-primary-foreground'
+                              : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {isAr ? lvl.labelAr : lvl.labelEn}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    {fullExerciseData && (
+                      <button
+                        id="btn-view-exercise-guide"
+                        type="button"
+                        onClick={() => onOpenExerciseDetails(fullExerciseData)}
+                        className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/50 px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary"
+                      >
+                        <Info className="h-3.5 w-3.5 text-primary" />
+                        <span>{isAr ? 'شرح التكنيك' : 'Form Guide'}</span>
+                      </button>
+                    )}
+
+                    <button
+                      id="btn-open-rpe-calculator"
+                      type="button"
+                      onClick={() => handleOpenRPECalculator()}
+                      className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/50 px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary"
+                    >
+                      <Calculator className="h-3.5 w-3.5 text-primary" />
+                      <span>{t.workout.rpeCalculatorBtn}</span>
+                    </button>
+
+                    <button
+                      id="btn-warmup-workout-top"
+                      type="button"
+                      onClick={() => setSmartWarmupOpen(true)}
+                      className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/50 px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary"
+                    >
+                      <Flame className="h-3.5 w-3.5 text-amber-400" />
+                      <span>{isAr ? 'إحماء 5 دقائق' : '5m Warm-up'}</span>
+                    </button>
+
+                    <button
+                      id="btn-swap-exercise-toggle"
+                      type="button"
+                      onClick={() => setSubstitutionModalOpen(true)}
+                      className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/50 px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5 text-primary" />
+                      <span>{isAr ? 'تبديل يوم التمرين' : 'Swap Full Day'}</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setSoundEnabled(prev => !prev)}
+                    className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/40 px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary"
+                  >
+                    {soundEnabled ? <Volume2 className="h-3.5 w-3.5 text-primary" /> : <VolumeX className="h-3.5 w-3.5 text-muted-foreground" />}
+                    <span>{soundEnabled ? (isAr ? 'تنبيهات الصوت: مفعّلة' : 'Audio Cues: On') : (isAr ? 'تنبيهات الصوت: صامت' : 'Audio Cues: Muted')}</span>
+                  </button>
+
+                  {/* Knee & Lower-Back Pain Safety Check */}
+                  <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 space-y-2.5">
+                    <div className="flex items-start gap-2">
+                      <ShieldAlert className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="text-xs font-black text-foreground">
+                          {isAr ? 'فحص سلامة الركبة وأسفل الظهر' : 'Knee & Lower-Back Safety Check'}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+                          {isAr
+                            ? 'إذا شعرت بألم حاد في الركبة أو أسفل الظهر، توقف عن التمرين فوراً واستبدله بحركة منخفضة الضغط.'
+                            : 'If you feel sharp knee or lower-back pain, stop this movement immediately and switch to a joint-safe alternative.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['knee', 'lower_back'] as const).map(area => (
+                        <button
+                          key={area}
+                          id={`btn-report-pain-${area}`}
+                          type="button"
+                          onClick={() => {
+                            StorageService.addJointPainLog({
+                              id: `pain_${Date.now()}`,
+                              date: new Date().toISOString().split('T')[0],
+                              timestamp: Date.now(),
+                              area,
+                              severity: 'moderate',
+                              exerciseName: isAr && currentExercise.exerciseNameAr ? currentExercise.exerciseNameAr : currentExercise.exerciseName,
+                              actionTaken: isAr
+                                ? 'إيقاف التمرين وفتح البدائل الآمنة للمفاصل.'
+                                : 'Paused movement and opened joint-safe exercise substitutes.',
+                            });
+                            setJointPainFilter(true);
+                            setGuidanceOpen(false);
+                            setSwapExerciseOpen(true);
+                          }}
+                          className="rounded-lg border border-rose-500/40 bg-card/90 px-2.5 py-2 text-[11px] font-bold text-rose-300 hover:bg-rose-500/20 transition-colors"
+                        >
+                          {area === 'knee'
+                            ? isAr ? 'انزعاج الركبة ← بديل آمن' : 'Knee Discomfort → Swap'
+                            : isAr ? 'انزعاج أسفل الظهر ← بديل آمن' : 'Back Discomfort → Swap'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </motion.aside>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Achievement Confetti PR Toast */}
       <PRAchievementToast

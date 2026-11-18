@@ -1,18 +1,14 @@
 import express from 'express';
 import http from 'http';
+import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
-import { createServer as createViteServer } from 'vite';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: '15mb' }));
 
@@ -277,6 +273,7 @@ async function start() {
   const httpServer = http.createServer(app);
 
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const isHmrDisabled = process.env.DISABLE_HMR === 'true';
     const vite = await createViteServer({
       server: {
@@ -287,7 +284,9 @@ async function start() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const cwdDist = path.join(process.cwd(), 'dist');
+    const cjsDir = typeof __dirname !== 'undefined' ? __dirname : cwdDist;
+    const distPath = fs.existsSync(path.join(cwdDist, 'index.html')) ? cwdDist : cjsDir;
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));

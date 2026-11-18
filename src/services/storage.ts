@@ -13,7 +13,10 @@ import {
   Achievement, 
   AIChatMessage, 
   GeneratedImageRecord,
-  DailyReadinessAssessment
+  DailyReadinessAssessment,
+  DailyCheckInRecord,
+  MorningMotivationState,
+  JointPainLog,
 } from '../types';
 import { exerciseSeedData } from '../data/exerciseSeed';
 
@@ -33,14 +36,17 @@ const STORAGE_KEYS = {
   ACHIEVEMENTS: 'eddieb_achievements_v1',
   CHAT_HISTORY: 'eddieb_ai_chat_v1',
   SAVED_IMAGES: 'eddieb_saved_images_v1',
+  DAILY_CHECKINS: 'eddieb_daily_checkins_v1',
+  MORNING_MOTIVATION: 'eddieb_morning_motivation_v1',
+  JOINT_PAIN_LOGS: 'eddieb_joint_pain_v1',
 };
 
 export const defaultProfile: UserProfile = {
   name: 'Eddie B',
   age: 41,
   heightCm: 176,
-  currentWeightKg: 100.95,
-  goalWeightKg: 80.0,
+  currentWeightKg: 101.1,
+  goalWeightKg: 80.0, // Realistic Stage 1 goal; device ideal reference: 67.2 kg
   trainingDaysPerWeek: 4,
   level: 'intermediate',
   preferredLocation: 'gym',
@@ -48,13 +54,17 @@ export const defaultProfile: UserProfile = {
   mode: 'controlled_fat_loss',
   activityLevel: 'moderate',
   currentWaistCm: 102,
-  startDate: new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0], // 2 weeks ago
-  dailyCalorieTarget: 2050, // Optimal deficit for 1949 kcal BMR + active training
-  dailyProteinTargetGrams: 175, // Preserves 64.9 kg muscle mass while burning 21 kg fat
-  dailyCarbsTargetGrams: 180,
-  dailyFatTargetGrams: 55,
-  dailyWaterTargetMl: 4000,
-  notes: 'Mission Target: 80.0 kg. Preserve 65kg+ muscle mass, burn visceral fat (current 22.5), drop body fat from 32.5% to athletic 15%.',
+  startDate: new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0],
+  dailyCalorieTarget: 1900, // Sustainable deficit below ~2600-2700 TDEE (BMR 1951 kcal)
+  dailyProteinTargetGrams: 170, // ~2.5g/kg FFM (68.2 kg) to preserve skeletal muscle (34.3 kg)
+  dailyCarbsTargetGrams: 175,
+  dailyFatTargetGrams: 54,
+  dailyFiberTargetGrams: 32,
+  dailyWaterTargetMl: 3500,
+  morningWindowStart: '07:30',
+  morningWindowEnd: '08:00',
+  morningNotificationsEnabled: false,
+  notes: 'Primary Goal: Sustainable fat loss from 101.1 kg while protecting knees, lower back & joints, preserving 34.3 kg skeletal muscle, and building a consistent post-Fajr (7:30–8:00 AM) gym habit.',
   theme: 'elegant_dark',
   language: 'ar',
   unitSystem: 'kg',
@@ -64,26 +74,26 @@ export const defaultProfile: UserProfile = {
   units: 'km',
   restSoundType: 'beep',
   latestScaleScan: {
-    scanDate: '2026/08/22 10:05:32',
-    weightKg: 100.95,
-    goalWeightKg: 80.0,
+    scanDate: new Date().toISOString().split('T')[0],
+    weightKg: 101.1,
+    goalWeightKg: 67.2, // Device suggested ideal weight (trend indicator only)
     bmi: 32.6,
     bodyFatPercent: 32.5,
-    bodyFatKg: 32.8,
-    skeletalMuscleKg: 33.9,
-    muscleWeightKg: 64.9,
+    bodyFatKg: 32.9,
+    skeletalMuscleKg: 34.3,
+    muscleWeightKg: 65.0,
     visceralFat: 22.5,
     waterPercent: 49.8,
     waterKg: 50.3,
     proteinPercent: 14.5,
     proteinKg: 14.6,
-    boneMassKg: 3.17,
-    bmrKcal: 1949.0,
-    bodyAge: 51.0,
+    boneMassKg: 3.22,
+    bmrKcal: 1951,
+    bodyAge: 50,
     actualAge: 41,
     heightCm: 176,
-    weightWithoutFatKg: 68.14,
-    obesityDegreePercent: 50.2,
+    weightWithoutFatKg: 68.2,
+    obesityDegreePercent: 50.4,
   },
 };
 
@@ -820,7 +830,37 @@ export const StorageService = {
   getProfile(): UserProfile {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.PROFILE);
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const parsed = JSON.parse(stored) as UserProfile;
+        let dirty = false;
+
+        // Cleanly backfill missing fields without overriding user-customized data
+        if (!parsed.dailyFiberTargetGrams) {
+          parsed.dailyFiberTargetGrams = defaultProfile.dailyFiberTargetGrams;
+          dirty = true;
+        }
+        if (!parsed.morningWindowStart) {
+          parsed.morningWindowStart = defaultProfile.morningWindowStart;
+          dirty = true;
+        }
+        if (!parsed.morningWindowEnd) {
+          parsed.morningWindowEnd = defaultProfile.morningWindowEnd;
+          dirty = true;
+        }
+        // If user still had untouched legacy baseline scan (100.95 kg / 1949 BMR), refresh to latest BIA scan
+        if (parsed.latestScaleScan && parsed.latestScaleScan.weightKg === 100.95 && parsed.latestScaleScan.bmrKcal === 1949) {
+          parsed.currentWeightKg = defaultProfile.currentWeightKg;
+          parsed.dailyCalorieTarget = defaultProfile.dailyCalorieTarget;
+          parsed.dailyProteinTargetGrams = defaultProfile.dailyProteinTargetGrams;
+          parsed.dailyWaterTargetMl = defaultProfile.dailyWaterTargetMl;
+          parsed.latestScaleScan = defaultProfile.latestScaleScan;
+          dirty = true;
+        }
+        if (dirty) {
+          this.saveProfile(parsed);
+        }
+        return parsed;
+      }
     } catch (e) {
       console.error('Error loading profile:', e);
     }
@@ -1303,6 +1343,82 @@ export const StorageService = {
     });
 
     return csv;
+  },
+
+  getDailyCheckIns(): DailyCheckInRecord[] {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.DAILY_CHECKINS);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  },
+
+  getTodayCheckIn(dateStr: string = new Date().toISOString().split('T')[0]): DailyCheckInRecord {
+    const list = this.getDailyCheckIns();
+    const found = list.find(c => c.date === dateStr);
+    if (found) return found;
+    return {
+      date: dateStr,
+      status: 'not_started',
+      updatedAt: Date.now(),
+      skipAction: null,
+      morningActive: false,
+    };
+  },
+
+  saveTodayCheckIn(record: DailyCheckInRecord): void {
+    try {
+      const list = this.getDailyCheckIns();
+      const idx = list.findIndex(c => c.date === record.date);
+      if (idx >= 0) {
+        list[idx] = record;
+      } else {
+        list.unshift(record);
+      }
+      if (list.length > 60) list.length = 60;
+      localStorage.setItem(STORAGE_KEYS.DAILY_CHECKINS, JSON.stringify(list));
+    } catch (e) {}
+  },
+
+  getMorningMotivationState(): MorningMotivationState {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.MORNING_MOTIVATION);
+      if (stored) return JSON.parse(stored);
+    } catch (e) {}
+    return {
+      recentMessageIds: [],
+      lastShownDate: null,
+      lastNotifiedDate: null,
+    };
+  },
+
+  saveMorningMotivationState(state: MorningMotivationState): void {
+    try {
+      localStorage.setItem(STORAGE_KEYS.MORNING_MOTIVATION, JSON.stringify(state));
+    } catch (e) {}
+  },
+
+  getJointPainLogs(): JointPainLog[] {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.JOINT_PAIN_LOGS);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  },
+
+  addJointPainLog(log: JointPainLog): void {
+    try {
+      const list = this.getJointPainLogs();
+      list.unshift(log);
+      if (list.length > 50) list.length = 50;
+      localStorage.setItem(STORAGE_KEYS.JOINT_PAIN_LOGS, JSON.stringify(list));
+    } catch (e) {}
   },
 
   resetAllData(): void {

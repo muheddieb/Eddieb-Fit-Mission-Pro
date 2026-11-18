@@ -481,6 +481,7 @@ export interface NutritionEntry {
   carbsGrams?: number;
   fat?: number;
   fatGrams?: number;
+  fiberGrams?: number;
   notes?: string;
   timestamp?: number;
 }
@@ -523,6 +524,44 @@ export type ScreenWakeDuration = '1m' | '2m' | '5m' | '10m' | '30m' | 'never';
 export type CardioMotivationFrequency = '1m' | '2m' | 'off';
 export type RestSoundType = 'beep' | 'whistle' | 'chime' | 'buzzer' | 'bell';
 
+export type DailyGymStatus = 'not_started' | 'in_progress' | 'completed' | 'skipped';
+
+export interface DailyCheckInRecord {
+  date: string; // YYYY-MM-DD
+  status: DailyGymStatus;
+  updatedAt: number;
+  skipAction?: 'rescheduled' | 'rest_day' | 'moved' | null;
+  stepsToday?: number;
+  morningActive?: boolean;
+  notes?: string;
+}
+
+export interface MorningMotivationState {
+  recentMessageIds: string[];
+  lastShownDate: string | null;
+  lastNotifiedDate: string | null;
+}
+
+export interface JointPainLog {
+  id: string;
+  date: string;
+  timestamp: number;
+  area: 'knee' | 'lower_back' | 'shoulder' | 'other';
+  severity: 'mild' | 'moderate' | 'sharp';
+  exerciseName?: string;
+  actionTaken: string;
+}
+
+export type ScheduleSafetyRating = 'green' | 'yellow' | 'red';
+
+export interface MoveSafetyEvaluation {
+  rating: ScheduleSafetyRating;
+  labelEn: string;
+  labelAr: string;
+  reasonEn: string;
+  reasonAr: string;
+}
+
 export interface BodyCompositionScan {
   scanDate: string;
   weightKg: number;
@@ -564,7 +603,11 @@ export interface UserProfile {
   dailyProteinTargetGrams: number;
   dailyCarbsTargetGrams?: number;
   dailyFatTargetGrams?: number;
+  dailyFiberTargetGrams?: number;
   dailyWaterTargetMl: number;
+  morningWindowStart?: string; // e.g. '07:30'
+  morningWindowEnd?: string;   // e.g. '08:00'
+  morningNotificationsEnabled?: boolean;
   notes?: string;
   theme: AppTheme;
   language: AppLanguage;

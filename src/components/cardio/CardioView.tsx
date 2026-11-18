@@ -88,32 +88,66 @@ export const CardioView: React.FC<CardioViewProps> = ({
         <p className="text-sm text-muted-foreground">{t.cardio.subtitle}</p>
       </div>
 
-      {/* Quick Launch Cards for Top 3 Cardio Modalities */}
+      {/* Quick Launch Cards for Low-Impact Gym Cardio Modalities */}
       <div className="space-y-3">
         <h3 className="text-base font-bold text-foreground flex items-center gap-2">
           <Zap className="h-5 w-5 text-primary" />
-          <span>{isAr ? 'بدء جلسة كارديو تفاعلية فورية (Live HUD)' : 'Instant Live Cardio Launchers'}</span>
+          <span>{isAr ? 'خيارات الكارديو الآمنة للمفاصل في الجيم' : 'Joint-Safe Gym Cardio Launchers'}</span>
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Preset 1: Treadmill Incline Walk */}
-          <div className="rounded-2xl border border-emerald-500/30 bg-card p-5 shadow-md flex flex-col justify-between space-y-4 hover:border-emerald-500/60 transition-all">
+          {/* Preset 1: Stationary Cycling */}
+          <div className="rounded-2xl border border-primary/30 bg-card p-5 shadow-sm flex flex-col justify-between space-y-4">
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[10px] font-bold text-emerald-400">
-                  Zone 2 Fat-Loss
-                </span>
-                <span className="text-xs font-bold text-muted-foreground">
-                  25 min
-                </span>
+              <div className="flex items-center justify-between text-xs font-mono tabular-nums">
+                <span className="font-bold text-primary">Zone 2 · Zero Knee Impact</span>
+                <span className="text-muted-foreground">20–30 min</span>
+              </div>
+
+              <h4 className="text-base font-black text-foreground flex items-center gap-2">
+                <Bike className="h-4 w-4 text-primary" />
+                <span>{isAr ? 'دراجة ثابتة (Stationary Bike)' : 'Stationary Bike'}</span>
+              </h4>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {isAr
+                  ? 'الأفضل لوزن 101 كجم: يحرق الدهون بمقاومة متوسطة و70–85 لفة بدون أي صدمات على الركبة أو أسفل الظهر.'
+                  : 'Best choice at 101 kg: smooth 70–85 RPM cadence burns fat with zero knee or lower-back impact.'}
+              </p>
+            </div>
+
+            <button
+              id="btn-start-live-cycling"
+              onClick={() => handleStartLiveCardio({
+                type: 'stationary_bike',
+                targetDurationMinutes: 25,
+                inclinePercentage: 0,
+                initialSpeedKmh: 20.0,
+                intensity: 'zone2_fat_loss',
+                environment: 'coastal',
+              })}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              <Play className="h-4 w-4 fill-current" />
+              <span>{isAr ? 'ابدأ جلسة الدراجة' : 'Start Stationary Bike'}</span>
+            </button>
+          </div>
+
+          {/* Preset 2: Treadmill Walking (Flat or Gentle Incline) */}
+          <div className="rounded-2xl border border-emerald-500/30 bg-card p-5 shadow-sm flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-mono tabular-nums">
+                <span className="font-bold text-emerald-400">Zone 2 Fat-Loss Walk</span>
+                <span className="text-muted-foreground">20–30 min</span>
               </div>
 
               <h4 className="text-base font-black text-foreground flex items-center gap-2">
                 <Mountain className="h-4 w-4 text-emerald-400" />
-                <span>{isAr ? 'مشي بميل على المشاية (Incline)' : 'Incline Treadmill Walk'}</span>
+                <span>{isAr ? 'مشي على المشاية (Treadmill Walk)' : 'Treadmill Walking'}</span>
               </h4>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                {isAr ? 'ميل 10% وسرعة 4.8 كم/س لحرق الدهون النقية وحماية الكتلة العضلية.' : '10% incline at 4.8 km/h. Maximizes fat oxidation without CNS fatigue.'}
+                {isAr
+                  ? 'سرعة 4.2–5.0 كم/س بميل لطيف 4–8% (بدون جري). يرفع الحرق مع حماية المفاصل.'
+                  : 'Walk at 4.2–5.0 km/h with a gentle 4–8% incline (no running) to protect knees and lower back.'}
               </p>
             </div>
 
@@ -122,120 +156,87 @@ export const CardioView: React.FC<CardioViewProps> = ({
               onClick={() => handleStartLiveCardio({
                 type: 'treadmill_incline',
                 targetDurationMinutes: 25,
-                inclinePercentage: 10,
-                initialSpeedKmh: 4.8,
+                inclinePercentage: 6,
+                initialSpeedKmh: 4.6,
                 intensity: 'zone2_fat_loss',
                 environment: 'sunset',
               })}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-500 transition-colors"
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white hover:bg-emerald-500 transition-colors"
             >
               <Play className="h-4 w-4 fill-current" />
-              <span>{isAr ? 'ابدأ الجلسة التفاعلية (Full HUD)' : 'Start Live Treadmill Session'}</span>
+              <span>{isAr ? 'ابدأ مشي المشاية' : 'Start Treadmill Walk'}</span>
             </button>
           </div>
 
-          {/* Preset 2: Stationary Cycling */}
-          <div className="rounded-2xl border border-primary/30 bg-card p-5 shadow-md flex flex-col justify-between space-y-4 hover:border-primary/60 transition-all">
+          {/* Preset 3: Low-Impact Elliptical */}
+          <div className="rounded-2xl border border-cyan-500/30 bg-card p-5 shadow-sm flex flex-col justify-between space-y-4">
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="rounded-full bg-primary/20 px-2.5 py-0.5 text-[10px] font-bold text-primary">
-                  Endurance & Recovery
-                </span>
-                <span className="text-xs font-bold text-muted-foreground">
-                  20 min
-                </span>
-              </div>
-
-              <h4 className="text-base font-black text-foreground flex items-center gap-2">
-                <Bike className="h-4 w-4 text-primary" />
-                <span>{isAr ? 'دراجة ثابتة (Stationary Bike)' : 'Stationary Bike Cadence'}</span>
-              </h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                {isAr ? 'إيقاع تدوير سلس بمقاومة متوسطة لتعزيز الدورة الدموية والاستشفاء.' : 'Smooth 70-85 RPM cadence. Ideal for joint-friendly active recovery.'}
-              </p>
-            </div>
-
-            <button
-              id="btn-start-live-cycling"
-              onClick={() => handleStartLiveCardio({
-                type: 'stationary_bike',
-                targetDurationMinutes: 20,
-                inclinePercentage: 0,
-                initialSpeedKmh: 20.0,
-                intensity: 'zone2_fat_loss',
-                environment: 'coastal',
-              })}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-xs font-bold text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90 transition-colors"
-            >
-              <Play className="h-4 w-4 fill-current" />
-              <span>{isAr ? 'ابدأ تمرين الدراجة المباشر' : 'Start Live Cycling HUD'}</span>
-            </button>
-          </div>
-
-          {/* Preset 3: Outdoor Zone 2 Walk */}
-          <div className="rounded-2xl border border-cyan-500/30 bg-card p-5 shadow-md flex flex-col justify-between space-y-4 hover:border-cyan-500/60 transition-all">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="rounded-full bg-cyan-500/20 px-2.5 py-0.5 text-[10px] font-bold text-cyan-400">
-                  Outdoor GPS Track
-                </span>
-                <span className="text-xs font-bold text-muted-foreground">
-                  30 min
-                </span>
+              <div className="flex items-center justify-between text-xs font-mono tabular-nums">
+                <span className="font-bold text-cyan-400">Low-Impact Alternative</span>
+                <span className="text-muted-foreground">20 min</span>
               </div>
 
               <h4 className="text-base font-black text-foreground flex items-center gap-2">
                 <Navigation className="h-4 w-4 text-cyan-400" />
-                <span>{isAr ? 'مشي خارجي نشط (Outdoor Walk)' : 'Outdoor Track / Walk'}</span>
+                <span>{isAr ? 'جهاز إليبتيكال (Elliptical)' : 'Low-Impact Elliptical'}</span>
               </h4>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                {isAr ? 'تتبع تلقائي لمسافة وسرعة المشي عبر مستشعر الـ GPS الحقيقي.' : 'Real-time GPS distance and speed tracker with smart mobile screen keep-awake.'}
+                {isAr
+                  ? 'حركة انسيابية لكامل الجسم بدون ارتطام القدم بالأرض عند توفره في الجيم.'
+                  : 'Smooth gliding stride with zero foot-strike impact when cycling or walking needs variety.'}
               </p>
             </div>
 
             <button
-              id="btn-start-live-outdoor"
+              id="btn-start-live-elliptical"
               onClick={() => handleStartLiveCardio({
-                type: 'outdoor_walk',
-                targetDurationMinutes: 30,
+                type: 'elliptical',
+                targetDurationMinutes: 20,
                 inclinePercentage: 0,
-                initialSpeedKmh: 5.2,
+                initialSpeedKmh: 6.5,
                 intensity: 'zone2_fat_loss',
                 environment: 'mountain',
               })}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-cyan-600 py-3 text-xs font-bold text-white shadow-md shadow-cyan-600/20 hover:bg-cyan-500 transition-colors"
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-cyan-600 py-3 text-xs font-bold text-white hover:bg-cyan-500 transition-colors"
             >
               <Play className="h-4 w-4 fill-current" />
-              <span>{isAr ? 'ابدأ التتبع الخارجي (GPS Live)' : 'Start Outdoor Live Session'}</span>
+              <span>{isAr ? 'ابدأ جلسة الإليبتيكال' : 'Start Elliptical'}</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Protocols / Scientific Directives */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-5 space-y-2.5">
-          <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
-            <ShieldCheck className="h-5 w-5" />
-            <span>{isAr ? 'بروتوكول المشي بميل لحرق الدهون دون هدم العضلات' : 'Incline Treadmill Zone 2 Fat-Loss Protocol'}</span>
-          </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            {isAr
-              ? 'المشي بسرعة 4.5-5.0 كم/س بميل 8-12% لمدة 20-30 دقيقة يحافظ على ضربات القلب في النطاق الثاني (Zone 2) لأكسدة الدهون النقية بدون إجهاد الجهاز العصبي أو الإضرار بالاستشفاء العضلي.'
-              : 'Walking at 4.5-5.0 km/h at an 8-12% incline keeps heart rate in Zone 2 (60-70% max HR), optimizing lipolysis (fat burning) without degrading skeletal muscle tissue.'}
-          </p>
+      {/* Clear Cardio Strategy Table */}
+      <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
+        <div className="flex items-center gap-2 text-primary font-black text-sm">
+          <ShieldCheck className="h-5 w-5" />
+          <span>{isAr ? 'استراتيجية الكارديو المخصصة لوزن 101 كجم (الجيم فقط)' : 'Low-Impact Gym Cardio Strategy'}</span>
         </div>
-
-        <div className="rounded-2xl border border-primary/25 bg-primary/5 p-5 space-y-2.5">
-          <div className="flex items-center gap-2 text-primary font-bold text-sm">
-            <Zap className="h-5 w-5" />
-            <span>{isAr ? 'التوقيت المثالي للكارديو' : 'Optimal Cardio Timing'}</span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+          <div className="border-s-2 border-primary ps-3 space-y-0.5">
+            <div className="font-bold text-foreground">{isAr ? 'المدة والتكرار' : 'Duration & Frequency'}</div>
+            <div className="text-muted-foreground">
+              {isAr ? '20–30 دقيقة بعد التمرين (أو 30 د في أيام الراحة) • 3–5 مرات أسبوعياً.' : '20–30 min post-lifting (or 30m on rest days) • 3–5x/week.'}
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            {isAr
-              ? 'قم بأداء الكارديو بعد تمرين الحديد مباشرة أو في أيام الراحة لتجنب استنزاف طاقة الجليكوجين قبل رفع الأوزان الثقيلة.'
-              : 'Perform steady-state cardio directly post-lifting or on non-lifting active recovery days so maximum neural drive is reserved for heavy progressive overload.'}
-          </p>
+          <div className="border-s-2 border-emerald-500 ps-3 space-y-0.5">
+            <div className="font-bold text-foreground">{isAr ? 'الشدة (Zone 2)' : 'Intensity (Zone 2)'}</div>
+            <div className="text-muted-foreground">
+              {isAr ? 'نبض 60–70% (تستطيع الكلام بجمل قصيرة بدون نهجان شديد).' : '60–70% max HR (steady conversational pace, RPE 5–6).'}
+            </div>
+          </div>
+          <div className="border-s-2 border-sky-500 ps-3 space-y-0.5">
+            <div className="font-bold text-foreground">{isAr ? 'التوقيت الصباحي' : 'Timing'}</div>
+            <div className="text-muted-foreground">
+              {isAr ? 'بعد رفع الأوزان مباشرة للحفاظ على طاقة العضلات، أو صباحاً في أيام الراحة.' : 'Directly after lifting so strength stays high, or morning on rest days.'}
+            </div>
+          </div>
+          <div className="border-s-2 border-amber-500 ps-3 space-y-0.5">
+            <div className="font-bold text-foreground">{isAr ? 'التدرج الآمن' : 'Progression'}</div>
+            <div className="text-muted-foreground">
+              {isAr ? 'زد +5 دقائق كل أسبوعين قبل زيادة المقاومة أو الميل. تجنب الجري والقفز.' : 'Add +5 min every 2 weeks before increasing resistance/incline. Avoid running/jumping.'}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -248,7 +249,7 @@ export const CardioView: React.FC<CardioViewProps> = ({
               {isAr ? 'تخصيص جلسة كارديو (Custom Parameters)' : 'Custom Cardio Parameters'}
             </h3>
           </div>
-          <span className="text-xs font-bold text-emerald-400">
+          <span className="text-xs font-bold font-mono tabular-nums text-emerald-400">
             ~{estimatedCalories} kcal est. burn
           </span>
         </div>
@@ -264,11 +265,10 @@ export const CardioView: React.FC<CardioViewProps> = ({
               onChange={e => setType(e.target.value as any)}
               className="w-full rounded-xl border border-border bg-background p-2.5 text-sm text-foreground focus:border-primary focus:outline-none"
             >
-              <option value="treadmill_incline">{isAr ? 'مشي بميل على المشاية (Incline Walk)' : 'Treadmill Incline Walk'}</option>
               <option value="stationary_bike">{isAr ? 'دراجة ثابتة (Stationary Bike)' : 'Stationary Bike'}</option>
-              <option value="outdoor_walk">{isAr ? 'مشي خارجي نشط (Outdoor Walk)' : 'Outdoor Walk'}</option>
+              <option value="treadmill_incline">{isAr ? 'مشي بميل على المشاية (Incline Walk)' : 'Treadmill Incline Walk'}</option>
+              <option value="treadmill_walk">{isAr ? 'مشي مستوي على المشاية (Treadmill Walk)' : 'Treadmill Flat Walk'}</option>
               <option value="elliptical">{isAr ? 'إليبتيكال (Elliptical)' : 'Elliptical'}</option>
-              <option value="treadmill_run">{isAr ? 'جري خفيف (Treadmill Run)' : 'Treadmill Run'}</option>
             </select>
           </div>
 

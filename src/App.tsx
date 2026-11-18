@@ -8,6 +8,7 @@ import { Navbar } from './components/layout/Navbar';
 import { Sidebar, NavSection } from './components/layout/Sidebar';
 import { MobileNav } from './components/layout/MobileNav';
 import { DashboardView } from './components/dashboard/DashboardView';
+import { GuidanceView } from './components/guidance/GuidanceView';
 import { AICoachView } from './components/aicoach/AICoachView';
 import { ExerciseLibraryView } from './components/library/ExerciseLibraryView';
 import { HomeWorkoutsView } from './components/home/HomeWorkoutsView';
@@ -115,8 +116,21 @@ export default function App() {
     }
   };
 
+  const syncDailyCheckInStatus = (status: 'in_progress' | 'completed') => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const existing = StorageService.getTodayCheckIn(todayStr);
+    StorageService.saveTodayCheckIn({
+      ...existing,
+      date: todayStr,
+      status,
+      skipAction: null,
+      updatedAt: Date.now(),
+    });
+  };
+
   // Handler: Start or resume daily workout
   const handleStartWorkout = () => {
+    syncDailyCheckInStatus('in_progress');
     if (activeWorkout) {
       setActiveWorkoutOpen(true);
       return;
@@ -130,6 +144,7 @@ export default function App() {
 
   // Handler: Start home workout routine
   const handleStartHomeWorkout = () => {
+    syncDailyCheckInStatus('in_progress');
     const homeProfile = { ...profile, preferredLocation: 'home' as const };
     const newSession = PPLEngine.buildDailyWorkout(homeProfile, workoutHistory);
     setActiveWorkout(newSession);
@@ -139,6 +154,7 @@ export default function App() {
 
   // Handler: Start Return to Training Workout
   const handleStartReturnWorkout = (session: WorkoutSession) => {
+    syncDailyCheckInStatus('in_progress');
     setActiveWorkout(session);
     StorageService.saveActiveWorkout(session);
     setActiveWorkoutOpen(true);
@@ -153,6 +169,7 @@ export default function App() {
   // Handler: Finish workout (Complete or Partial)
   const handleFinishWorkout = (w: WorkoutSession) => {
     StorageService.completeWorkout(w);
+    syncDailyCheckInStatus('completed');
     if (currentUser) {
       FirestoreSyncService.saveWorkout(w, currentUser.uid);
     }
@@ -240,12 +257,14 @@ export default function App() {
             activeWorkout={activeWorkout}
             onStartWorkout={handleStartWorkout}
             onStartSpecificWorkout={(session) => {
+              syncDailyCheckInStatus('in_progress');
               setActiveWorkout(session);
               StorageService.saveActiveWorkout(session);
               setActiveWorkoutOpen(true);
             }}
             onFinishActiveWorkout={handleFinishActiveWorkoutFromDashboard}
             onNavigate={(sec) => setCurrentSection(sec)}
+            onUpdateProfile={handleUpdateProfile}
           />
         );
       case 'weeklySchedule':
@@ -255,6 +274,7 @@ export default function App() {
               profile={profile}
               history={workoutHistory}
               onStartSpecificWorkout={(session) => {
+                syncDailyCheckInStatus('in_progress');
                 setActiveWorkout(session);
                 StorageService.saveActiveWorkout(session);
                 setActiveWorkoutOpen(true);
@@ -263,6 +283,13 @@ export default function App() {
               compact={false}
             />
           </div>
+        );
+      case 'guidance':
+        return (
+          <GuidanceView
+            profile={profile}
+            onNavigateToMeals={() => setCurrentSection('nutrition')}
+          />
         );
       case 'returnToTraining':
         return (
@@ -290,6 +317,12 @@ export default function App() {
             history={workoutHistory}
             activeWorkout={activeWorkout}
             onStartWorkout={handleStartWorkout}
+            onStartSpecificWorkout={(session) => {
+              syncDailyCheckInStatus('in_progress');
+              setActiveWorkout(session);
+              StorageService.saveActiveWorkout(session);
+              setActiveWorkoutOpen(true);
+            }}
             onFinishActiveWorkout={handleFinishActiveWorkoutFromDashboard}
             onNavigate={(sec) => setCurrentSection(sec)}
             onUpdateProfile={handleUpdateProfile}
@@ -377,6 +410,13 @@ export default function App() {
             history={workoutHistory}
             activeWorkout={activeWorkout}
             onStartWorkout={handleStartWorkout}
+            onStartSpecificWorkout={(session) => {
+              syncDailyCheckInStatus('in_progress');
+              setActiveWorkout(session);
+              StorageService.saveActiveWorkout(session);
+              setActiveWorkoutOpen(true);
+            }}
+            onFinishActiveWorkout={handleFinishActiveWorkoutFromDashboard}
             onNavigate={(sec) => setCurrentSection(sec)}
             onUpdateProfile={handleUpdateProfile}
           />
@@ -412,6 +452,10 @@ export default function App() {
         <Sidebar
           currentSection={currentSection}
           onSelectSection={(sec) => {
+            if (sec === 'workout') {
+              handleStartWorkout();
+              return;
+            }
             if (sec === 'visualizer') {
               setVisualizerModalOpen(true);
             }
@@ -436,6 +480,10 @@ export default function App() {
       <MobileNav
         currentSection={currentSection}
         onSelectSection={(sec) => {
+          if (sec === 'workout') {
+            handleStartWorkout();
+            return;
+          }
           if (sec === 'visualizer') {
             setVisualizerModalOpen(true);
           }
