@@ -617,6 +617,7 @@ export interface UserProfile {
   autoGpsTracking?: boolean;
   units?: 'km' | 'miles';
   restSoundType?: RestSoundType;
+  storageMode?: 'local' | 'cloud';
   latestScaleScan?: BodyCompositionScan;
 }
 

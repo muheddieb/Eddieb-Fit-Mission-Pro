@@ -42,29 +42,29 @@ const STORAGE_KEYS = {
 };
 
 export const defaultProfile: UserProfile = {
-  name: 'Eddie B',
-  age: 41,
-  heightCm: 176,
-  currentWeightKg: 101.1,
-  goalWeightKg: 80.0, // Realistic Stage 1 goal; device ideal reference: 67.2 kg
+  name: 'Athlete / متدرب',
+  age: 30,
+  heightCm: 175,
+  currentWeightKg: 75.0,
+  goalWeightKg: 70.0, // Clean shareable goal reference
   trainingDaysPerWeek: 4,
   level: 'intermediate',
   preferredLocation: 'gym',
   availableEquipment: ['Barbell', 'Dumbbells', 'Cables', 'Machines', 'Bodyweight'],
   mode: 'controlled_fat_loss',
   activityLevel: 'moderate',
-  currentWaistCm: 102,
-  startDate: new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0],
-  dailyCalorieTarget: 1900, // Sustainable deficit below ~2600-2700 TDEE (BMR 1951 kcal)
-  dailyProteinTargetGrams: 170, // ~2.5g/kg FFM (68.2 kg) to preserve skeletal muscle (34.3 kg)
-  dailyCarbsTargetGrams: 175,
-  dailyFatTargetGrams: 54,
-  dailyFiberTargetGrams: 32,
-  dailyWaterTargetMl: 3500,
+  currentWaistCm: 82,
+  startDate: new Date().toISOString().split('T')[0],
+  dailyCalorieTarget: 2000,
+  dailyProteinTargetGrams: 150,
+  dailyCarbsTargetGrams: 200,
+  dailyFatTargetGrams: 60,
+  dailyFiberTargetGrams: 30,
+  dailyWaterTargetMl: 3000,
   morningWindowStart: '07:30',
   morningWindowEnd: '08:00',
   morningNotificationsEnabled: false,
-  notes: 'Primary Goal: Sustainable fat loss from 101.1 kg while protecting knees, lower back & joints, preserving 34.3 kg skeletal muscle, and building a consistent post-Fajr (7:30–8:00 AM) gym habit.',
+  notes: 'Shareable fitness program. Customize your profile, weight, and track your personal workouts independently.',
   theme: 'elegant_dark',
   language: 'ar',
   unitSystem: 'kg',
@@ -73,27 +73,28 @@ export const defaultProfile: UserProfile = {
   autoGpsTracking: true,
   units: 'km',
   restSoundType: 'beep',
+  storageMode: 'cloud',
   latestScaleScan: {
     scanDate: new Date().toISOString().split('T')[0],
-    weightKg: 101.1,
-    goalWeightKg: 67.2, // Device suggested ideal weight (trend indicator only)
-    bmi: 32.6,
-    bodyFatPercent: 32.5,
-    bodyFatKg: 32.9,
-    skeletalMuscleKg: 34.3,
-    muscleWeightKg: 65.0,
-    visceralFat: 22.5,
-    waterPercent: 49.8,
-    waterKg: 50.3,
-    proteinPercent: 14.5,
-    proteinKg: 14.6,
-    boneMassKg: 3.22,
-    bmrKcal: 1951,
-    bodyAge: 50,
-    actualAge: 41,
-    heightCm: 176,
-    weightWithoutFatKg: 68.2,
-    obesityDegreePercent: 50.4,
+    weightKg: 75.0,
+    goalWeightKg: 70.0,
+    bmi: 24.5,
+    bodyFatPercent: 18.5,
+    bodyFatKg: 13.8,
+    skeletalMuscleKg: 36.0,
+    muscleWeightKg: 40.0,
+    visceralFat: 8.0,
+    waterPercent: 55.0,
+    waterKg: 41.2,
+    proteinPercent: 16.0,
+    proteinKg: 12.0,
+    boneMassKg: 3.2,
+    bmrKcal: 1750,
+    bodyAge: 30,
+    actualAge: 30,
+    heightCm: 175,
+    weightWithoutFatKg: 61.2,
+    obesityDegreePercent: 0,
   },
 };
 
@@ -1425,5 +1426,32 @@ export const StorageService = {
     Object.values(STORAGE_KEYS).forEach(key => {
       localStorage.removeItem(key);
     });
+  },
+
+  /**
+   * Helper function to migrate existing local data to Firestore when switching from Local to Cloud for the first time.
+   */
+  async migrateLocalDataToCloud(userId: string): Promise<{ success: boolean; itemCount: number }> {
+    try {
+      const profile = this.getProfile();
+      const workouts = this.getWorkoutHistory();
+      const nutrition = this.getNutritionHistory();
+      const measurements = this.getMeasurements();
+      const cardio = this.getCardioHistory();
+      const sleep = this.getSleepHistory();
+
+      const updatedProfile = { ...profile, storageMode: 'cloud' as const };
+      this.saveProfile(updatedProfile);
+
+      const itemCount = 1 + workouts.length + nutrition.length + measurements.length + cardio.length + sleep.length;
+
+      const { FirestoreSyncService } = await import('./firestoreSyncService');
+      await FirestoreSyncService.syncUpAllLocalData(userId);
+
+      return { success: true, itemCount };
+    } catch (e) {
+      console.error('Error migrating local data to cloud:', e);
+      return { success: false, itemCount: 0 };
+    }
   },
 };

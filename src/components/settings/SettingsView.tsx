@@ -25,20 +25,34 @@ import {
   Shield,
   ShieldCheck,
   WifiOff,
-  Maximize
+  Maximize,
+  Cloud,
+  HardDrive,
+  LogIn,
+  LogOut,
+  RefreshCw,
+  CloudOff,
 } from 'lucide-react';
-import { UserProfile, RestSoundType, AppTheme } from '../../types';
+import { User } from 'firebase/auth';
+import { UserProfile, RestSoundType, AppTheme, SyncStatus } from '../../types';
 import { translations } from '../../i18n/translations';
 import { StorageService } from '../../services/storage';
 import { AudioService } from '../../services/audioService';
 import { PWAService, PWAState } from '../../services/pwaService';
 import { THEME_OPTIONS, ThemeOption } from '../../utils/themeData';
+import { FirestoreSyncService } from '../../services/firestoreSyncService';
 
 interface SettingsViewProps {
   profile: UserProfile;
   onUpdateProfile: (profile: UserProfile) => void;
   onResetApp: () => void;
   onOpenPWAInstallModal?: () => void;
+  currentUser?: User | null;
+  onSignInWithGoogle?: () => void;
+  onSignOut?: () => void;
+  syncStatus?: SyncStatus;
+  isOnline?: boolean;
+  onRetrySync?: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -46,12 +60,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateProfile,
   onResetApp,
   onOpenPWAInstallModal,
+  currentUser,
+  onSignInWithGoogle,
+  onSignOut,
+  syncStatus = 'idle',
+  isOnline = true,
+  onRetrySync,
 }) => {
   const t = translations[profile.language];
   const isAr = profile.language === 'ar';
 
   const [confirmReset, setConfirmReset] = useState<boolean>(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [isMigrating, setIsMigrating] = useState<boolean>(false);
   const [pwaState, setPwaState] = useState<PWAState>(PWAService.getState());
   const [themeCategoryFilter, setThemeCategoryFilter] = useState<'all' | 'pro_athlete' | 'performance'>('all');
 
@@ -142,6 +163,179 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           >
             <span>🇪🇬 العربية (RTL)</span>
           </button>
+        </div>
+      </div>
+
+      {/* Storage Mode & Cloud Synchronization */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-md space-y-4">
+        <div className="flex items-center justify-between border-b border-border pb-3">
+          <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+            <Cloud className="h-5 w-5 text-primary" />
+            <span>{isAr ? 'وضع التخزين والمزامنة (Storage Mode)' : 'Storage Mode & Cloud Sync'}</span>
+          </h3>
+          <span className={`rounded-full px-3 py-1 text-xs font-black border ${
+            (profile.storageMode || 'cloud') === 'cloud'
+              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+              : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+          }`}>
+            {(profile.storageMode || 'cloud') === 'cloud' 
+              ? (isAr ? 'مزامنة السحابة مفعلة' : 'Cloud Sync Active') 
+              : (isAr ? 'هذا الجهاز فقط' : 'Local Only')}
+          </span>
+        </div>
+
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {isAr
+            ? 'اختر ما إذا كنت تريد حفظ بياناتك على هذا الجهاز فقط (Local Only) أو مزامنتها بشكل آمن ومستقل مع حساب جوجل الخاص بك في سحابة Firestore (Cloud Sync).'
+            : 'Choose whether your fitness profile, workouts, and measurements remain stored purely on this device (Local Only) or synchronized securely under your Google account (Cloud Sync).'}
+        </p>
+
+        {/* Mode Selector Buttons */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <button
+            type="button"
+            onClick={async () => {
+              onUpdateProfile({ ...profile, storageMode: 'local' });
+              setSuccessMsg(isAr ? 'تم التحويل إلى التخزين المحلي فقط' : 'Switched to Local Only storage mode');
+              setTimeout(() => setSuccessMsg(null), 3000);
+            }}
+            className={`rounded-xl border p-4 text-start transition-all flex flex-col gap-2 ${
+              (profile.storageMode || 'cloud') === 'local'
+                ? 'border-primary bg-primary/10 shadow-md ring-1 ring-primary/30'
+                : 'border-border bg-secondary/40 hover:bg-secondary/70'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-black text-foreground text-xs sm:text-sm">
+                <HardDrive className="h-4 w-4 text-primary" />
+                <span>{isAr ? 'هذا الجهاز فقط (Local Only)' : 'Local Only'}</span>
+              </div>
+              {(profile.storageMode || 'cloud') === 'local' && <Check className="h-4 w-4 text-primary" />}
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              {isAr
+                ? 'البيانات تُحفظ حصرياً في متصفحك المحلي (localStorage). لا يتم رفع أي شيء للسحابة.'
+                : 'Data remains strictly in your browser storage. No cloud upload occurs.'}
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={async () => {
+              onUpdateProfile({ ...profile, storageMode: 'cloud' });
+              if (!currentUser && onSignInWithGoogle) {
+                onSignInWithGoogle();
+              } else if (currentUser) {
+                try {
+                  setIsMigrating(true);
+                  const res = await StorageService.migrateLocalDataToCloud(currentUser.uid);
+                  if (res.success) {
+                    setSuccessMsg(isAr ? `تم نقل ومزامنة ${res.itemCount} عنصر إلى السحابة بنجاح!` : `Successfully migrated ${res.itemCount} items to cloud!`);
+                  } else {
+                    setSuccessMsg(isAr ? 'فشلت عملية المزامنة للسحابة' : 'Cloud synchronization failed');
+                  }
+                  setTimeout(() => setSuccessMsg(null), 4000);
+                } catch (e) {
+                  console.error('Migration error:', e);
+                } finally {
+                  setIsMigrating(false);
+                }
+              }
+            }}
+            className={`rounded-xl border p-4 text-start transition-all flex flex-col gap-2 ${
+              (profile.storageMode || 'cloud') === 'cloud'
+                ? 'border-emerald-500 bg-emerald-500/10 shadow-md ring-1 ring-emerald-500/30'
+                : 'border-border bg-secondary/40 hover:bg-secondary/70'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-black text-foreground text-xs sm:text-sm">
+                <Cloud className="h-4 w-4 text-emerald-400" />
+                <span>{isAr ? 'مزامنة السحابة (Cloud Sync)' : 'Cloud Sync'}</span>
+              </div>
+              {(profile.storageMode || 'cloud') === 'cloud' && <Check className="h-4 w-4 text-emerald-400" />}
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              {isAr
+                ? 'حفظ واستعادة بياناتك عبر حساب جوجل الخاص بك. رفع البيانات المحلية للسحابة تلقائياً عند التفعيل لأول مرة.'
+                : 'Syncs data securely across devices via your Google account. Automatically migrates existing local records upon first activation.'}
+            </p>
+          </button>
+        </div>
+
+        {/* Cloud Connection & Migration Status */}
+        <div className="rounded-xl border border-border bg-secondary/30 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-3">
+          <div className="flex items-center gap-3">
+            {currentUser?.photoURL ? (
+              <img src={currentUser.photoURL} alt="Avatar" className="h-9 w-9 rounded-full shrink-0" referrerPolicy="no-referrer" />
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/20 text-primary">
+                <Cloud className="h-5 w-5" />
+              </div>
+            )}
+            <div>
+              <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <span>{currentUser ? currentUser.displayName || currentUser.email : (isAr ? 'غير مسجل الدخول' : 'Not Signed In')}</span>
+                {currentUser && <span className="rounded bg-emerald-500/20 px-1.5 py-0.2 text-[9px] font-bold text-emerald-400">Connected</span>}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {currentUser 
+                  ? (isAr ? 'حساب جوجل متصل ومؤمن' : 'Google account connected & secured') 
+                  : (isAr ? 'سجل الدخول بحساب جوجل لتفعيل مزامنة السحابة' : 'Sign in with Google to enable cloud backup')}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {currentUser ? (
+              <>
+                <button
+                  type="button"
+                  disabled={isMigrating}
+                  onClick={async () => {
+                    try {
+                      setIsMigrating(true);
+                      const res = await StorageService.migrateLocalDataToCloud(currentUser.uid);
+                      if (res.success) {
+                        setSuccessMsg(isAr ? `تم نقل ومزامنة ${res.itemCount} عنصر إلى السحابة بنجاح!` : `Successfully migrated ${res.itemCount} items to cloud!`);
+                      } else {
+                        setSuccessMsg(isAr ? 'فشلت عملية المزامنة للسحابة' : 'Cloud synchronization failed');
+                      }
+                      setTimeout(() => setSuccessMsg(null), 3000);
+                    } catch (e) {
+                      console.error(e);
+                    } finally {
+                      setIsMigrating(false);
+                    }
+                  }}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${isMigrating ? 'animate-spin' : ''}`} />
+                  <span>{isMigrating ? (isAr ? 'جاري الرفع...' : 'Migrating...') : (isAr ? 'رفع البيانات للسحابة (Migrate)' : 'Migrate to Cloud')}</span>
+                </button>
+                {onSignOut && (
+                  <button
+                    type="button"
+                    onClick={onSignOut}
+                    className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </>
+            ) : (
+              onSignInWithGoogle && (
+                <button
+                  type="button"
+                  onClick={onSignInWithGoogle}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow hover:bg-primary/90 transition-colors"
+                >
+                  <LogIn className="h-4 w-4" />
+                  <span>{isAr ? 'تسجيل الدخول بحساب جوجل' : 'Sign in with Google'}</span>
+                </button>
+              )
+            )}
+          </div>
         </div>
       </div>
 

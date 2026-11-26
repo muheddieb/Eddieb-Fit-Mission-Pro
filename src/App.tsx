@@ -401,6 +401,12 @@ export default function App() {
             onUpdateProfile={handleUpdateProfile}
             onResetApp={handleResetApp}
             onOpenPWAInstallModal={() => setPwaInstallModalOpen(true)}
+            currentUser={currentUser}
+            onSignInWithGoogle={handleSignIn}
+            onSignOut={handleSignOut}
+            syncStatus={syncStatus}
+            isOnline={isOnline}
+            onRetrySync={handleRetrySync}
           />
         );
       default:
