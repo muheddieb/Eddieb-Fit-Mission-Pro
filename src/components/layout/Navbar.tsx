@@ -134,7 +134,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-[80] flex h-16 w-full max-w-full items-center justify-between border-b border-border bg-card/95 px-2.5 sm:px-4 md:px-6 backdrop-blur overflow-x-hidden">
+    <header className="sticky top-0 z-50 flex h-16 w-full max-w-full items-center justify-between border-b border-border bg-card/95 px-2.5 sm:px-4 md:px-6 backdrop-blur overflow-x-hidden">
       {/* Left: Brand / Mobile menu trigger */}
       <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
         <button
@@ -190,7 +190,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Offline Sync Details Popover */}
             {syncPopoverOpen && (
               <div 
-                className={`absolute top-full mt-2 w-72 sm:w-88 max-w-[calc(100vw-1.5rem)] rounded-2xl border border-amber-500/30 p-4 shadow-2xl z-[90] animate-in fade-in zoom-in-95 duration-150 ${
+                className={`absolute top-full mt-2 w-72 sm:w-88 max-w-[calc(100vw-1.5rem)] rounded-2xl border border-amber-500/30 p-4 shadow-2xl z-[60] animate-in fade-in zoom-in-95 duration-150 ${
                   isRTL ? 'left-0 sm:left-auto sm:right-0' : 'right-0'
                 }`}
                 style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
@@ -425,7 +425,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {themePopoverOpen && (
             <div 
               id="popover-quick-theme-studio"
-              className={`absolute top-full mt-2 z-[90] w-80 sm:w-96 max-w-[calc(100vw-1rem)] rounded-2xl border p-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150 ${
+              className={`absolute top-full mt-2 z-[60] w-80 sm:w-96 max-w-[calc(100vw-1rem)] rounded-2xl border p-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150 ${
                 isRTL ? 'left-0 sm:left-auto sm:right-0' : 'right-0'
               }`}
               style={{ 
